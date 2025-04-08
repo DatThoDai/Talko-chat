@@ -10,42 +10,83 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
+import * as authService from '../api/authService';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleRegister = () => {
-    setIsLoading(true);
-    setError(null);
-    
-    // Basic validation
-    if (!name || !email || !password || !confirmPassword) {
+  const validateInputs = () => {
+    if (!name || !email || !password || !confirmPassword || !phone) {
       setError('Vui lòng điền đầy đủ thông tin');
-      setIsLoading(false);
-      return;
+      return false;
     }
     
     if (password !== confirmPassword) {
       setError('Mật khẩu không khớp');
-      setIsLoading(false);
-      return;
+      return false;
     }
+
+    if (password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+
+    // Kiểm tra email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Email không hợp lệ');
+      return false;
+    }
+
+    // Kiểm tra số điện thoại
+    if (!/^[0-9]{9,11}$/.test(phone)) {
+      setError('Số điện thoại không hợp lệ');
+      return false;
+    }
+
+    setError(null);
+    return true;
+  };
+
+  const handleRegister = async () => {
+    if (!validateInputs()) return;
     
-    // In a real app, you would have API calls here
-    setTimeout(() => {
+    setIsLoading(true);
+    try {
+      // Gửi API đăng ký
+      const userData = {
+        name,
+        email,
+        username: email, // Sử dụng email làm username
+        password,
+        phone
+      };
+
+      await authService.register(userData);
+      
+      // Chuyển sang màn hình nhập OTP
       setIsLoading(false);
-      navigation.navigate('ConfirmOTP', { email });
-    }, 1500);
+      Alert.alert(
+        'Đăng ký thành công',
+        'Mã OTP đã được gửi đến email/số điện thoại của bạn. Vui lòng nhập mã để xác thực tài khoản.',
+        [{ text: 'OK', onPress: () => navigation.navigate('ConfirmOTP', { username: email }) }]
+      );
+    } catch (error) {
+      setIsLoading(false);
+      setError(error.message || 'Đã xảy ra lỗi khi đăng ký');
+    }
   };
 
   return (
@@ -81,11 +122,22 @@ const RegisterScreen = ({ navigation }) => {
               <Icon name="email" size={20} color={colors.gray} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Email hoặc số điện thoại"
+                placeholder="Email"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
+              />
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <Icon name="phone" size={20} color={colors.gray} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Số điện thoại"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
               />
             </View>
 
@@ -140,9 +192,11 @@ const RegisterScreen = ({ navigation }) => {
               onPress={handleRegister}
               disabled={isLoading}
             >
-              <Text style={styles.registerButtonText}>
-                {isLoading ? 'Đang xử lý...' : 'Đăng ký'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.registerButtonText}>Đăng ký</Text>
+              )}
             </TouchableOpacity>
           </View>
 

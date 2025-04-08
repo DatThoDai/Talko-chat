@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -17,7 +18,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { colors, spacing } from '../styles';
-import { updateProfile } from '../redux/authSlice';
+import { updateProfile, clearError, getUserProfile } from '../redux/authSlice';
 
 const validationSchema = Yup.object().shape({
   name: Yup.string().required('Tên không được để trống'),
@@ -27,10 +28,29 @@ const validationSchema = Yup.object().shape({
 
 const EditProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
+  const { user, isLoading, error, profileUpdateSuccess } = useSelector((state) => state.auth);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(parseDate(user?.birthdate || '20/11/2000'));
   const [gender, setGender] = useState(user?.gender || 'Nam');
+  
+  // Xóa lỗi khi vào màn hình
+  useEffect(() => {
+    dispatch(clearError());
+    // Tải lại thông tin người dùng khi vào màn hình
+    dispatch(getUserProfile());
+    return () => dispatch(clearError());
+  }, [dispatch]);
+  
+  // Xử lý khi cập nhật hồ sơ thành công
+  useEffect(() => {
+    if (profileUpdateSuccess) {
+      Alert.alert(
+        'Thành công',
+        'Thông tin cá nhân đã được cập nhật',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [profileUpdateSuccess, navigation]);
 
   const formatDate = (date) => {
     if (!date) return '';
@@ -45,19 +65,12 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   const handleSubmit = (values) => {
-    // In a real app, make API call to update profile
+    // Gọi API cập nhật hồ sơ thông qua Redux
     dispatch(updateProfile({
       ...values,
       gender,
+      birthdate: formatDate(selectedDate),
     }));
-    
-    Alert.alert(
-      'Thành công',
-      'Thông tin cá nhân đã được cập nhật',
-      [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]
-    );
   };
 
   if (!user) {
@@ -309,11 +322,20 @@ const EditProfileScreen = ({ navigation }) => {
               </Modal>
             </View>
             
+            {error && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+            
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSubmit}
+              disabled={isLoading}
             >
-              <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         )}

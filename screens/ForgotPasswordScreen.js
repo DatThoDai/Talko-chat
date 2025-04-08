@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,31 +9,48 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { forgotPassword, clearError } from '../redux/authSlice';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [emailError, setEmailError] = useState('');
+  const { isLoading, error, passwordResetStage } = useSelector(state => state.auth);
+  const dispatch = useDispatch();
+
+  // Theo dõi trạng thái quên mật khẩu
+  useEffect(() => {
+    if (passwordResetStage === 'email_sent') {
+      // Chuyển hướng đến màn hình xác thực OTP
+      navigation.navigate('ConfirmOTP', { email, isResetPassword: true });
+    }
+  }, [passwordResetStage, navigation, email]);
+
+  // Xác thực đầu vào
+  const validateEmail = () => {
+    if (!email.trim()) {
+      setEmailError('Vui lòng nhập email');
+      return false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Email không hợp lệ');
+      return false;
+    } 
+    setEmailError('');
+    return true;
+  };
 
   const handleResetPassword = () => {
-    setIsLoading(true);
-    setError(null);
+    // Xóa lỗi từ lần trước
+    dispatch(clearError());
     
-    // Basic validation
-    if (!email) {
-      setError('Vui lòng nhập email hoặc số điện thoại');
-      setIsLoading(false);
-      return;
+    // Xác thực email trước khi gửi yêu cầu
+    if (validateEmail()) {
+      dispatch(forgotPassword(email));
     }
-    
-    // In a real app, you would have API calls here
-    setTimeout(() => {
-      setIsLoading(false);
-      navigation.navigate('ConfirmOTP', { email, isResetPassword: true });
-    }, 1500);
   };
 
   return (
@@ -63,13 +80,20 @@ const ForgotPasswordScreen = ({ navigation }) => {
               <Icon name="email" size={20} color={colors.gray} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Email hoặc số điện thoại"
+                placeholder="Email"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setEmailError('');
+                }}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
             </View>
+            
+            {emailError ? (
+              <Text style={styles.errorText}>{emailError}</Text>
+            ) : null}
 
             {error && (
               <Text style={styles.errorText}>{error}</Text>
@@ -80,9 +104,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
               onPress={handleResetPassword}
               disabled={isLoading}
             >
-              <Text style={styles.submitButtonText}>
-                {isLoading ? 'Đang xử lý...' : 'Tiếp tục'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Tiếp tục</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

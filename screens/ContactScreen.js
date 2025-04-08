@@ -167,23 +167,22 @@ const ContactScreen = ({ navigation }) => {
         }
       />
 
-      <View style={styles.bottomTabs}>
-        <TouchableOpacity 
-          style={styles.tabButton}
-          onPress={() => navigation.navigate('Home')}
-        >
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.footerItem}
+          onPress={() => navigation.navigate('Home')}>
           <Icon name="chat" size={24} color={colors.gray} />
-          <Text style={styles.tabText}>Tin nhắn</Text>
+          <Text style={styles.footerText}>Tin nhắn</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
-          <Icon name="people" size={24} color={colors.primary} />
-          <Text style={styles.activeTabText}>Danh bạ</Text>
+        <TouchableOpacity style={[styles.footerItem, styles.footerItemActive]}>
+          <Icon name="groups" size={24} color={colors.primary} />
+          <Text style={styles.footerTextActive}>Danh bạ</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.tabButton}>
+        <TouchableOpacity style={styles.footerItem}
+          onPress={() => navigation.navigate('Profile')}>
           <Icon name="person" size={24} color={colors.gray} />
-          <Text style={styles.tabText}>Cá nhân</Text>
+          <Text style={styles.footerText}>Cá nhân</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -279,28 +278,28 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: 'bold',
   },
-  bottomTabs: {
+  footer: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.light,
     backgroundColor: colors.white,
   },
-  tabButton: {
+  footerItem: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
-  activeTab: {
+  footerItemActive: {
     borderTopWidth: 2,
     borderTopColor: colors.primary,
   },
-  tabText: {
+  footerText: {
     fontSize: 12,
     color: colors.gray,
     marginTop: spacing.xs,
   },
-  activeTabText: {
+  footerTextActive: {
     fontSize: 12,
     color: colors.primary,
     fontWeight: 'bold',

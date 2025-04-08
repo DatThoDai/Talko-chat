@@ -44,15 +44,17 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     navigation.goBack();
   };
 
+  const LEAVE_GROUP_MESSAGE = 'Bạn có chắc chắn muốn rời khỏi nhóm không?';
+  const DELETE_GROUP_MESSAGE = 'Bạn có chắc chắn muốn xóa cuộc trò chuyện này không? Hành động này không thể hoàn tác.';
+
   const handleLeaveGroup = () => {
     Alert.alert(
       'Rời nhóm',
-      'Bạn có chắc chắn muốn rời khỏi nhóm không?',
+      LEAVE_GROUP_MESSAGE,
       [
         {
           text: 'Hủy',
           style: 'cancel',
-          onPress: () => navigation.goBack(),
         },
         {
           text: 'Rời nhóm',
@@ -60,8 +62,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           onPress: () => {
             // In a real app, make API call to leave group
             navigation.goBack();
-            navigation.navigate('Home');
-          },
+            // Không navigate to Home ở đây, chỉ cần goBack
+          }
         },
       ]
     );
@@ -70,12 +72,11 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const handleDelete = () => {
     Alert.alert(
       'Xóa cuộc trò chuyện',
-      'Bạn có chắc chắn muốn xóa cuộc trò chuyện này không? Hành động này không thể hoàn tác.',
+      DELETE_GROUP_MESSAGE,
       [
         {
           text: 'Hủy',
           style: 'cancel',
-          onPress: () => navigation.goBack(),
         },
         {
           text: 'Xóa',
@@ -83,8 +84,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           onPress: () => {
             // In a real app, make API call to delete conversation
             navigation.goBack();
-            navigation.navigate('Home');
-          },
+            // Không navigate to Home ở đây, chỉ cần goBack
+          }
         },
       ]
     );

@@ -9,13 +9,14 @@ import {
   StatusBar,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useSelector, useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, typography } from '../styles';
-import { logoutUser } from '../redux/authSlice';
+import { logoutUser, updateAvatar as updateProfileImage, checkAuth } from '../redux/authSlice';
 
 const ProfileItem = ({ label, value, extraInfo }) => {
   return (
@@ -41,11 +42,21 @@ const ProfileOption = ({ icon, title, onPress, color = colors.dark }) => {
 
 const ProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
+  const { user, isLoading } = useSelector((state) => state.auth);
   const [profileImage, setProfileImage] = useState(null);
 
   useEffect(() => {
-    // Set profile image from user data if available
+    // Tải thông tin hồ sơ người dùng khi màn hình được hiển thị
+    dispatch(checkAuth());
+    
+    // Cập nhật ảnh hồ sơ từ dữ liệu người dùng nếu có
+    if (user && user.avatar) {
+      setProfileImage(user.avatar);
+    }
+  }, [dispatch]);
+  
+  // Theo dõi sự thay đổi của dữ liệu người dùng
+  useEffect(() => {
     if (user && user.avatar) {
       setProfileImage(user.avatar);
     }
@@ -80,9 +91,11 @@ const ProfileScreen = ({ navigation }) => {
       });
       
       if (!result.canceled && result.assets && result.assets[0].uri) {
-        setProfileImage(result.assets[0].uri);
-        // In a real app, upload image to server and update user data
-        Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
+        const imageUri = result.assets[0].uri;
+        setProfileImage(imageUri);
+        
+        // Upload ảnh đại diện lên server và cập nhật dữ liệu người dùng
+        dispatch(updateProfileImage(imageUri));
       }
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể thay đổi ảnh đại diện. Vui lòng thử lại sau.');
@@ -106,8 +119,9 @@ const ProfileScreen = ({ navigation }) => {
         { 
           text: 'Đăng xuất', 
           onPress: () => {
-            // In a real app, make API call to logout from all devices
-            Alert.alert('Thành công', 'Đã đăng xuất khỏi tất cả các thiết bị khác');
+            // Gọi API để đăng xuất khỏi tất cả các thiết bị
+            // Tạm thởi gọi hàm logout thông thường vì chưa có API đăng xuất từ tất cả thiết bị
+            dispatch(logoutUser());
           }
         }
       ]
@@ -221,26 +235,23 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </ScrollView>
       
-      <View style={styles.bottomTabs}>
-        <TouchableOpacity 
-          style={styles.tabButton}
-          onPress={() => navigation.navigate('Home')}
-        >
+      {/* Footer navigation */}
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.footerItem} 
+          onPress={() => navigation.navigate('Home')}>
           <Icon name="chat" size={24} color={colors.gray} />
-          <Text style={styles.tabText}>Tin nhắn</Text>
+          <Text style={styles.footerText}>Tin nhắn</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={styles.tabButton}
-          onPress={() => navigation.navigate('Contact')}
-        >
-          <Icon name="people" size={24} color={colors.gray} />
-          <Text style={styles.tabText}>Danh bạ</Text>
+        <TouchableOpacity style={styles.footerItem} 
+          onPress={() => navigation.navigate('Contact')}>
+          <Icon name="groups" size={24} color={colors.gray} />
+          <Text style={styles.footerText}>Danh bạ</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+        <TouchableOpacity style={[styles.footerItem, styles.footerItemActive]}>
           <Icon name="person" size={24} color={colors.primary} />
-          <Text style={styles.activeTabText}>Cá nhân</Text>
+          <Text style={styles.footerTextActive}>Cá nhân</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -363,28 +374,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     flex: 1,
   },
-  bottomTabs: {
+  footer: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.light,
     backgroundColor: colors.white,
   },
-  tabButton: {
+  footerItem: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
-  activeTab: {
+  footerItemActive: {
     borderTopWidth: 2,
     borderTopColor: colors.primary,
   },
-  tabText: {
+  footerText: {
     fontSize: 12,
     color: colors.gray,
     marginTop: spacing.xs,
   },
-  activeTabText: {
+  footerTextActive: {
     fontSize: 12,
     color: colors.primary,
     fontWeight: 'bold',

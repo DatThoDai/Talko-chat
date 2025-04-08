@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,14 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import { useDispatch, useSelector } from 'react-redux';
+import { changePassword, clearError } from '../redux/authSlice';
 import { colors, spacing } from '../styles';
 
 const validationSchema = Yup.object().shape({
@@ -29,19 +32,32 @@ const ChangePasswordScreen = ({ navigation }) => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  const dispatch = useDispatch();
+  const { isLoading, error, passwordChangeSuccess } = useSelector(state => state.auth);
+  
+  // Xóa lỗi khi vào màn hình
+  useEffect(() => {
+    dispatch(clearError());
+    return () => dispatch(clearError());
+  }, [dispatch]);
+  
+  // Quay lại màn hình trước khi thay đổi mật khẩu thành công
+  useEffect(() => {
+    if (passwordChangeSuccess) {
+      Alert.alert(
+        'Thành công',
+        'Mật khẩu của bạn đã được thay đổi',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [passwordChangeSuccess, navigation]);
 
   const handleSubmit = (values, { resetForm }) => {
-    // In a real app, make API call to change password
-    Alert.alert(
-      'Thành công',
-      'Mật khẩu của bạn đã được thay đổi',
-      [
-        { text: 'OK', onPress: () => {
-          resetForm();
-          navigation.goBack();
-        }}
-      ]
-    );
+    dispatch(changePassword({
+      currentPassword: values.currentPassword,
+      newPassword: values.newPassword
+    }));
   };
 
   return (
@@ -151,11 +167,20 @@ const ChangePasswordScreen = ({ navigation }) => {
               )}
             </View>
             
+            {error && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+            
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSubmit}
+              disabled={isLoading}
             >
-              <Text style={styles.saveButtonText}>Cập nhật mật khẩu</Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.saveButtonText}>Cập nhật mật khẩu</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         )}

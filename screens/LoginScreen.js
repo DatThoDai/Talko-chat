@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser } from '../redux/authSlice';
+import { loginUser, clearError } from '../redux/authSlice';
 import { colors, typography, spacing, borderRadius } from '../styles';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -21,11 +21,56 @@ const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { isLoading, error } = useSelector(state => state.auth);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const { isLoading, error, isAuthenticated } = useSelector(state => state.auth);
   const dispatch = useDispatch();
 
+  // Không sử dụng navigation.replace để chuyển hướng về Home sau khi đăng nhập
+  // Thay vào đó, sử dụng AppNavigator để chuyển hướng khi isAuthenticated = true
+  // useEffect(() => {
+  //   if (isAuthenticated) {
+  //     navigation.replace('Home');
+  //   }
+  // }, [isAuthenticated, navigation]);
+
+  // Xác thực đầu vào
+  const validateInputs = () => {
+    let isValid = true;
+    
+    // Xác thực email
+    if (!email.trim()) {
+      setEmailError('Email là bắt buộc');
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Email không hợp lệ');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+    
+    // Xác thực mật khẩu
+    if (!password) {
+      setPasswordError('Mật khẩu là bắt buộc');
+      isValid = false;
+    } else if (password.length < 6) {
+      setPasswordError('Mật khẩu phải có ít nhất 6 ký tự');
+      isValid = false;
+    } else {
+      setPasswordError('');
+    }
+    
+    return isValid;
+  };
+
   const handleLogin = () => {
-    dispatch(loginUser({ email, password }));
+    // Xóa lỗi từ lần trước
+    dispatch(clearError());
+    
+    // Kiểm tra hợp lệ trước khi đăng nhập
+    if (validateInputs()) {
+      dispatch(loginUser({ email, password }));
+    }
   };
 
   return (
@@ -46,11 +91,15 @@ const LoginScreen = ({ navigation }) => {
                 style={styles.input}
                 placeholder="Email/Số điện thoại"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setEmailError('');
+                }}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
             </View>
+            {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
 
             <View style={styles.inputWrapper}>
               <Icon name="lock" size={20} color={colors.gray} style={styles.inputIcon} />
@@ -58,7 +107,10 @@ const LoginScreen = ({ navigation }) => {
                 style={styles.input}
                 placeholder="Mật khẩu"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setPasswordError('');
+                }}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity
@@ -72,6 +124,7 @@ const LoginScreen = ({ navigation }) => {
                 />
               </TouchableOpacity>
             </View>
+            {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
 
             <TouchableOpacity
               style={styles.forgotPasswordButton}
@@ -112,6 +165,13 @@ const LoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  fieldError: {
+    color: colors.danger,
+    fontSize: 12,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    paddingLeft: spacing.md,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.white,

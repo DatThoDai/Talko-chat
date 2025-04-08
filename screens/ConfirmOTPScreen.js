@@ -8,6 +8,8 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {
   CodeField,
@@ -15,6 +17,9 @@ import {
   useBlurOnFulfill,
   useClearByFocusCell,
 } from 'react-native-confirmation-code-field';
+import * as authService from '../api/authService';
+import { useDispatch } from 'react-redux';
+import { loginUser } from '../redux/authSlice';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
 
@@ -22,12 +27,15 @@ const CELL_COUNT = 6;
 const RESEND_TIMEOUT = 60;
 
 const ConfirmOTPScreen = ({ route, navigation }) => {
-  const { email, isResetPassword = false } = route.params || {};
+  const { username, isResetPassword = false } = route.params || {};
   const [value, setValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(RESEND_TIMEOUT);
   const [canResend, setCanResend] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  const dispatch = useDispatch();
   
   const ref = useBlurOnFulfill({ value, cellCount: CELL_COUNT });
   const [props, getCellOnLayoutHandler] = useClearByFocusCell({
@@ -35,6 +43,7 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     setValue,
   });
   
+  // Đếm ngược thời gian gửi lại OTP
   useEffect(() => {
     let timer;
     if (timeLeft > 0 && !canResend) {
@@ -49,38 +58,70 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     };
   }, [timeLeft, canResend]);
   
-  const handleVerify = () => {
-    setIsLoading(true);
-    setError(null);
+  // Xác thực OTP
+  const handleVerify = async () => {
+    setError('');
+    setCodeError('');
     
-    // Basic validation
+    // Xác thực đầu vào
     if (value.length !== CELL_COUNT) {
-      setError('Vui lòng nhập đủ mã xác nhận');
-      setIsLoading(false);
+      setCodeError('Vui lòng nhập đủ mã xác nhận');
       return;
     }
     
-    // In a real app, you would have API calls here
-    setTimeout(() => {
+    setIsLoading(true);
+    try {
+      // Gửi API xác thực OTP
+      const response = await authService.confirmAccount(username, value);
       setIsLoading(false);
-      
-      // For demo purposes, consider any code valid
-      if (isResetPassword) {
-        // Navigate to set new password screen (not implemented yet)
-        navigation.navigate('Login');
+
+      // Xử lý response
+      if (response.token) {
+        // Đăng nhập tự động sau khi xác thực thành công
+        dispatch(loginUser({ email: username, password: '' })); // Password không quan trọng vì đã có token
+        Alert.alert(
+          'Xác nhận thành công',
+          'Tài khoản của bạn đã được xác nhận thành công. Bạn đã được đăng nhập tự động.',
+          [{ text: 'OK' }]
+        );
       } else {
-        // Registration completed successfully
-        navigation.navigate('Login');
+        // Trường hợp không có token, hiển thị thông báo lỗi
+        Alert.alert(
+          'Xác nhận tài khoản thất bại',
+          'Bạn đã xác nhận thành công, nhưng không thể đăng nhập tự động. Vui lòng đăng nhập lại.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+        );
       }
-    }, 1500);
+    } catch (err) {
+      setIsLoading(false);
+      setError(err.message || 'Có lỗi xảy ra khi xác thực OTP');
+    }
   };
   
-  const handleResendCode = () => {
+  // Gửi lại mã OTP
+  const handleResendCode = async () => {
     if (!canResend) return;
     
-    // In a real app, you would have API calls here
-    setTimeLeft(RESEND_TIMEOUT);
-    setCanResend(false);
+    setIsLoading(true);
+    try {
+      // TODO: Implement resend OTP API call when available
+      // await authService.resendOTP(username);
+      
+      // Tạm thời dùng mock call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setTimeLeft(RESEND_TIMEOUT);
+      setCanResend(false);
+      setIsLoading(false);
+      Alert.alert(
+        'Gửi lại OTP thành công',
+        'Chúng tôi đã gửi lại mã OTP mới đến ' + username,
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      setIsLoading(false);
+      setError('Không thể gửi lại mã OTP. Vui lòng thử lại sau.');
+    }
   };
 
   return (
@@ -103,7 +144,7 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
 
           <View style={styles.contentContainer}>
             <Text style={styles.description}>
-              Chúng tôi đã gửi mã xác nhận đến {email}
+              Chúng tôi đã gửi mã xác nhận đến {username}
             </Text>
             
             <CodeField
@@ -135,14 +176,20 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
               <Text style={styles.errorText}>{error}</Text>
             )}
 
+            {codeError ? (
+              <Text style={styles.errorText}>{codeError}</Text>
+            ) : null}
+            
             <TouchableOpacity
               style={styles.verifyButton}
               onPress={handleVerify}
               disabled={isLoading || value.length !== CELL_COUNT}
             >
-              <Text style={styles.verifyButtonText}>
-                {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.verifyButtonText}>Xác nhận</Text>
+              )}
             </TouchableOpacity>
             
             <View style={styles.resendContainer}>
@@ -150,7 +197,7 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
                 Không nhận được mã? {' '}
               </Text>
               {canResend ? (
-                <TouchableOpacity onPress={handleResendCode}>
+                <TouchableOpacity onPress={handleResendCode} disabled={isLoading}>
                   <Text style={styles.resendActionText}>Gửi lại</Text>
                 </TouchableOpacity>
               ) : (

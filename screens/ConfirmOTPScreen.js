@@ -17,7 +17,7 @@ import {
   useBlurOnFulfill,
   useClearByFocusCell,
 } from 'react-native-confirmation-code-field';
-import * as authService from '../api/authService';
+import { authService } from '../api/authService';
 import { useDispatch } from 'react-redux';
 import { loginUser } from '../redux/authSlice';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -71,27 +71,22 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     
     setIsLoading(true);
     try {
-      // Gửi API xác thực OTP
-      const response = await authService.confirmAccount(username, value);
-      setIsLoading(false);
-
-      // Xử lý response
-      if (response.token) {
-        // Đăng nhập tự động sau khi xác thực thành công
-        dispatch(loginUser({ email: username, password: '' })); // Password không quan trọng vì đã có token
+      // Phân biệt giữa xác thực tài khoản và xác thực OTP khi quên mật khẩu
+      if (isResetPassword) {
+        // Nếu là quên mật khẩu, chuyển hướng đến màn hình đổi mật khẩu
+        navigation.navigate('ResetPassword', { username, otp: value });
+      } else {
+        // Nếu là xác thực tài khoản
+        await authService.confirmAccount(username, value);
+        
+        // Xử lý thành công
         Alert.alert(
           'Xác nhận thành công',
-          'Tài khoản của bạn đã được xác nhận thành công. Bạn đã được đăng nhập tự động.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // Trường hợp không có token, hiển thị thông báo lỗi
-        Alert.alert(
-          'Xác nhận tài khoản thất bại',
-          'Bạn đã xác nhận thành công, nhưng không thể đăng nhập tự động. Vui lòng đăng nhập lại.',
+          'Tài khoản của bạn đã được xác nhận thành công. Bạn có thể đăng nhập ngay bây giờ.',
           [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
         );
       }
+      setIsLoading(false);
     } catch (err) {
       setIsLoading(false);
       setError(err.message || 'Có lỗi xảy ra khi xác thực OTP');

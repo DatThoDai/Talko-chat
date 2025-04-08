@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
-import * as authService from '../api/authService';
+import { authService } from '../api/authService';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');

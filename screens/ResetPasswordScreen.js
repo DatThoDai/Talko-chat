@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,32 +10,23 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { resetPassword, clearError } from '../redux/authSlice';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
+import { authService } from '../api/authService';
 
 const ResetPasswordScreen = ({ route, navigation }) => {
-  const { email, otp } = route.params || {};
+  const { username, otp } = route.params || {};
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
-  
-  const { isLoading, error, passwordResetStage } = useSelector(state => state.auth);
-  const dispatch = useDispatch();
-  
-  // Chuyển hướng nếu đặt lại mật khẩu thành công
-  useEffect(() => {
-    if (passwordResetStage === 'password_reset_success') {
-      // Chuyển hướng về màn hình đăng nhập
-      navigation.navigate('Login');
-    }
-  }, [passwordResetStage, navigation]);
-  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
   // Xác thực đầu vào
   const validateInputs = () => {
     let isValid = true;
@@ -64,18 +55,33 @@ const ResetPasswordScreen = ({ route, navigation }) => {
     
     return isValid;
   };
-  
+
   // Xử lý đặt lại mật khẩu
-  const handleResetPassword = () => {
-    // Xóa lỗi từ lần trước
-    dispatch(clearError());
-    
+  const handleResetPassword = async () => {
     // Xác thực đầu vào
-    if (validateInputs()) {
-      dispatch(resetPassword({ email, otp, newPassword: password }));
+    if (!validateInputs()) return;
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // Gửi API đặt lại mật khẩu
+      await authService.resetPassword(username, otp, password);
+      
+      setIsLoading(false);
+      
+      // Hiển thị thông báo thành công và chuyển hướng về màn hình đăng nhập
+      Alert.alert(
+        'Thay đổi mật khẩu thành công',
+        'Mật khẩu của bạn đã được đổi. Hãy đăng nhập lại bằng mật khẩu mới.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+      );
+    } catch (error) {
+      setIsLoading(false);
+      setError(error.message || 'Đặt lại mật khẩu thất bại');
     }
   };
-  
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -109,6 +115,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
                 onChangeText={(text) => {
                   setPassword(text);
                   setPasswordError('');
+                  setError('');
                 }}
                 secureTextEntry={!showPassword}
               />
@@ -135,6 +142,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
                 onChangeText={(text) => {
                   setConfirmPassword(text);
                   setConfirmPasswordError('');
+                  setError('');
                 }}
                 secureTextEntry={!showConfirmPassword}
               />
@@ -151,7 +159,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
             </View>
             {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
             
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
             
             <TouchableOpacity
               style={styles.submitButton}

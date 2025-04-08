@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,25 +10,17 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { forgotPassword, clearError } from '../redux/authSlice';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
+import { authService } from '../api/authService';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
-  const { isLoading, error, passwordResetStage } = useSelector(state => state.auth);
-  const dispatch = useDispatch();
-
-  // Theo dõi trạng thái quên mật khẩu
-  useEffect(() => {
-    if (passwordResetStage === 'email_sent') {
-      // Chuyển hướng đến màn hình xác thực OTP
-      navigation.navigate('ConfirmOTP', { email, isResetPassword: true });
-    }
-  }, [passwordResetStage, navigation, email]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // Xác thực đầu vào
   const validateEmail = () => {
@@ -43,13 +35,28 @@ const ForgotPasswordScreen = ({ navigation }) => {
     return true;
   };
 
-  const handleResetPassword = () => {
-    // Xóa lỗi từ lần trước
-    dispatch(clearError());
-    
+  const handleResetPassword = async () => {
     // Xác thực email trước khi gửi yêu cầu
-    if (validateEmail()) {
-      dispatch(forgotPassword(email));
+    if (!validateEmail()) return;
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // Gửi API reset OTP
+      await authService.forgotPassword(email);
+      
+      setIsLoading(false);
+      
+      // Chuyển hướng đến màn hình xác thực OTP
+      Alert.alert(
+        'Gửi yêu cầu thành công',
+        'Mã OTP đã được gửi đến email của bạn. Vui lòng kiểm tra email và nhập mã OTP.',
+        [{ text: 'OK', onPress: () => navigation.navigate('ConfirmOTP', { username: email, isResetPassword: true }) }]
+      );
+    } catch (error) {
+      setIsLoading(false);
+      setError(error.message || 'Gửi yêu cầu lỗi, vui lòng thử lại');
     }
   };
 
@@ -73,7 +80,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
           <View style={styles.contentContainer}>
             <Text style={styles.description}>
-              Nhập email hoặc số điện thoại của bạn để nhận mã xác nhận
+              Nhập email của bạn để nhận mã xác nhận
             </Text>
 
             <View style={styles.inputWrapper}>
@@ -85,6 +92,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 onChangeText={(text) => {
                   setEmail(text);
                   setEmailError('');
+                  setError('');
                 }}
                 autoCapitalize="none"
                 keyboardType="email-address"
@@ -95,9 +103,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
               <Text style={styles.errorText}>{emailError}</Text>
             ) : null}
 
-            {error && (
+            {error ? (
               <Text style={styles.errorText}>{error}</Text>
-            )}
+            ) : null}
 
             <TouchableOpacity
               style={styles.submitButton}

@@ -45,12 +45,15 @@ export const authService = {
   // Quên mật khẩu - Gửi yêu cầu
   forgotPassword: async (email) => {
     try {
-      // Backend mới sử dụng username thay vì email
-      const username = email.split('@')[0];
-      const response = await api.post('/auth/reset-otp', { username, email });
-      return response; // axios.js đã trả về response.data trực tiếp
+      // Su1eed du1ee5ng email tru1ef1c tiu1ebfp lu00e0m username
+      // Khu00f4ng tu1ef1 u0111u1ed9ng tu00e1ch username nu1eefa vu00ec username cu00f3 thu1ec3 lu00e0 email u0111u1ea7y u0111u1ee7
+      const username = email; // Su1eed du1ee5ng ngu1ecdi gi00e1 tru1ecb ngu01b0u1eddi du00f9ng nhu1eadp
+
+      // Gu1ecdi API reset-otp
+      const response = await api.post('/auth/reset-otp', { username });
+      return response;
     } catch (error) {
-      throw error.response || { message: 'Lỗi kết nối đến server' };
+      throw error.response || { message: 'Lu1ed7i yu00eau cu1ea7u lu1ea5y lu1ea1i mu1eadt khu1ea9u' };
     }
   },
 
@@ -67,17 +70,21 @@ export const authService = {
 
   // Đặt lại mật khẩu sau khi quên
   resetPassword: async (email, otp, newPassword) => {
-    try {
-      // Backend mới sử dụng username và password thay vì email và newPassword
-      const username = email.split('@')[0];
+    try {      
+      // Su1eed du1ee5ng email tru1ef1c tiu1ebfp lu00e0m username
+      // Khu00f4ng tu1ef1 u0111u1ed9ng tu00e1ch username nu1eefa
+      const username = email; // Su1eed du1ee5ng ngu1ecdi gi00e1 tru1ecb ngu01b0u1eddi du00f9ng nhu1eadp
+      
+      // Truy1ec1n u0111u00fang params theo API cu1ee7a CNM_Chat-test
       const response = await api.post('/auth/confirm-password', { 
         username, 
         otp, 
         password: newPassword 
       });
-      return response; // axios.js đã trả về response.data trực tiếp
+      
+      return response;
     } catch (error) {
-      throw error.response || { message: 'Lỗi kết nối đến server' };
+      throw error.response || { message: 'Lu1ed7i u0111u1eb7t lu1ea1i mu1eadt khu1ea9u' };
     }
   },
 

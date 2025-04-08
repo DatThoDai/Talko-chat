@@ -42,5 +42,59 @@ export const userService = {
     } catch (error) {
       throw error.response || { message: 'Lỗi kết nối đến server' };
     }
+  },
+  
+  // Lấy thông tin profile của người dùng hiện tại từ CNM_Chat-test
+  getUserProfile: async (username) => {
+    try {
+      console.log('Calling API with username:', username);
+      
+      // Đảm bảo sử dụng đúng username trong database
+      // Nếu username được cung cấp không phải là email đầy đủ, thêm @gmail.com
+      let fullUsername = username;
+      if (!username.includes('@')) {
+        fullUsername = `${username}@gmail.com`;
+        console.log('Converting to full email:', fullUsername);
+      }
+      
+      const response = await api.get(`/auth/users/${fullUsername}`);
+      console.log('API response successful:', response);
+      return response; // axios.js đã trả về response.data trực tiếp
+    } catch (error) {
+      console.error('API error:', error);
+      if (error.response) {
+        console.error('Error response:', error.response);
+      }
+      throw error.response || { message: 'Lỗi khi lấy thông tin người dùng' };
+    }
+  },
+  
+  // Thay đổi mật khẩu người dùng
+  changePassword: async (oldPassword, newPassword, username) => {
+    try {
+      console.log('Changing password for user:', username);
+      
+      // Đảm bảo sử dụng đúng username trong database
+      // Nếu username được cung cấp không phải là email đầy đủ, thêm @gmail.com
+      let fullUsername = username;
+      if (!username.includes('@')) {
+        fullUsername = `${username}@gmail.com`;
+        console.log('Converting to full email for password change:', fullUsername);
+      }
+      
+      const response = await api.post('/auth/change-password', { 
+        username: fullUsername, 
+        oldPassword, 
+        newPassword 
+      });
+      console.log('Password change response:', response);
+      return response; // axios.js đã trả về response.data trực tiếp
+    } catch (error) {
+      console.error('Password change error:', error);
+      if (error.response) {
+        console.error('Error response details:', error.response);
+      }
+      throw error.response || { message: 'Lỗi khi thay đổi mật khẩu' };
+    }
   }
 };

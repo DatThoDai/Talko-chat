@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-import { useDispatch, useSelector } from 'react-redux';
-import { changePassword, clearError } from '../redux/authSlice';
+import { useSelector } from 'react-redux';
+import { userService } from '../api/userService';
 import { colors, spacing } from '../styles';
 
 const validationSchema = Yup.object().shape({
@@ -32,32 +32,50 @@ const ChangePasswordScreen = ({ navigation }) => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   
-  const dispatch = useDispatch();
-  const { isLoading, error, passwordChangeSuccess } = useSelector(state => state.auth);
+  // Lấy thông tin user từ Redux store thay vì AuthContext
+  const { user: authUser } = useSelector((state) => state.auth);
   
-  // Xóa lỗi khi vào màn hình
-  useEffect(() => {
-    dispatch(clearError());
-    return () => dispatch(clearError());
-  }, [dispatch]);
-  
-  // Quay lại màn hình trước khi thay đổi mật khẩu thành công
-  useEffect(() => {
-    if (passwordChangeSuccess) {
+  const handleSubmit = async (values, { resetForm }) => {
+    try {
+      if (!authUser || !authUser.username) {
+        setError('Vui lòng đăng nhập lại để thực hiện thao tác này');
+        return;
+      }
+      
+      setIsLoading(true);
+      setError('');
+      
+      // Log thông tin để debug
+      console.log('Auth user for password change:', authUser);
+      const username = authUser.email || authUser.username;
+      console.log('Using username for password change:', username);
+      
+      // Gọi API thay đổi mật khẩu
+      await userService.changePassword(
+        values.currentPassword,
+        values.newPassword,
+        username
+      );
+      
+      setIsLoading(false);
+      
+      // Thông báo thành công và quay về màn hình trước
       Alert.alert(
         'Thành công',
         'Mật khẩu của bạn đã được thay đổi',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
+      
+      // Reset form
+      resetForm();
+    } catch (err) {
+      setIsLoading(false);
+      console.error('Error changing password:', err);
+      setError(err.message || 'Không thể thay đổi mật khẩu. Vui lòng thử lại sau.');
     }
-  }, [passwordChangeSuccess, navigation]);
-
-  const handleSubmit = (values, { resetForm }) => {
-    dispatch(changePassword({
-      currentPassword: values.currentPassword,
-      newPassword: values.newPassword
-    }));
   };
 
   return (
@@ -92,7 +110,10 @@ const ChangePasswordScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   value={values.currentPassword}
-                  onChangeText={handleChange('currentPassword')}
+                  onChangeText={(text) => {
+                    handleChange('currentPassword')(text);
+                    setError('');
+                  }}
                   onBlur={handleBlur('currentPassword')}
                   placeholder="Nhập mật khẩu hiện tại"
                   secureTextEntry={!showCurrentPassword}
@@ -119,7 +140,10 @@ const ChangePasswordScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   value={values.newPassword}
-                  onChangeText={handleChange('newPassword')}
+                  onChangeText={(text) => {
+                    handleChange('newPassword')(text);
+                    setError('');
+                  }}
                   onBlur={handleBlur('newPassword')}
                   placeholder="Nhập mật khẩu mới"
                   secureTextEntry={!showNewPassword}
@@ -146,7 +170,10 @@ const ChangePasswordScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   value={values.confirmPassword}
-                  onChangeText={handleChange('confirmPassword')}
+                  onChangeText={(text) => {
+                    handleChange('confirmPassword')(text);
+                    setError('');
+                  }}
                   onBlur={handleBlur('confirmPassword')}
                   placeholder="Nhập lại mật khẩu mới"
                   secureTextEntry={!showConfirmPassword}

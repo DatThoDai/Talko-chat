@@ -16,7 +16,9 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useSelector, useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, typography } from '../styles';
-import { logoutUser, updateAvatar as updateProfileImage, checkAuth } from '../redux/authSlice';
+import { logoutUser } from '../redux/authSlice';
+import { userService } from '../api/userService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ProfileItem = ({ label, value, extraInfo }) => {
   return (
@@ -42,25 +44,47 @@ const ProfileOption = ({ icon, title, onPress, color = colors.dark }) => {
 
 const ProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user, isLoading } = useSelector((state) => state.auth);
+  const { user: authUser } = useSelector((state) => state.auth);
   const [profileImage, setProfileImage] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Tải thông tin hồ sơ người dùng khi màn hình được hiển thị
-    dispatch(checkAuth());
-    
-    // Cập nhật ảnh hồ sơ từ dữ liệu người dùng nếu có
-    if (user && user.avatar) {
-      setProfileImage(user.avatar);
+    // Lấy thông tin người dùng từ API khi màn hình được hiển thị
+    fetchUserProfile();
+  }, []);
+
+  // Lấy thông tin người dùng từ API
+  const fetchUserProfile = async () => {
+    if (!authUser || !authUser.username) return;
+
+    console.log('Auth user:', authUser);
+    // Username từ đối tượng auth user có thể không đúng với database
+    // Thử dùng email đầy đủ nếu có, nếu không thì dùng username
+    const username = authUser.email || authUser.username;
+    console.log('Using username for API call:', username);
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await userService.getUserProfile(username);
+      console.log('User profile response:', response);
+      setUser(response);
+
+      // Cập nhật ảnh hồ sơ từ dữ liệu người dùng nếu có
+      if (response && response.avatar) {
+        setProfileImage(response.avatar);
+      }
+
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+      setIsLoading(false);
+      setError('Không thể tải thông tin người dùng. Vui lòng kiểm tra username trong cấu hình.');
     }
-  }, [dispatch]);
-  
-  // Theo dõi sự thay đổi của dữ liệu người dùng
-  useEffect(() => {
-    if (user && user.avatar) {
-      setProfileImage(user.avatar);
-    }
-  }, [user]);
+  };
 
   const requestMediaLibraryPermissions = async () => {
     if (Platform.OS !== 'web') {
@@ -79,9 +103,9 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleChangeProfileImage = async () => {
     const hasPermission = await requestMediaLibraryPermissions();
-    
+
     if (!hasPermission) return;
-    
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -89,13 +113,13 @@ const ProfileScreen = ({ navigation }) => {
         aspect: [1, 1],
         quality: 0.7,
       });
-      
+
       if (!result.canceled && result.assets && result.assets[0].uri) {
         const imageUri = result.assets[0].uri;
         setProfileImage(imageUri);
-        
-        // Upload ảnh đại diện lên server và cập nhật dữ liệu người dùng
-        dispatch(updateProfileImage(imageUri));
+
+        // Tạm thởi chỉ cập nhật UI, cần triển khai API upload avatar sau
+        Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện');
       }
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể thay đổi ảnh đại diện. Vui lòng thử lại sau.');
@@ -103,52 +127,62 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleEditProfile = () => {
-    navigation.navigate('EditProfile');
+    // Chuyển đến màn hình EditProfile
+    Alert.alert('Thông báo', 'Chức năng đang được phát triển');
+    // navigation.navigate('EditProfile');
   };
 
   const handleChangePassword = () => {
+    // Chuyển đến màn hình ChangePassword
     navigation.navigate('ChangePassword');
   };
 
-  const handleLogoutAll = () => {
-    Alert.alert(
-      'Đăng xuất khỏi các thiết bị khác',
-      'Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị khác?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Đăng xuất', 
-          onPress: () => {
-            // Gọi API để đăng xuất khỏi tất cả các thiết bị
-            // Tạm thởi gọi hàm logout thông thường vì chưa có API đăng xuất từ tất cả thiết bị
-            dispatch(logoutUser());
-          }
-        }
-      ]
-    );
+  // Tạo chữ cái đầu từ tên người dùng cho ảnh đại diện mặc định
+  const getInitials = () => {
+    if (user && user.name) {
+      return user.name.charAt(0).toUpperCase();
+    } else if (authUser && authUser.username) {
+      return authUser.username.charAt(0).toUpperCase();
+    }
+    return 'U';
   };
 
+  // Xử lý đăng xuất
   const handleLogout = () => {
     Alert.alert(
       'Đăng xuất',
       'Bạn có chắc chắn muốn đăng xuất?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Đăng xuất', 
-          style: 'destructive',
-          onPress: () => {
-            dispatch(logoutUser());
-          }
-        }
+        {
+          text: 'Đăng xuất',
+          onPress: async () => {
+            try {
+              // Xóa token từ AsyncStorage
+              await AsyncStorage.removeItem('token');
+              await AsyncStorage.removeItem('refreshToken');
+              
+              // Đăng xuất thông qua Redux - điều này sẽ tự động kích hoạt chuyển sang AuthStack
+              // vì AppNavigator sẽ hiển thị AuthStackNavigator khi isAuthenticated = false
+              dispatch(logoutUser());
+              
+              // KHÔNG cần gọi navigation.reset vì AppNavigator sẽ tự động xử lý điều hướng
+              // dựa trên giá trị isAuthenticated trong Redux state
+            } catch (error) {
+              console.error('Error logging out:', error);
+            }
+          },
+        },
       ]
     );
   };
 
-  if (!user) {
+  // Nếu đang tải dữ liệu
+  if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text>Đang tải...</Text>
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 20, color: colors.gray }}>Đang tải thông tin...</Text>
       </SafeAreaView>
     );
   }
@@ -156,99 +190,90 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
-      
+
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Cá nhân</Text>
+        <Text style={styles.headerTitle}>Thông tin cá nhân</Text>
       </View>
-      
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Profile header with image and name */}
         <View style={styles.profileHeader}>
-          <TouchableOpacity 
-            style={styles.profileImageContainer}
-            onPress={handleChangeProfileImage}
-          >
+          <View style={styles.profileImageContainer}>
             {profileImage ? (
-              <Image 
-                source={{ uri: profileImage }} 
-                style={styles.profileImage} 
-              />
+              <Image source={{ uri: profileImage }} style={styles.profileImage} />
             ) : (
               <View style={styles.defaultProfileImage}>
-                <Text style={styles.profileInitials}>
-                  {user.name ? user.name.charAt(0).toUpperCase() : '?'}
-                </Text>
+                <Text style={styles.profileInitials}>{getInitials()}</Text>
               </View>
             )}
-            <View style={styles.editProfileImageButton}>
-              <Icon name="camera-alt" size={16} color={colors.white} />
+            <TouchableOpacity
+              style={styles.editProfileImageButton}
+              onPress={handleChangeProfileImage}
+            >
+              <Icon name="edit" size={18} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.profileName}>{user?.name || authUser?.username || 'Người dùng'}</Text>
+        </View>
+
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchUserProfile}>
+              <Text style={styles.retryText}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Basic information section */}
+            <View style={styles.infoSection}>
+              <ProfileItem
+                label="Tên người dùng"
+                value={user?.username || authUser?.username || 'Chưa có thông tin'}
+              />
+              <ProfileItem label="Họ tên" value={user?.name || 'Chưa cập nhật'} />
+              <ProfileItem
+                label="Trạng thái"
+                value={user?.isActived ? 'Đã kích hoạt' : 'Chưa kích hoạt'}
+                extraInfo={user?.isActived ? 'Tài khoản đang hoạt động bình thường' : 'Cần xác thực để kích hoạt tài khoản'}
+              />
             </View>
-          </TouchableOpacity>
-          
-          <Text style={styles.profileName}>
-            {user.name || 'Hào Nguyễn'}
-          </Text>
-        </View>
-        
-        <View style={styles.infoSection}>
-          <ProfileItem 
-            label="Giới tính" 
-            value={user.gender || 'Nam'} 
-          />
-          
-          <ProfileItem 
-            label="Ngày sinh" 
-            value={user.birthdate || '20/11/2000'} 
-          />
-          
-          <ProfileItem 
-            label="Điện thoại" 
-            value={user.phone || '0798662438'} 
-            extraInfo="Số điện thoại của bạn chỉ hiển thị với bạn bè có lưu số của bạn trong danh bạ"
-          />
-        </View>
-        
+          </>
+        )}
+
+        {/* Profile options section */}
         <View style={styles.optionsSection}>
-          <ProfileOption 
-            icon="edit" 
-            title="Đổi thông tin" 
-            onPress={handleEditProfile} 
+          <ProfileOption
+            icon="edit"
+            title="Cập nhật thông tin cá nhân"
+            onPress={handleEditProfile}
           />
-          
-          <ProfileOption 
-            icon="lock" 
-            title="Đổi mật khẩu" 
-            onPress={handleChangePassword} 
+          <ProfileOption
+            icon="lock"
+            title="Thay đổi mật khẩu"
+            onPress={handleChangePassword}
           />
-          
-          <ProfileOption 
-            icon="logout" 
-            title="Đăng xuất ra khỏi các thiết bị khác" 
-            onPress={handleLogoutAll} 
-          />
-          
-          <ProfileOption 
-            icon="exit-to-app" 
-            title="Đăng xuất" 
-            onPress={handleLogout} 
+          <ProfileOption
+            icon="exit-to-app"
+            title="Đăng xuất"
+            onPress={handleLogout}
             color={colors.danger}
           />
         </View>
       </ScrollView>
-      
+
       {/* Footer navigation */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.footerItem} 
-          onPress={() => navigation.navigate('Home')}>
+        <TouchableOpacity style={styles.footerItem} onPress={() => navigation.navigate('Home')}>
           <Icon name="chat" size={24} color={colors.gray} />
           <Text style={styles.footerText}>Tin nhắn</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.footerItem} 
-          onPress={() => navigation.navigate('Contact')}>
+
+        <TouchableOpacity style={styles.footerItem} onPress={() => navigation.navigate('Contact')}>
           <Icon name="groups" size={24} color={colors.gray} />
           <Text style={styles.footerText}>Danh bạ</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[styles.footerItem, styles.footerItemActive]}>
           <Icon name="person" size={24} color={colors.primary} />
           <Text style={styles.footerTextActive}>Cá nhân</Text>
@@ -400,6 +425,26 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: 'bold',
     marginTop: spacing.xs,
+  },
+  errorContainer: {
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  errorText: {
+    color: colors.danger,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  retryButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: colors.white,
+    fontWeight: 'bold',
   },
 });
 

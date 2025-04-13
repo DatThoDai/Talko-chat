@@ -16,9 +16,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing } from '../styles';
 import { logoutUser } from '../redux/authSlice';
-import meApi from '../api/meApi';
-import authApi from '../api/authService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi } from '../api/authApi';
 
 // Hiển thị một mục thông tin cá nhân
 const ProfileItem = ({ label, value, extraInfo }) => {
@@ -59,7 +57,7 @@ const ProfileScreen = ({ navigation }) => {
 
   // Lấy thông tin người dùng từ API
   const fetchUserProfile = async () => {
-    if (!authUser) return;
+    if (!authUser || !authUser.username) return;
 
     console.log('Auth user:', authUser);
     
@@ -73,7 +71,7 @@ const ProfileScreen = ({ navigation }) => {
       );
       
       // Gọi API lấy thông tin người dùng với timeout
-      const responsePromise = meApi.fetchProfile();
+      const responsePromise = authApi.getUserProfile();
       const response = await Promise.race([responsePromise, timeoutPromise]);
       
       console.log('User profile response:', response);
@@ -93,14 +91,15 @@ const ProfileScreen = ({ navigation }) => {
     } catch (err) {
       console.error('Error fetching user profile:', err);
       
-      // Xử lý các loại lỗi khác nhau
+      // Xử lý các loại lỗi khác nhau dựa trên status code
       if (err.message === 'Yêu cầu hết thời gian') {
         setError('Yêu cầu hết thời gian. Vui lòng kiểm tra kết nối mạng và thử lại.');
-      } else if (err.response && err.response.status === 401) {
+      } else if (err.status === 401) {
         setError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        // Có thể trigger refresh token ở đây
-      } else if (err.response && err.response.status === 404) {
+      } else if (err.status === 404) {
         setError('Không tìm thấy thông tin người dùng.');
+      } else if (err.status === 0) {
+        setError('Không có kết nối internet. Vui lòng kiểm tra mạng và thử lại.');
       } else {
         setError(err.message || 'Không thể tải thông tin người dùng. Vui lòng thử lại sau.');
       }
@@ -140,43 +139,8 @@ const ProfileScreen = ({ navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setIsLoading(true);
-        
-        // Tạo FormData để upload ảnh
-        const formData = new FormData();
-        const imageUri = result.assets[0].uri;
-        const filename = imageUri.split('/').pop();
-        
-        // Determine file type
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image';
-        
-        formData.append('file', {
-          uri: imageUri,
-          name: filename,
-          type
-        });
-        
-        try {
-          // Upload ảnh sử dụng meApi
-          const response = await meApi.updateAvatar(formData);
-          
-          // Cập nhật UI
-          setProfileImage(response.avatar || imageUri);
-          
-          // Cập nhật user object
-          setUser(prev => ({
-            ...prev,
-            avatar: response.avatar || imageUri
-          }));
-          
-          Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
-        } catch (uploadError) {
-          console.error('Error uploading avatar:', uploadError);
-          Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại sau.');
-        } finally {
-          setIsLoading(false);
-        }
+        setProfileImage(result.assets[0].uri);
+        // Thêm logic lưu ảnh lên server tại đây
       }
     } catch (e) {
       console.error('Error picking image:', e);
@@ -200,8 +164,6 @@ const ProfileScreen = ({ navigation }) => {
   const getInitials = () => {
     if (user && user.name) {
       return user.name.charAt(0).toUpperCase();
-    } else if (authUser && authUser.name) {
-      return authUser.name.charAt(0).toUpperCase();
     } else if (authUser && authUser.username) {
       return authUser.username.charAt(0).toUpperCase();
     }
@@ -223,12 +185,7 @@ const ProfileScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Xóa token và thông tin người dùng
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('refreshToken');
-              await AsyncStorage.removeItem('user');
-              
-              // Cập nhật Redux state
+              await authApi.logout();
               dispatch(logoutUser());
             } catch (error) {
               console.error('Error logging out:', error);

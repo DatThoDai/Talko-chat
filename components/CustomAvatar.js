@@ -5,29 +5,40 @@ import { colors, spacing, borderRadius } from '../styles';
 const CustomAvatar = ({ 
   size = 40, 
   source, 
-  name, 
+  imageUrl,
+  name = '',
+  color,
   online = false,
   style 
 }) => {
+  // Get initials from name (maximum 2 characters)
   const initials = name
     ?.split(' ')
-    .map(word => word[0])
+    .map(word => word && word[0])
+    .filter(Boolean)
     .join('')
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || '?';
+
+  // Determine the background color
+  const backgroundColor = color || colors.primary;
+
+  // Determine if we should show an image
+  const hasImage = source || imageUrl;
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
-      {source ? (
+      {hasImage ? (
         <Image
-          source={source}
+          source={source || { uri: imageUrl }}
           style={[styles.image, { borderRadius: size / 2 }]}
+          defaultSource={require('../assets/default-avatar.png')}
         />
       ) : (
         <View
           style={[
             styles.initialsContainer,
-            { backgroundColor: colors.primary, borderRadius: size / 2 },
+            { backgroundColor, borderRadius: size / 2 },
           ]}
         >
           <Text
@@ -79,4 +90,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomAvatar; 
+export default CustomAvatar;

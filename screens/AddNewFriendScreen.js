@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,57 +8,50 @@ import {
   FlatList,
   ActivityIndicator,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomAvatar from '../components/CustomAvatar';
 import { colors, spacing, typography, borderRadius } from '../styles';
+import userApi from '../api/userApi';
+import friendApi from '../api/friendApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Mock user search results for demonstration
-const mockSearchResults = [
-  {
-    id: '10',
-    name: 'Ngọc Hân',
-    email: 'ngochan@example.com',
-    avatar: null,
-    isFriend: false,
-  },
-  {
-    id: '11',
-    name: 'Thanh Tùng',
-    email: 'thanhtung@example.com',
-    avatar: null,
-    isFriend: false,
-  },
-  {
-    id: '12',
-    name: 'Minh Tuấn',
-    email: 'minhtuan@example.com',
-    avatar: null,
-    isFriend: true,
-  },
-];
+const UserItem = ({ user, onAddFriend, isSent }) => {
+  // Determine button state
+  let buttonText = 'Kết bạn';
+  let buttonStyle = styles.addButton;
+  let isDisabled = false;
 
-const UserItem = ({ user, onAddFriend }) => {
+  if (user.isFriend) {
+    buttonText = 'Đã kết bạn';
+    buttonStyle = styles.addedButton;
+    isDisabled = true;
+  } else if (isSent) {
+    buttonText = 'Đã gửi';
+    buttonStyle = styles.sentButton;
+    isDisabled = true;
+  }
+
   return (
     <View style={styles.userItem}>
       <CustomAvatar size={50} name={user.name} source={user.avatar} />
       
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{user.name}</Text>
-        <Text style={styles.userEmail}>{user.email}</Text>
+        <Text style={styles.userName}>{user.name || 'Người dùng'}</Text>
+        <Text style={styles.userEmail}>{user.username || ''}</Text>
       </View>
       
       <TouchableOpacity 
-        style={[
-          styles.actionButton,
-          user.isFriend ? styles.addedButton : styles.addButton,
-        ]}
-        disabled={user.isFriend}
+        style={[styles.actionButton, buttonStyle]}
+        disabled={isDisabled}
         onPress={() => onAddFriend(user)}
       >
-        <Text style={styles.actionButtonText}>
-          {user.isFriend ? 'Đã kết bạn' : 'Kết bạn'}
+        <Text style={[styles.actionButtonText, 
+          isDisabled && buttonText === 'Đã gửi' ? {color: colors.gray} : 
+          isDisabled ? {color: colors.dark} : {color: colors.white}]}>
+          {buttonText}
         </Text>
       </TouchableOpacity>
     </View>
@@ -70,33 +63,77 @@ const AddNewFriendScreen = ({ navigation }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [sentRequests, setSentRequests] = useState([]); // Track sent requests
+  const [error, setError] = useState(null);
 
-  const handleSearch = () => {
+  // Load sent friend requests
+  useEffect(() => {
+    loadSentRequests();
+  }, []);
+
+  const loadSentRequests = async () => {
+    try {
+      const response = await friendApi.fetchMyRequestFriend();
+      if (response && Array.isArray(response)) {
+        // Extract user IDs from sent requests
+        const sentIds = response.map(request => request.receiver?._id || request.receiver);
+        setSentRequests(sentIds);
+      }
+    } catch (error) {
+      console.error('Error loading sent requests:', error);
+    }
+  };
+
+  const handleSearch = async () => {
     if (searchQuery.trim() === '') return;
     
     setIsSearching(true);
     setHasSearched(true);
+    setError(null);
     
-    // Simulate API call to search users
-    setTimeout(() => {
-      setSearchResults(mockSearchResults);
+    try {
+      // Call the userApi to search for users
+      const response = await userApi.fetchUser(searchQuery.trim());
+      
+      if (response) {
+        // Normalize the response to an array
+        const results = Array.isArray(response) ? response : [response];
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setError('Không thể tìm kiếm người dùng. Vui lòng thử lại sau.');
+      setSearchResults([]);
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
   };
 
-  const handleAddFriend = (user) => {
-    // Simulate API call to add friend
-    const updatedResults = searchResults.map(result => 
-      result.id === user.id ? { ...result, isFriend: true } : result
-    );
-    
-    setSearchResults(updatedResults);
-    
-    // Show success feedback here (could be a toast message in a real app)
+  const handleAddFriend = async (user) => {
+    try {
+      // Call the friendApi to send a friend request
+      await friendApi.sendRequestFriend(user._id);
+      
+      // Update local state to show the request was sent
+      setSentRequests(prev => [...prev, user._id]);
+      
+      // Show success feedback
+      Alert.alert('Thành công', 'Đã gửi lời mời kết bạn');
+    } catch (error) {
+      console.error('Add friend error:', error);
+      Alert.alert('Lỗi', 'Không thể gửi lời mời kết bạn. Vui lòng thử lại sau.');
+    }
   };
 
   const handleBack = () => {
     navigation.goBack();
+  };
+
+  // Check if a friend request has been sent to this user
+  const isRequestSent = (user) => {
+    return sentRequests.includes(user._id);
   };
 
   return (
@@ -114,14 +151,14 @@ const AddNewFriendScreen = ({ navigation }) => {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Tìm kiếm theo tên, email hoặc số điện thoại"
+          placeholder="Tìm kiếm theo tên đăng nhập"
           value={searchQuery}
           onChangeText={setSearchQuery}
           returnKeyType="search"
           onSubmitEditing={handleSearch}
         />
         <TouchableOpacity 
-          style={styles.searchButton} 
+          style={[styles.searchButton, searchQuery.trim() === '' ? styles.disabledButton : {}]} 
           onPress={handleSearch}
           disabled={searchQuery.trim() === ''}
         >
@@ -138,13 +175,22 @@ const AddNewFriendScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Đang tìm kiếm...</Text>
         </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Icon name="error-outline" size={50} color={colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       ) : hasSearched ? (
         <FlatList
           data={searchResults}
           renderItem={({ item }) => (
-            <UserItem user={item} onAddFriend={handleAddFriend} />
+            <UserItem 
+              user={item} 
+              onAddFriend={handleAddFriend} 
+              isSent={isRequestSent(item)}
+            />
           )}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item._id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -216,6 +262,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  disabledButton: {
+    backgroundColor: colors.light,
+  },
   listContent: {
     paddingBottom: spacing.lg,
   },
@@ -253,10 +302,14 @@ const styles = StyleSheet.create({
   addedButton: {
     backgroundColor: colors.light,
   },
+  sentButton: {
+    backgroundColor: colors.light,
+    borderWidth: 1,
+    borderColor: colors.gray,
+  },
   actionButtonText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: colors.white,
   },
   loadingContainer: {
     flex: 1,
@@ -266,6 +319,18 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     color: colors.gray,
+    marginTop: spacing.md,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.error,
+    textAlign: 'center',
     marginTop: spacing.md,
   },
   emptyContainer: {

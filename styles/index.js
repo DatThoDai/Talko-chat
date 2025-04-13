@@ -12,6 +12,12 @@ export const colors = {
   white: '#FFFFFF',
   black: '#000000',
   gray: '#8E8E93',
+  darkGray: '#636366',
+  lightGray: '#D1D1D6',
+  error: '#FF3B30',
+  background: '#F2F2F7',
+  backgroundLight: '#F9F9F9',
+  transparent: 'transparent',
 };
 
 export const typography = {
@@ -51,6 +57,26 @@ export const borderRadius = {
   round: 9999,
 };
 
+// Message types used throughout the app
+export const MESSAGE_TYPES = {
+  TEXT: 'text',
+  IMAGE: 'image',
+  VIDEO: 'video',
+  FILE: 'file',
+  NOTIFY: 'notify',  // For system messages
+  AUDIO: 'audio',
+};
+
+// Reaction types
+export const REACTION_TYPES = {
+  LIKE: 'like',
+  LOVE: 'love',
+  LAUGH: 'laugh',
+  WOW: 'wow',
+  SAD: 'sad',
+  ANGRY: 'angry',
+};
+
 export default StyleSheet.create({
   container: {
     flex: 1,
@@ -78,4 +104,4 @@ export default StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-}); 
+});

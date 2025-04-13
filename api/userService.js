@@ -2,6 +2,16 @@ import api from './axios';
 
 // User profile services
 export const userService = {
+  // Lấy thông tin người dùng theo ID
+  fetchUser: async (userId) => {
+    try {
+      const response = await api.get(`/users/${userId}`);
+      return response;
+    } catch (error) {
+      throw error.response || { message: 'Lỗi kết nối đến server' };
+    }
+  },
+
   // Cập nhật thông tin profile
   updateProfile: async (userData) => {
     try {
@@ -98,3 +108,6 @@ export const userService = {
     }
   }
 };
+
+// Export default cho tương thích ngược
+export default userService;

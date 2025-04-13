@@ -11,42 +11,35 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearError } from '../redux/authSlice';
 import { colors, typography, spacing, borderRadius } from '../styles';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import authApi from '../api/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [emailError, setEmailError] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const { isLoading, error, isAuthenticated } = useSelector(state => state.auth);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const dispatch = useDispatch();
-
-  // Không sử dụng navigation.replace để chuyển hướng về Home sau khi đăng nhập
-  // Thay vào đó, sử dụng AppNavigator để chuyển hướng khi isAuthenticated = true
-  // useEffect(() => {
-  //   if (isAuthenticated) {
-  //     navigation.replace('Home');
-  //   }
-  // }, [isAuthenticated, navigation]);
 
   // Xác thực đầu vào
   const validateInputs = () => {
     let isValid = true;
     
-    // Xác thực email
-    if (!email.trim()) {
-      setEmailError('Email là bắt buộc');
-      isValid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError('Email không hợp lệ');
+    // Xác thực username (email)
+    if (!username.trim()) {
+      setUsernameError('Tên đăng nhập là bắt buộc');
       isValid = false;
     } else {
-      setEmailError('');
+      setUsernameError('');
     }
     
     // Xác thực mật khẩu
@@ -63,13 +56,52 @@ const LoginScreen = ({ navigation }) => {
     return isValid;
   };
 
-  const handleLogin = () => {
-    // Xóa lỗi từ lần trước
-    dispatch(clearError());
+  const handleLogin = async () => {
+    // Clear previous errors
+    setLoginError('');
     
-    // Kiểm tra hợp lệ trước khi đăng nhập
-    if (validateInputs()) {
-      dispatch(loginUser({ email, password }));
+    // Validate inputs
+    if (!validateInputs()) {
+      return;
+    }
+    
+    setIsLoggingIn(true);
+    
+    try {
+      // Call login API
+      const response = await authApi.login(username, password);
+      
+      // Store auth data in AsyncStorage
+      if (response.token) {
+        await AsyncStorage.setItem('token', response.token);
+        
+        if (response.refreshToken) {
+          await AsyncStorage.setItem('refreshToken', response.refreshToken);
+        }
+        
+        if (response.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(response.user));
+        }
+        
+        // Dispatch login action to update Redux state
+        dispatch(loginUser({
+          user: response.user,
+          token: response.token,
+          refreshToken: response.refreshToken
+        }));
+        
+        // Navigation to home will be handled by the app navigator based on auth state
+      } else {
+        setLoginError('Đăng nhập thất bại: Không nhận được token');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoginError(
+        error.message || 
+        'Đăng nhập thất bại. Vui lòng kiểm tra thông tin đăng nhập của bạn.'
+      );
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -86,20 +118,19 @@ const LoginScreen = ({ navigation }) => {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputWrapper}>
-              <Icon name="email" size={20} color={colors.gray} style={styles.inputIcon} />
+              <Icon name="person" size={20} color={colors.gray} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Email/Số điện thoại"
-                value={email}
+                placeholder="Tên đăng nhập"
+                value={username}
                 onChangeText={(text) => {
-                  setEmail(text);
-                  setEmailError('');
+                  setUsername(text);
+                  setUsernameError('');
                 }}
                 autoCapitalize="none"
-                keyboardType="email-address"
               />
             </View>
-            {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
+            {usernameError ? <Text style={styles.fieldError}>{usernameError}</Text> : null}
 
             <View style={styles.inputWrapper}>
               <Icon name="lock" size={20} color={colors.gray} style={styles.inputIcon} />
@@ -133,18 +164,18 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
             </TouchableOpacity>
 
-            {error && (
+            {loginError ? (
               <Text style={styles.errorText}>
-                {error}
+                {loginError}
               </Text>
-            )}
+            ) : null}
 
             <TouchableOpacity
               style={styles.loginButton}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isLoggingIn}
             >
-              {isLoading ? (
+              {isLoggingIn ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.loginButtonText}>Đăng nhập</Text>
@@ -207,32 +238,33 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    paddingVertical: spacing.md,
+    height: 40,
     fontSize: 16,
+    color: colors.dark,
   },
   eyeIcon: {
-    padding: spacing.sm,
+    padding: spacing.xs,
+  },
+  errorText: {
+    color: colors.danger,
+    textAlign: 'center',
+    marginVertical: spacing.md,
   },
   forgotPasswordButton: {
     alignSelf: 'flex-end',
-    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
   },
   forgotPasswordText: {
     color: colors.primary,
     fontSize: 14,
   },
-  errorText: {
-    color: colors.danger,
-    marginVertical: spacing.sm,
-    textAlign: 'center',
-  },
   loginButton: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
-    marginTop: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.md,
   },
   loginButtonText: {
     color: colors.white,
@@ -242,10 +274,10 @@ const styles = StyleSheet.create({
   bottomContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   noAccountText: {
-    color: colors.dark,
+    color: colors.gray,
     fontSize: 14,
   },
   registerText: {

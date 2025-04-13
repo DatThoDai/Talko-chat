@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authService } from '../api/authService';
-import { userService } from '../api/userService';
+import { authService, meApi } from '../api';
 
 const initialState = {
   user: null,
@@ -23,10 +22,13 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async (credentials, { rejectWithValue }) => {
     try {
+      console.log('loginUser thunk called with:', credentials.email);
+      
       // Gọi API đăng nhập thực
       const response = await authService.login(credentials.email, credentials.password);
+      console.log('Login response:', response);
       
-      // Thu thập hai cách truy cập
+      // Get token and refreshToken from response
       const token = response.token || (response.data && response.data.token);
       const refreshToken = response.refreshToken || (response.data && response.data.refreshToken);
       
@@ -34,12 +36,28 @@ export const loginUser = createAsyncThunk(
         throw new Error('Không tìm thấy token trong response');
       }
       
-      // Tạo thông tin user từ dữ liệu nhận được nếu không có
-      const user = response.user || {
-        id: credentials.email,
-        username: credentials.email.split('@')[0],
-        email: credentials.email
-      };
+      // Get user data from response
+      let user = response.user;
+      
+      // If user data is not available, create minimal user object
+      if (!user) {
+        console.log('No user data in response, creating minimal user object');
+        user = {
+          _id: credentials.email, // Sử dụng email như là ID trong trường hợp không có ID thực
+          username: credentials.email,
+          name: credentials.email.split('@')[0],
+          email: credentials.email
+        };
+      }
+      
+      // Đảm bảo user có trường _id (cần thiết cho socket)
+      if (!user._id && user.id) {
+        user._id = user.id; // Dùng id nếu có
+      } else if (!user._id && user.email) {
+        user._id = user.email; // Dùng email như là ID dự phòng
+      }
+      
+      console.log('User data to be stored:', user);
       
       // Lưu dữ liệu vào AsyncStorage
       await AsyncStorage.setItem('user', JSON.stringify(user));
@@ -50,6 +68,7 @@ export const loginUser = createAsyncThunk(
       
       return { user, token, refreshToken };
     } catch (error) {
+      console.error('Login error:', error);
       return rejectWithValue(error.message || 'Đăng nhập thất bại');
     }
   }
@@ -98,22 +117,36 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (profileData, { getState, rejectWithValue }) => {
     try {
-      // Gọi API cập nhật thông tin profile
-      const response = await userService.updateProfile(profileData);
+      console.log('authSlice: updating profile with data:', profileData);
       
-      // Lấy dữ liệu user hiện tại từ state
+      // Gọi API cập nhật thông tin profile sử dụng authApi mới
+      const updatedUser = await meApi.updateUserProfile(profileData);
+      
+      // Nếu cập nhật thành công, lấy dữ liệu user hiện tại từ state và merge
       const { auth } = getState();
-      const updatedUser = {
+      const mergedUser = {
         ...auth.user,
-        ...response.user
+        ...updatedUser
       };
       
-      // Lưu vào AsyncStorage
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      console.log('authSlice: updated user data:', mergedUser);
       
-      return updatedUser;
+      // Lưu vào AsyncStorage để duy trì đăng nhập
+      await AsyncStorage.setItem('user', JSON.stringify(mergedUser));
+      
+      return mergedUser;
     } catch (error) {
-      return rejectWithValue(error.message || 'Cập nhật thông tin thất bại');
+      console.error('authSlice updateProfile error:', error);
+      // // Xử lý các trường hợp lỗi khác nhau
+      // if (error.status === 408) {
+      //   return rejectWithValue('Yêu cầu hết thời gian, vui lòng thử lại');
+      // } else if (error.status === 401) {
+      //   return rejectWithValue('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
+      // } else if (error.status === 0) {
+      //   return rejectWithValue('Không có kết nối internet, vui lòng kiểm tra mạng');
+      // } else {
+      //   return rejectWithValue(error.message || 'Cập nhật thông tin thất bại');
+      // }
     }
   }
 );
@@ -146,7 +179,7 @@ export const verifyOtp = createAsyncThunk(
 
 // Đặt lại mật khẩu mới
 export const resetPassword = createAsyncThunk(
-  'auth/resetPassword',
+  'auth/confirm-password',
   async ({ email, otp, newPassword }, { rejectWithValue }) => {
     try {
       const response = await authService.resetPassword(email, otp, newPassword);
@@ -173,32 +206,16 @@ export const changePassword = createAsyncThunk(
 // Upload avatar
 export const updateAvatar = createAsyncThunk(
   'auth/updateAvatar',
-  async (imageUri, { getState, rejectWithValue }) => {
+  async (imageBase64, { getState, rejectWithValue }) => {
     try {
-      // Tạo form data để upload ảnh
-      const formData = new FormData();
+      // Gọi API cập nhật ảnh đại diện
+      const avatarUrl = await authService.updateAvatar(imageBase64);
       
-      // Lấy tên file từ URI
-      const filename = imageUri.split('/').pop();
-      
-      // Xác định kiểu MIME
-      const match = /\.([\w]+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      
-      // Thêm file vào form data
-      formData.append('avatar', {
-        uri: imageUri,
-        name: filename,
-        type
-      });
-      
-      const response = await userService.uploadAvatar(formData);
-      
-      // Cập nhật thông tin user
+      // Lấy dữ liệu user hiện tại
       const { auth } = getState();
       const updatedUser = {
         ...auth.user,
-        avatar: response.avatarUrl
+        avatar: avatarUrl
       };
       
       // Lưu vào AsyncStorage
@@ -207,6 +224,19 @@ export const updateAvatar = createAsyncThunk(
       return updatedUser;
     } catch (error) {
       return rejectWithValue(error.message || 'Cập nhật ảnh đại diện thất bại');
+    }
+  }
+);
+
+// Refresh token
+export const refreshUserToken = createAsyncThunk(
+  'auth/refreshToken',
+  async (_, { rejectWithValue }) => {
+    try {
+      const result = await authService.refreshToken();
+      return result;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Refresh token failed');
     }
   }
 );
@@ -243,10 +273,13 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.refreshToken = action.payload.refreshToken;
+        
+        console.log('Login successful, user authenticated:', action.payload.user);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
+        console.log('Login rejected with error:', action.payload);
       })
       
       // Logout
@@ -376,6 +409,21 @@ const authSlice = createSlice({
         state.user = action.payload;
       })
       .addCase(updateAvatar.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      
+      // Refresh Token
+      .addCase(refreshUserToken.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(refreshUserToken.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.token = action.payload.token;
+        state.refreshToken = action.payload.refreshToken;
+      })
+      .addCase(refreshUserToken.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

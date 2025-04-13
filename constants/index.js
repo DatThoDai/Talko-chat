@@ -1,8 +1,8 @@
 // Cấu hình API URL và các hằng số khác
 // Sử dụng IP máy của bạn thay vì localhost khi phát triển với Expo trên điện thoại thật
 // Ví dụ: nếu chạy local thì dùng 192.168.x.x thay vì localhost
-export const REACT_APP_API_URL = 'http://192.168.1.5:3001'; // Thay đổi IP và port phù hợp
-export const REACT_APP_SOCKET_URL = 'http://192.168.1.5:3001'; // Thay đổi IP và port phù hợp
+export const REACT_APP_API_URL = 'http://172.30.16.1:3001'; // Thay đổi IP và port phù hợp
+export const REACT_APP_SOCKET_URL = 'http://172.30.16.1:3001'; // Thay đổi IP và port phù hợp
 
 // Các tham số mặc định
 export const DEFAULT_MESSAGE_PARAMS = {

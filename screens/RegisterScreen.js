@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
-import { authService } from '../api/authService';
+import authApi from '../api/authService';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -65,27 +65,30 @@ const RegisterScreen = ({ navigation }) => {
     
     setIsLoading(true);
     try {
-      // Gửi API đăng ký
-      const userData = {
-        name,
-        email,
-        username: email, // Sử dụng email làm username
-        password,
-        phone
-      };
-
-      await authService.register(userData);
+      // Sử dụng authApi để đăng ký
+      const response = await authApi.registry(name, email, password, phone);
       
-      // Chuyển sang màn hình nhập OTP
       setIsLoading(false);
-      Alert.alert(
-        'Đăng ký thành công',
-        'Mã OTP đã được gửi đến email/số điện thoại của bạn. Vui lòng nhập mã để xác thực tài khoản.',
-        [{ text: 'OK', onPress: () => navigation.navigate('ConfirmOTP', { username: email }) }]
-      );
+      
+      // Kiểm tra phản hồi từ API
+      if (response) {
+        // Chuyển sang màn hình nhập OTP nếu cần
+        Alert.alert(
+          'Đăng ký thành công',
+          'Vui lòng xác nhận tài khoản qua email hoặc đăng nhập vào ứng dụng.',
+          [{ 
+            text: 'OK', 
+            onPress: () => navigation.navigate('Login')
+          }]
+        );
+      }
     } catch (error) {
+      console.error('Register error:', error);
       setIsLoading(false);
-      setError(error.message || 'Đã xảy ra lỗi khi đăng ký');
+      setError(
+        error.message || 
+        'Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại sau.'
+      );
     }
   };
 
@@ -198,13 +201,13 @@ const RegisterScreen = ({ navigation }) => {
                 <Text style={styles.registerButtonText}>Đăng ký</Text>
               )}
             </TouchableOpacity>
-          </View>
 
-          <View style={styles.bottomContainer}>
-            <Text style={styles.hasAccountText}>Đã có tài khoản? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginText}>Đăng nhập</Text>
-            </TouchableOpacity>
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Đã có tài khoản? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.loginLink}>Đăng nhập</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -277,17 +280,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  bottomContainer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 'auto',
     marginBottom: spacing.md,
   },
-  hasAccountText: {
+  loginText: {
     color: colors.dark,
     fontSize: 14,
   },
-  loginText: {
+  loginLink: {
     color: colors.primary,
     fontSize: 14,
     fontWeight: 'bold',

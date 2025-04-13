@@ -3,16 +3,18 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
-  TextInput,
+  TouchableOpacity,
   Alert,
-  StatusBar,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useSelector } from 'react-redux';
 import CustomAvatar from '../components/CustomAvatar';
-import { colors, spacing, typography, borderRadius } from '../styles';
+import { colors, spacing, typography } from '../styles';
+import { conversationService } from '../api';
 
 // Mock group members data for demonstration
 const mockMembers = [
@@ -131,8 +133,8 @@ const MemberScreen = ({ route, navigation }) => {
     // Simulate API call to get members
     const fetchMembers = async () => {
       // In a real app, replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setMembers(mockMembers);
+      const response = await conversationService.getMembers(conversationId);
+      setMembers(response.data);
       setIsLoading(false);
     };
 
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginHorizontal: spacing.md,
     marginVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
   },
   searchInput: {
     flex: 1,
@@ -344,7 +346,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: spacing.md,
+    borderRadius: 10,
   },
   adminBadgeText: {
     color: colors.white,
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     top: spacing.xl,
     backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
     elevation: 5,
     shadowColor: colors.dark,
     shadowOffset: { width: 0, height: 2 },

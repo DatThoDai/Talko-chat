@@ -6,7 +6,6 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
-  StatusBar,
   Alert,
   Platform,
   ActivityIndicator,
@@ -15,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useSelector, useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, spacing, typography } from '../styles';
+import { colors, spacing } from '../styles';
 import { logoutUser } from '../redux/authSlice';
-import { userService } from '../api/userService';
+import meApi from '../api/meApi';
+import authApi from '../api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Hiển thị một mục thông tin cá nhân
 const ProfileItem = ({ label, value, extraInfo }) => {
   return (
     <View style={styles.profileItem}>
@@ -32,6 +33,7 @@ const ProfileItem = ({ label, value, extraInfo }) => {
   );
 };
 
+// Hiển thị một tùy chọn trong profile
 const ProfileOption = ({ icon, title, onPress, color = colors.dark }) => {
   return (
     <TouchableOpacity style={styles.profileOption} onPress={onPress}>
@@ -57,20 +59,30 @@ const ProfileScreen = ({ navigation }) => {
 
   // Lấy thông tin người dùng từ API
   const fetchUserProfile = async () => {
-    if (!authUser || !authUser.username) return;
+    if (!authUser) return;
 
     console.log('Auth user:', authUser);
-    // Username từ đối tượng auth user có thể không đúng với database
-    // Thử dùng email đầy đủ nếu có, nếu không thì dùng username
-    const username = authUser.email || authUser.username;
-    console.log('Using username for API call:', username);
-
+    
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await userService.getUserProfile(username);
+      // Sử dụng timeout để tránh chờ vô hạn
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Yêu cầu hết thời gian')), 10000)
+      );
+      
+      // Gọi API lấy thông tin người dùng với timeout
+      const responsePromise = meApi.fetchProfile();
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
       console.log('User profile response:', response);
+      
+      // Kiểm tra response để đảm bảo dữ liệu hợp lệ
+      if (!response) {
+        throw new Error('Dữ liệu người dùng không hợp lệ');
+      }
+      
       setUser(response);
 
       // Cập nhật ảnh hồ sơ từ dữ liệu người dùng nếu có
@@ -78,14 +90,26 @@ const ProfileScreen = ({ navigation }) => {
         setProfileImage(response.avatar);
       }
 
-      setIsLoading(false);
     } catch (err) {
       console.error('Error fetching user profile:', err);
+      
+      // Xử lý các loại lỗi khác nhau
+      if (err.message === 'Yêu cầu hết thời gian') {
+        setError('Yêu cầu hết thời gian. Vui lòng kiểm tra kết nối mạng và thử lại.');
+      } else if (err.response && err.response.status === 401) {
+        setError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+        // Có thể trigger refresh token ở đây
+      } else if (err.response && err.response.status === 404) {
+        setError('Không tìm thấy thông tin người dùng.');
+      } else {
+        setError(err.message || 'Không thể tải thông tin người dùng. Vui lòng thử lại sau.');
+      }
+    } finally {
       setIsLoading(false);
-      setError('Không thể tải thông tin người dùng. Vui lòng kiểm tra username trong cấu hình.');
     }
   };
 
+  // Yêu cầu quyền truy cập thư viện ảnh
   const requestMediaLibraryPermissions = async () => {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -101,6 +125,7 @@ const ProfileScreen = ({ navigation }) => {
     return true;
   };
 
+  // Xử lý thay đổi ảnh đại diện
   const handleChangeProfileImage = async () => {
     const hasPermission = await requestMediaLibraryPermissions();
 
@@ -111,29 +136,63 @@ const ProfileScreen = ({ navigation }) => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.5,
       });
 
-      if (!result.canceled && result.assets && result.assets[0].uri) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsLoading(true);
+        
+        // Tạo FormData để upload ảnh
+        const formData = new FormData();
         const imageUri = result.assets[0].uri;
-        setProfileImage(imageUri);
-
-        // Tạm thởi chỉ cập nhật UI, cần triển khai API upload avatar sau
-        Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện');
+        const filename = imageUri.split('/').pop();
+        
+        // Determine file type
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image';
+        
+        formData.append('file', {
+          uri: imageUri,
+          name: filename,
+          type
+        });
+        
+        try {
+          // Upload ảnh sử dụng meApi
+          const response = await meApi.updateAvatar(formData);
+          
+          // Cập nhật UI
+          setProfileImage(response.avatar || imageUri);
+          
+          // Cập nhật user object
+          setUser(prev => ({
+            ...prev,
+            avatar: response.avatar || imageUri
+          }));
+          
+          Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
+        } catch (uploadError) {
+          console.error('Error uploading avatar:', uploadError);
+          Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại sau.');
+        } finally {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      Alert.alert('Lỗi', 'Không thể thay đổi ảnh đại diện. Vui lòng thử lại sau.');
+    } catch (e) {
+      console.error('Error picking image:', e);
+      Alert.alert('Lỗi', 'Không thể chọn ảnh. Vui lòng thử lại sau.');
     }
   };
 
+  // Xử lý cập nhật thông tin cá nhân
   const handleEditProfile = () => {
-    // Chuyển đến màn hình EditProfile
-    Alert.alert('Thông báo', 'Chức năng đang được phát triển');
-    // navigation.navigate('EditProfile');
+    // Chuyển đến màn hình chỉnh sửa thông tin cá nhân
+    navigation.navigate('EditProfile', { user });
   };
 
+  // Xử lý thay đổi mật khẩu
   const handleChangePassword = () => {
-    // Chuyển đến màn hình ChangePassword
+    // Chuyển đến màn hình thay đổi mật khẩu
     navigation.navigate('ChangePassword');
   };
 
@@ -141,6 +200,8 @@ const ProfileScreen = ({ navigation }) => {
   const getInitials = () => {
     if (user && user.name) {
       return user.name.charAt(0).toUpperCase();
+    } else if (authUser && authUser.name) {
+      return authUser.name.charAt(0).toUpperCase();
     } else if (authUser && authUser.username) {
       return authUser.username.charAt(0).toUpperCase();
     }
@@ -153,21 +214,22 @@ const ProfileScreen = ({ navigation }) => {
       'Đăng xuất',
       'Bạn có chắc chắn muốn đăng xuất?',
       [
-        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Hủy',
+          style: 'cancel',
+        },
         {
           text: 'Đăng xuất',
+          style: 'destructive',
           onPress: async () => {
             try {
-              // Xóa token từ AsyncStorage
+              // Xóa token và thông tin người dùng
               await AsyncStorage.removeItem('token');
               await AsyncStorage.removeItem('refreshToken');
+              await AsyncStorage.removeItem('user');
               
-              // Đăng xuất thông qua Redux - điều này sẽ tự động kích hoạt chuyển sang AuthStack
-              // vì AppNavigator sẽ hiển thị AuthStackNavigator khi isAuthenticated = false
+              // Cập nhật Redux state
               dispatch(logoutUser());
-              
-              // KHÔNG cần gọi navigation.reset vì AppNavigator sẽ tự động xử lý điều hướng
-              // dựa trên giá trị isAuthenticated trong Redux state
             } catch (error) {
               console.error('Error logging out:', error);
             }
@@ -182,27 +244,21 @@ const ProfileScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 20, color: colors.gray }}>Đang tải thông tin...</Text>
+        <Text style={{ marginTop: spacing.md }}>Đang tải thông tin...</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
-
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Thông tin cá nhân</Text>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile header with image and name */}
+        {/* Header section */}
         <View style={styles.profileHeader}>
           <View style={styles.profileImageContainer}>
             {profileImage ? (
               <Image source={{ uri: profileImage }} style={styles.profileImage} />
             ) : (
-              <View style={styles.defaultProfileImage}>
+              <View style={[styles.defaultProfileImage, user?.avatarColor ? { backgroundColor: user.avatarColor } : null]}>
                 <Text style={styles.profileInitials}>{getInitials()}</Text>
               </View>
             )}
@@ -231,11 +287,29 @@ const ProfileScreen = ({ navigation }) => {
                 label="Tên người dùng"
                 value={user?.username || authUser?.username || 'Chưa có thông tin'}
               />
-              <ProfileItem label="Họ tên" value={user?.name || 'Chưa cập nhật'} />
+              <ProfileItem 
+                label="Họ tên" 
+                value={user?.name || 'Chưa cập nhật'} 
+              />
               <ProfileItem
-                label="Trạng thái"
-                value={user?.isActived ? 'Đã kích hoạt' : 'Chưa kích hoạt'}
-                extraInfo={user?.isActived ? 'Tài khoản đang hoạt động bình thường' : 'Cần xác thực để kích hoạt tài khoản'}
+                label="Ngày sinh"
+                value={user?.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                }) : 'Chưa cập nhật'} 
+              />
+              <ProfileItem
+                label="Giới tính"
+                value={user?.gender !== undefined ? (user.gender ? 'Nam' : 'Nữ') : 'Chưa cập nhật'}
+              />
+              <ProfileItem
+                label="Ngày tham gia"
+                value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                }) : 'Không xác định'}
               />
             </View>
           </>
@@ -261,24 +335,6 @@ const ProfileScreen = ({ navigation }) => {
           />
         </View>
       </ScrollView>
-
-      {/* Footer navigation */}
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.footerItem} onPress={() => navigation.navigate('Home')}>
-          <Icon name="chat" size={24} color={colors.gray} />
-          <Text style={styles.footerText}>Tin nhắn</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.footerItem} onPress={() => navigation.navigate('Contact')}>
-          <Icon name="groups" size={24} color={colors.gray} />
-          <Text style={styles.footerText}>Danh bạ</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.footerItem, styles.footerItemActive]}>
-          <Icon name="person" size={24} color={colors.primary} />
-          <Text style={styles.footerTextActive}>Cá nhân</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -287,17 +343,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
-  },
-  header: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.white,
   },
   scrollContent: {
     paddingBottom: spacing.xl,
@@ -398,33 +443,6 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     flex: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.light,
-    backgroundColor: colors.white,
-  },
-  footerItem: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  footerItemActive: {
-    borderTopWidth: 2,
-    borderTopColor: colors.primary,
-  },
-  footerText: {
-    fontSize: 12,
-    color: colors.gray,
-    marginTop: spacing.xs,
-  },
-  footerTextActive: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: 'bold',
-    marginTop: spacing.xs,
   },
   errorContainer: {
     padding: spacing.lg,

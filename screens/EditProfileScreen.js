@@ -18,26 +18,48 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { colors, spacing } from '../styles';
-import { updateProfile, clearError, getUserProfile } from '../redux/authSlice';
+import meApi from '../api/meApi';
 
 const validationSchema = Yup.object().shape({
   name: Yup.string().required('Tên không được để trống'),
-  email: Yup.string().email('Email không hợp lệ').required('Email không được để trống'),
+  //email: Yup.string().email('Email không hợp lệ').required('Email không được để trống'),
   phone: Yup.string().matches(/^[0-9]{10}$/, 'Số điện thoại phải có 10 chữ số'),
 });
+
+const formatDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+};
+
+// Chuyển đổi chuỗi ngày dạng DD/MM/YYYY thành Date object
+const parseDate = (dateString) => {
+  if (!dateString) return new Date();
+  if (typeof dateString === 'string' && dateString.includes('/')) {
+    const [day, month, year] = dateString.split('/');
+    return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+  } else if (dateString instanceof Date) {
+    return dateString;
+  } else {
+    // Nếu là ISO string từ MongoDB
+    try {
+      return new Date(dateString);
+    } catch (e) {
+      return new Date();
+    }
+  }
+};
 
 const EditProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user, isLoading, error, profileUpdateSuccess } = useSelector((state) => state.auth);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(parseDate(user?.birthdate || '20/11/2000'));
-  const [gender, setGender] = useState(user?.gender || 'Nam');
+  const [selectedDate, setSelectedDate] = useState(user?.dateOfBirth ? parseDate(user.dateOfBirth) : new Date());
+  const [gender, setGender] = useState(user?.gender !== undefined ? (user.gender ? 'Nam' : 'Nữ') : 'Nam');
   
   // Xóa lỗi khi vào màn hình
   useEffect(() => {
     dispatch(clearError());
-    // Tải lại thông tin người dùng khi vào màn hình
-    dispatch(getUserProfile());
     return () => dispatch(clearError());
   }, [dispatch]);
   
@@ -52,31 +74,46 @@ const EditProfileScreen = ({ navigation }) => {
     }
   }, [profileUpdateSuccess, navigation]);
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-  };
-
-  const parseDate = (dateString) => {
-    if (!dateString) return new Date();
-    const [day, month, year] = dateString.split('/');
-    return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-  };
-
-  const handleSubmit = (values) => {
-    // Gọi API cập nhật hồ sơ thông qua Redux
-    dispatch(updateProfile({
-      ...values,
-      gender,
+  const handleSubmit = async (values) => {
+    console.log('Submitting profile update with values:', values);
+    
+    // Chuẩn bị dữ liệu để cập nhật hồ sơ
+    const profileData = {
+      name: values.name.trim(),
+      phone: values.phone?.trim() || '',
       birthdate: formatDate(selectedDate),
-    }));
+      gender: gender,
+      // Username là email trong MongoDB
+      username: user.username
+    };
+    
+    console.log('Sending profile data:', profileData);
+    
+    // Gọi API để cập nhật hồ sơ
+    try {
+      await meApi.updateProfile(profileData);
+      Alert.alert(
+        'Thành công',
+        'Thông tin cá nhân đã được cập nhật',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert(
+        'Lỗi',
+        'Không thể cập nhật thông tin cá nhân',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Đang tải...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Đang tải thông tin...</Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -99,15 +136,21 @@ const EditProfileScreen = ({ navigation }) => {
       <Formik
         initialValues={{
           name: user.name || '',
-          email: user.email || '',
+          email: user.username || '',
           phone: user.phone || '',
-          birthdate: user.birthdate || '20/11/2000',
         }}
         validationSchema={validationSchema}
         onSubmit={handleSubmit}
+        enableReinitialize
       >
         {({ handleChange, handleBlur, handleSubmit, values, errors, touched, setFieldValue }) => (
           <ScrollView style={styles.content}>
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorMessage}>{error}</Text>
+              </View>
+            )}
+            
             <View style={styles.formGroup}>
               <Text style={styles.label}>Họ và tên</Text>
               <TextInput
@@ -115,7 +158,7 @@ const EditProfileScreen = ({ navigation }) => {
                 value={values.name}
                 onChangeText={handleChange('name')}
                 onBlur={handleBlur('name')}
-                placeholder="Nhập họ và tên"
+                placeholder="Nhập họ và tên của bạn"
               />
               {touched.name && errors.name && (
                 <Text style={styles.errorText}>{errors.name}</Text>
@@ -123,19 +166,12 @@ const EditProfileScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Email (không thể thay đổi)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.light }]}
                 value={values.email}
-                onChangeText={handleChange('email')}
-                onBlur={handleBlur('email')}
-                placeholder="Nhập email"
-                keyboardType="email-address"
-                autoCapitalize="none"
+                editable={false}
               />
-              {touched.email && errors.email && (
-                <Text style={styles.errorText}>{errors.email}</Text>
-              )}
             </View>
             
             <View style={styles.formGroup}>
@@ -145,12 +181,24 @@ const EditProfileScreen = ({ navigation }) => {
                 value={values.phone}
                 onChangeText={handleChange('phone')}
                 onBlur={handleBlur('phone')}
-                placeholder="Nhập số điện thoại"
+                placeholder="Nhập số điện thoại của bạn"
                 keyboardType="phone-pad"
               />
               {touched.phone && errors.phone && (
                 <Text style={styles.errorText}>{errors.phone}</Text>
               )}
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Ngày sinh</Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text>
+                  {formatDate(selectedDate)}
+                </Text>
+              </TouchableOpacity>
             </View>
             
             <View style={styles.formGroup}>
@@ -178,161 +226,13 @@ const EditProfileScreen = ({ navigation }) => {
               </View>
             </View>
             
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Ngày sinh</Text>
-              <TouchableOpacity
-                style={styles.input}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text>{values.birthdate}</Text>
-              </TouchableOpacity>
-              
-              <Modal
-                transparent={true}
-                visible={showDatePicker}
-                animationType="slide"
-                onRequestClose={() => setShowDatePicker(false)}
-              >
-                <View style={styles.modalOverlay}>
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.datePickerHeader}>
-                      <Text style={styles.datePickerTitle}>Chọn ngày sinh</Text>
-                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                        <Icon name="close" size={24} color={colors.dark} />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    <View style={styles.datePickerContent}>
-                      <View style={styles.pickerRow}>
-                        {/* Day Selector */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Ngày</Text>
-                          <FlatList
-                            data={Array.from({length: 31}, (_, i) => String(i + 1).padStart(2, '0'))}
-                            renderItem={({item}) => (
-                              <TouchableOpacity 
-                                style={[styles.pickerItem, 
-                                  item === String(selectedDate.getDate()).padStart(2, '0') && styles.selectedPickerItem]}
-                                onPress={() => {
-                                  const newDate = new Date(selectedDate);
-                                  newDate.setDate(parseInt(item));
-                                  setSelectedDate(newDate);
-                                }}
-                              >
-                                <Text style={[styles.pickerItemText, 
-                                  item === String(selectedDate.getDate()).padStart(2, '0') && styles.selectedPickerItemText]}>
-                                  {item}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            keyExtractor={item => `day-${item}`}
-                            style={styles.pickerList}
-                            showsVerticalScrollIndicator={false}
-                            initialScrollIndex={selectedDate.getDate() - 1}
-                            getItemLayout={(data, index) => (
-                              {length: 44, offset: 44 * index, index}
-                            )}
-                          />
-                        </View>
-                        
-                        {/* Month Selector */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Tháng</Text>
-                          <FlatList
-                            data={Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'))}
-                            renderItem={({item}) => (
-                              <TouchableOpacity 
-                                style={[styles.pickerItem, 
-                                  item === String(selectedDate.getMonth() + 1).padStart(2, '0') && styles.selectedPickerItem]}
-                                onPress={() => {
-                                  const newDate = new Date(selectedDate);
-                                  newDate.setMonth(parseInt(item) - 1);
-                                  setSelectedDate(newDate);
-                                }}
-                              >
-                                <Text style={[styles.pickerItemText, 
-                                  item === String(selectedDate.getMonth() + 1).padStart(2, '0') && styles.selectedPickerItemText]}>
-                                  {item}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            keyExtractor={item => `month-${item}`}
-                            style={styles.pickerList}
-                            showsVerticalScrollIndicator={false}
-                            initialScrollIndex={selectedDate.getMonth()}
-                            getItemLayout={(data, index) => (
-                              {length: 44, offset: 44 * index, index}
-                            )}
-                          />
-                        </View>
-                        
-                        {/* Year Selector */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Năm</Text>
-                          <FlatList
-                            data={Array.from({length: 100}, (_, i) => String(2024 - i))}
-                            renderItem={({item}) => (
-                              <TouchableOpacity 
-                                style={[styles.pickerItem, 
-                                  item === String(selectedDate.getFullYear()) && styles.selectedPickerItem]}
-                                onPress={() => {
-                                  const newDate = new Date(selectedDate);
-                                  newDate.setFullYear(parseInt(item));
-                                  setSelectedDate(newDate);
-                                }}
-                              >
-                                <Text style={[styles.pickerItemText, 
-                                  item === String(selectedDate.getFullYear()) && styles.selectedPickerItemText]}>
-                                  {item}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            keyExtractor={item => `year-${item}`}
-                            style={styles.pickerList}
-                            showsVerticalScrollIndicator={false}
-                            initialScrollIndex={2024 - selectedDate.getFullYear()}
-                            getItemLayout={(data, index) => (
-                              {length: 44, offset: 44 * index, index}
-                            )}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.datePickerActions}>
-                      <TouchableOpacity 
-                        style={styles.cancelButton} 
-                        onPress={() => setShowDatePicker(false)}
-                      >
-                        <Text style={styles.cancelButtonText}>Hủy</Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={styles.confirmButton} 
-                        onPress={() => {
-                          setShowDatePicker(false);
-                          setFieldValue('birthdate', formatDate(selectedDate));
-                        }}
-                      >
-                        <Text style={styles.confirmButtonText}>Xác nhận</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </Modal>
-            </View>
-            
-            {error && (
-              <Text style={styles.errorText}>{error}</Text>
-            )}
-            
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSubmit}
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color={colors.white} />
+                <ActivityIndicator color={colors.white} size="small" />
               ) : (
                 <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
               )}
@@ -340,6 +240,166 @@ const EditProfileScreen = ({ navigation }) => {
           </ScrollView>
         )}
       </Formik>
+      
+      {/* Modal chọn ngày tháng năm sinh */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerContainer}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Chọn ngày sinh</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Icon name="close" size={24} color={colors.dark} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.datePickerContent}>
+              <View style={styles.pickerRow}>
+                {/* Ngày */}
+                <View style={styles.pickerColumn}>
+                  <Text style={styles.pickerLabel}>Ngày</Text>
+                  <FlatList
+                    style={styles.pickerList}
+                    data={Array.from({ length: 31 }, (_, i) => i + 1)}
+                    keyExtractor={(item) => `day-${item}`}
+                    showsVerticalScrollIndicator={false}
+                    initialScrollIndex={selectedDate.getDate() - 1}
+                    getItemLayout={(data, index) => ({
+                      length: 44,
+                      offset: 44 * index,
+                      index,
+                    })}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerItem,
+                          selectedDate.getDate() === item && styles.selectedPickerItem,
+                        ]}
+                        onPress={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setDate(item);
+                          setSelectedDate(newDate);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.pickerItemText,
+                            selectedDate.getDate() === item && styles.selectedPickerItemText,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+                
+                {/* Tháng */}
+                <View style={styles.pickerColumn}>
+                  <Text style={styles.pickerLabel}>Tháng</Text>
+                  <FlatList
+                    style={styles.pickerList}
+                    data={Array.from({ length: 12 }, (_, i) => i + 1)}
+                    keyExtractor={(item) => `month-${item}`}
+                    showsVerticalScrollIndicator={false}
+                    initialScrollIndex={selectedDate.getMonth()}
+                    getItemLayout={(data, index) => ({
+                      length: 44,
+                      offset: 44 * index,
+                      index,
+                    })}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerItem,
+                          selectedDate.getMonth() + 1 === item && styles.selectedPickerItem,
+                        ]}
+                        onPress={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setMonth(item - 1);
+                          setSelectedDate(newDate);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.pickerItemText,
+                            selectedDate.getMonth() + 1 === item && styles.selectedPickerItemText,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+                
+                {/* Năm */}
+                <View style={styles.pickerColumn}>
+                  <Text style={styles.pickerLabel}>Năm</Text>
+                  <FlatList
+                    style={styles.pickerList}
+                    data={Array.from(
+                      { length: 100 },
+                      (_, i) => new Date().getFullYear() - 99 + i
+                    )}
+                    keyExtractor={(item) => `year-${item}`}
+                    showsVerticalScrollIndicator={false}
+                    initialScrollIndex={
+                      selectedDate.getFullYear() - (new Date().getFullYear() - 99)
+                    }
+                    getItemLayout={(data, index) => ({
+                      length: 44,
+                      offset: 44 * index,
+                      index,
+                    })}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerItem,
+                          selectedDate.getFullYear() === item && styles.selectedPickerItem,
+                        ]}
+                        onPress={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setFullYear(item);
+                          setSelectedDate(newDate);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.pickerItemText,
+                            selectedDate.getFullYear() === item && styles.selectedPickerItemText,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.datePickerActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.confirmButtonText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -348,6 +408,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.gray,
   },
   header: {
     flexDirection: 'row',
@@ -434,6 +503,17 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: spacing.xs,
     fontSize: 14,
+  },
+  errorContainer: {
+    padding: spacing.md,
+    backgroundColor: colors.dangerLight,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  errorMessage: {
+    color: colors.danger,
+    fontSize: 14,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,

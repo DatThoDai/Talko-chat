@@ -11,7 +11,6 @@ export const authService = {
       // u0110u0103ng nhu1eadp u0111u1ec3 lu1ea5y token - simpler, more direct
       const loginResponse = await api.post('/auth/login', loginData);
       
-      // Return the response directly, whatever it is
       return loginResponse;
     } catch (error) {
       throw error.response || { message: 'Lu1ed7i ku1ebft nu1ed1i u0111u1ebfn server' };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   Image,
@@ -7,24 +7,68 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  Clipboard,
+  ToastAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { messageType } from '../../constants';
 import CustomAvatar from '../CustomAvatar';
+import MessageActions from './MessageActions';
 
 function SenderMessage(props) {
   const {
     message,
-    handleOpenOptionModal,
+    isMessageRecalled,
+    onPressEmoji,
     handleShowReactDetails,
-    content,
-    time,
-    reactVisibleInfo,
-    reactLength,
-    handleViewImage,
+    onPressDelete,
+    onPressEdit,
+    onReply,
+    onPressRecall,
+    loading,
+    previewImage,
+    navigation // Thêm navigation vào danh sách các props
   } = props;
+  
+  // Trích xuất trường dữ liệu từ message để tương thích với code cũ
+  const content = message?.content || '';
+  const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+  const reactLength = message?.reactions?.length || 0;
+  const reactVisibleInfo = reactLength > 0 ? `${reactLength}` : '';
+  const conversationId = message?.conversationId;
+  const currentUserId = message?.sender?._id;
+  const messageStatus = message?.status || 'sent';
 
-  const { type, sender, fileUrl } = message;
+  // Make sure we have message and sender
+  if (!message) {
+    console.warn('SenderMessage received null or undefined message');
+    return null;
+  }
+
+  const { type, sender = {}, fileUrl, fileName, fileSize } = message;
+  
+  // Ensure sender name is correct for this user
+  const senderName = sender?.name === 'truong chi bao' ? 
+    'truong chi bao' : // Keep this exact name
+    sender?.name || 'You';
+
+  // Force message to be recognized as from current user
+  const isMyMessage = true;
+  
+  // State for message actions modal
+  const [showActions, setShowActions] = useState(false);
+  
+  // Chuyển đổi dung lượng file sang định dạng readable
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
 
   // Render appropriate message content based on type
   const renderContent = () => {
@@ -43,12 +87,42 @@ function SenderMessage(props) {
       
       case messageType.FILE:
         return (
-          <View style={styles.fileContainer}>
-            <Icon name="document-outline" size={24} color="#2196F3" />
-            <Text style={styles.fileName} numberOfLines={1}>
-              {message.fileName || 'Tệp đính kèm'}
-            </Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.fileContainer}
+            onPress={() => {
+              // Mở file hoặc tải xuống file
+              if (fileUrl) {
+                // Có thể thêm logic để mở file hoặc tải xuống tại đây
+                Alert.alert(
+                  'Tệp đính kèm',
+                  `Bạn muốn làm gì với file ${fileName || 'này'}?`,
+                  [
+                    { text: 'Hủy', style: 'cancel' },
+                    { text: 'Tải xuống', onPress: () => console.log('Download file:', fileUrl) },
+                    { text: 'Chia sẻ', onPress: () => console.log('Share file:', fileUrl) },
+                  ]
+                );
+              }
+            }}
+          >
+            <View style={styles.fileIconContainer}>
+              <Icon 
+                name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
+                size={24} 
+                color="#2196F3" 
+              />
+            </View>
+            <View style={styles.fileInfoContainer}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {fileName || 'Tệp đính kèm'}
+              </Text>
+              {fileSize && (
+                <Text style={styles.fileSize}>
+                  {formatFileSize(fileSize)}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
         );
       
       case messageType.VIDEO:
@@ -73,23 +147,105 @@ function SenderMessage(props) {
     }
   };
 
+  // Handle long press to open message actions
+  const handleLongPress = () => {
+    setShowActions(true);
+  };
+
+  // Handle text selection for copy
+  const handleCopyText = (text) => {
+    Clipboard.setString(text);
+    
+    // Show toast or alert based on platform
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Thông báo', 'Đã sao chép văn bản');
+    }
+  };
+
+  // Check if message is recalled or deleted
+  const isRecalled = message.manipulatedUserIds?.includes(message.userId);
+  const isDeleted = message.isDeleted;
+  
+  // Modified message style if recalled or deleted
+  const messageStyle = isRecalled || isDeleted 
+    ? {...styles.messageContent, backgroundColor: '#f0f0f0'} 
+    : styles.messageContent;
+  
+  // Hiển thị chỉ báo trạng thái tin nhắn
+  const renderMessageStatus = () => {
+    if (!messageStatus) return null;
+    
+    switch (messageStatus) {
+      case 'sending':
+        return (
+          <View style={styles.statusContainer}>
+            <Icon name="time-outline" size={14} color="#999" />
+            <Text style={styles.statusText}>Đang gửi...</Text>
+          </View>
+        );
+      case 'sent':
+        return (
+          <View style={styles.statusContainer}>
+            <Icon name="checkmark-done" size={14} color="#4caf50" />
+          </View>
+        );
+      case 'failed':
+        return (
+          <View style={styles.statusContainer}>
+            <Icon name="alert-circle-outline" size={14} color="#f44336" />
+            <Text style={styles.statusText}>Lỗi</Text>
+            {onRetry && (
+              <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
+                <Text style={styles.retryText}>Thử lại</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      case 'retrying':
+        return (
+          <View style={styles.statusContainer}>
+            <Icon name="refresh-outline" size={14} color="#ff9800" />
+            <Text style={styles.statusText}>Đang thử lại...</Text>
+          </View>
+        );
+      case 'uploading':
+        // Hiển thị thanh tiến trình tải lên
+        return (
+          <View style={styles.progressContainer}>
+            <View style={styles.statusContainer}>
+              <Icon name="cloud-upload-outline" size={14} color="#2196F3" />
+              <Text style={styles.statusText}>Đang tải lên... {message.uploadProgress || 0}%</Text>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[styles.progressBar, { width: `${message.uploadProgress || 0}%` }]}
+              />
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.avatarContainer}>
-        <CustomAvatar
-          size={36}
-          name={sender?.name}
-          avatar={sender?.avatar}
-          color={sender?.avatarColor}
-        />
-      </View>
-      
       <View style={styles.messageContainer}>
-        <TouchableWithoutFeedback onLongPress={handleOpenOptionModal}>
-          <View style={styles.messageContent}>
-            <Text style={styles.senderName}>{sender?.name}</Text>
-            {renderContent()}
-            <Text style={styles.time}>{time}</Text>
+        <TouchableWithoutFeedback onLongPress={handleLongPress}>
+          <View style={[messageStyle, message.isTemp ? styles.tempMessage : null]}>
+            {isRecalled ? (
+              <Text style={styles.recalledText}>Tin nhắn đã bị thu hồi</Text>
+            ) : isDeleted ? (
+              <Text style={styles.recalledText}>Tin nhắn đã bị xóa</Text>
+            ) : (
+              renderContent()
+            )}
+            <View style={styles.timeContainer}>
+              {renderMessageStatus()}
+              <Text style={styles.time}>{time}</Text>
+            </View>
           </View>
         </TouchableWithoutFeedback>
         
@@ -101,6 +257,26 @@ function SenderMessage(props) {
           </TouchableOpacity>
         )}
       </View>
+      
+      <View style={styles.avatarContainer}>
+        <CustomAvatar
+          size={36}
+          name={sender?.name}
+          avatar={sender?.avatar}
+          color={sender?.avatarColor}
+        />
+      </View>
+      
+      <MessageActions
+        visible={showActions}
+        onClose={() => setShowActions(false)}
+        message={message}
+        currentUserId={currentUserId}
+        onReply={onReply}
+        onSelect={handleCopyText}
+        navigation={navigation}
+        conversationId={conversationId}
+      />
     </View>
   );
 }
@@ -111,17 +287,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     marginBottom: 15,
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    width: '100%',
   },
   avatarContainer: {
-    marginRight: 8,
+    marginLeft: 8,
   },
   messageContainer: {
     maxWidth: '75%',
+    alignItems: 'flex-end',
   },
   messageContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#DCF8C6',
     borderRadius: 16,
-    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
     padding: 12,
     shadowColor: '#000',
     shadowOffset: {
@@ -131,6 +310,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 1.0,
     elevation: 1,
+    alignSelf: 'flex-end',
   },
   senderName: {
     fontSize: 13,
@@ -173,12 +353,30 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginVertical: 4,
+    width: 200,
+  },
+  fileIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e3f2fd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileInfoContainer: {
+    flex: 1,
+    marginLeft: 8,
   },
   fileName: {
-    marginLeft: 8,
     color: '#2196F3',
     fontSize: 14,
+    fontWeight: '500',
     flex: 1,
+  },
+  fileSize: {
+    color: '#78909c',
+    fontSize: 12,
+    marginTop: 2,
   },
   videoContainer: {
     width: 200,
@@ -203,28 +401,102 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  recalledText: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 11,
+    color: '#888',
+    marginLeft: 4,
+  },
+  retryButton: {
+    marginLeft: 5,
+    backgroundColor: '#f1f1f1',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  retryText: {
+    fontSize: 10,
+    color: '#f44336',
+  },
+  progressContainer: {
+    width: '100%',
+    marginTop: 4,
+  },
+  progressBarContainer: {
+    height: 3,
+    width: '100%',
+    backgroundColor: '#e0e0e0',
+    borderRadius: 1.5,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#2196F3',
+  },
+  tempMessage: {
+    opacity: 0.8,
+    backgroundColor: '#f5f8ff',
+  },
 });
 
 SenderMessage.propTypes = {
   message: PropTypes.object,
-  handleOpenOptionModal: PropTypes.func,
+  isMessageRecalled: PropTypes.bool,
+  onPressEmoji: PropTypes.func,
   handleShowReactDetails: PropTypes.func,
+  onPressDelete: PropTypes.func,
+  onPressEdit: PropTypes.func,
+  onReply: PropTypes.func,
+  onPressRecall: PropTypes.func,
+  loading: PropTypes.bool,
+  previewImage: PropTypes.func,
+  navigation: PropTypes.object,
+  // Giữ lại các propTypes cũ để tương thích
   content: PropTypes.string,
   time: PropTypes.string,
   reactVisibleInfo: PropTypes.string,
   reactLength: PropTypes.number,
   handleViewImage: PropTypes.func,
+  conversationId: PropTypes.string,
+  currentUserId: PropTypes.string,
 };
 
 SenderMessage.defaultProps = {
   message: {},
-  handleOpenOptionModal: null,
+  isMessageRecalled: false,
+  onPressEmoji: null,
   handleShowReactDetails: null,
+  onPressDelete: null,
+  onPressEdit: null, 
+  onReply: () => {},
+  onPressRecall: null,
+  loading: false,
+  previewImage: null,
+  navigation: {},
+  // Giữ lại các defaultProps cũ để tương thích
   content: '',
   time: '',
   reactVisibleInfo: '',
   reactLength: 0,
   handleViewImage: null,
+  conversationId: '',
+  currentUserId: ''
 };
 
 export default SenderMessage;

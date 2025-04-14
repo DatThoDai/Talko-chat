@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   Image,
@@ -7,25 +7,54 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  Clipboard,
+  ToastAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { messageType } from '../../constants';
+import MessageActions from './MessageActions';
+import CustomAvatar from '../CustomAvatar';
 
 function ReceiverMessage(props) {
   const {
     message,
-    handleOpenOptionModal,
+    isMessageRecalled,
+    onPressEmoji,
     handleShowReactDetails,
-    content,
-    time,
-    reactVisibleInfo,
-    reactLength,
-    handleViewImage,
-    isLastMessage,
-    onLastView,
+    onReply,
+    previewImage
   } = props;
+  
+  // Trích xuất trường dữ liệu từ message để tương thích với code cũ
+  const content = message?.content || '';
+  const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+  const reactLength = message?.reactions?.length || 0;
+  const reactVisibleInfo = reactLength > 0 ? `${reactLength}` : '';
+  const conversationId = message?.conversationId;
+  const currentUserId = message?.sender?._id;
+  const isLastMessage = false; // Giả định không phải tin nhắn cuối
+  const onLastView = null;
+  const handleViewImage = previewImage || (() => {});
+  const navigation = {};
+  
+  // Make sure we have message
+  if (!message) {
+    console.warn('ReceiverMessage received null message');
+    return null;
+  }
+  
+  // State for message actions modal
+  const [showActions, setShowActions] = useState(false);
 
-  const { type, fileUrl, _id } = message;
+  const { type, fileUrl, _id, sender = {} } = message;
+  
+  // Ensure we display a valid sender name
+  const senderName = sender?.name || 
+                     (sender?.email && sender.email.includes('@') 
+                      ? sender.email.split('@')[0] 
+                      : 'Unknown User');
 
   // Render appropriate message content based on type
   const renderContent = () => {
@@ -33,7 +62,7 @@ function ReceiverMessage(props) {
       case messageType.IMAGE:
         return (
           <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, 'Bạn')}>
+            onPress={() => handleViewImage(fileUrl, senderName)}>
             <Image
               source={{ uri: fileUrl }}
               style={styles.image}
@@ -55,7 +84,7 @@ function ReceiverMessage(props) {
       case messageType.VIDEO:
         return (
           <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, 'Bạn', false)}>
+            onPress={() => handleViewImage(fileUrl, senderName, false)}>
             <View style={styles.videoContainer}>
               <Image
                 source={{ uri: message.thumbnail || fileUrl }}
@@ -74,12 +103,55 @@ function ReceiverMessage(props) {
     }
   };
 
+  // Handle long press to open message actions
+  const handleLongPress = () => {
+    setShowActions(true);
+  };
+
+  // Handle text selection for copy
+  const handleCopyText = (text) => {
+    Clipboard.setString(text);
+    
+    // Show toast or alert based on platform
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Thông báo', 'Đã sao chép văn bản');
+    }
+  };
+
+  // Check if message is recalled or deleted
+  const isRecalled = message.manipulatedUserIds?.includes(message.userId);
+  const isDeleted = message.isDeleted;
+  
+  // Modified message style if recalled or deleted
+  const messageStyle = isRecalled || isDeleted 
+    ? {...styles.messageContent, backgroundColor: '#a0a0a0'} 
+    : styles.messageContent;
+
   return (
     <View style={styles.container}>
+      <View style={styles.avatarContainer}>
+        <CustomAvatar
+          size={36}
+          name={senderName}
+          avatar={sender?.avatar || null}
+          color={sender?.avatarColor}
+        />
+      </View>
+
       <View style={styles.messageContainer}>
-        <TouchableWithoutFeedback onLongPress={handleOpenOptionModal}>
-          <View style={styles.messageContent}>
-            {renderContent()}
+        <Text style={styles.senderName}>{senderName}</Text>
+        
+        <TouchableWithoutFeedback onLongPress={handleLongPress}>
+          <View style={messageStyle}>
+            {isRecalled ? (
+              <Text style={styles.recalledText}>Tin nhắn đã bị thu hồi</Text>
+            ) : isDeleted ? (
+              <Text style={styles.recalledText}>Tin nhắn đã bị xóa</Text>
+            ) : (
+              renderContent()
+            )}
             <View style={styles.timeContainer}>
               <Text style={styles.time}>{time}</Text>
               
@@ -102,6 +174,17 @@ function ReceiverMessage(props) {
           </TouchableOpacity>
         )}
       </View>
+      
+      <MessageActions
+        visible={showActions}
+        onClose={() => setShowActions(false)}
+        message={message}
+        currentUserId={currentUserId}
+        onReply={onReply}
+        onSelect={handleCopyText}
+        navigation={navigation}
+        conversationId={conversationId}
+      />
     </View>
   );
 }
@@ -111,21 +194,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 10,
     marginBottom: 15,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  avatarContainer: {
+    marginRight: 8,
   },
   messageContainer: {
     maxWidth: '75%',
+    alignItems: 'flex-start',
   },
   messageContent: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 4,
     padding: 12,
-    alignSelf: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.0,
+    elevation: 1,
+    alignSelf: 'flex-start',
+  },
+  senderName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#555',
+    marginBottom: 4,
   },
   content: {
     fontSize: 15,
-    color: '#FFFFFF',
+    color: '#333',
   },
   timeContainer: {
     flexDirection: 'row',
@@ -135,14 +238,14 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#888',
   },
   seenButton: {
     marginLeft: 5,
   },
   seenText: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#888',
   },
   reactContainer: {
     backgroundColor: '#F0F2F5',
@@ -165,14 +268,14 @@ const styles = StyleSheet.create({
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     padding: 10,
     borderRadius: 8,
     marginVertical: 4,
   },
   fileName: {
     marginLeft: 8,
-    color: '#FFFFFF',
+    color: '#333',
     fontSize: 14,
     flex: 1,
   },
@@ -199,11 +302,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  recalledText: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+  },
 });
 
 ReceiverMessage.propTypes = {
   message: PropTypes.object,
-  handleOpenOptionModal: PropTypes.func,
   handleShowReactDetails: PropTypes.func,
   content: PropTypes.string,
   time: PropTypes.string,
@@ -212,11 +319,14 @@ ReceiverMessage.propTypes = {
   handleViewImage: PropTypes.func,
   isLastMessage: PropTypes.bool,
   onLastView: PropTypes.func,
+  navigation: PropTypes.object,
+  conversationId: PropTypes.string,
+  currentUserId: PropTypes.string,
+  onReply: PropTypes.func,
 };
 
 ReceiverMessage.defaultProps = {
   message: {},
-  handleOpenOptionModal: null,
   handleShowReactDetails: null,
   content: '',
   time: '',
@@ -225,6 +335,10 @@ ReceiverMessage.defaultProps = {
   handleViewImage: null,
   isLastMessage: false,
   onLastView: null,
+  navigation: {},
+  conversationId: '',
+  currentUserId: '',
+  onReply: () => {},
 };
 
 export default ReceiverMessage;

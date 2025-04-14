@@ -1,122 +1,106 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
-import {Text} from 'react-native';
+import {View, Text} from 'react-native';
 import {messageType} from '../../constants';
 import commonFuc from '../../utils/commonFuc';
-import dateUtils from '../../utils/dateUtils';
+// Sửa cách import để dùng named exports thay vì default export
+import { formatMessageTime } from '../../utils/dateUtils';
 import ReceiverMessage from './ReceiverMessage';
 import SenderMessage from './SenderMessage';
 
-function ChatMessage(props) {
-  const {
-    message,
-    isMyMessage,
-    setModalVisible,
-    showReactDetails,
-    navigation,
-    setImageProps,
-    isLastMessage,
-    onLastView,
-  } = props;
+// Định nghĩa MESSAGE_STATUS để tránh lỗi
+const MESSAGE_STATUS = {
+  recalled: 'recalled',
+  sent: 'sent',
+  sending: 'sending',
+  failed: 'failed'
+};
 
-  // Handle potential missing properties in message
-  if (!message || typeof message !== 'object') {
-    return null;
+const ChatMessage = ({
+  message,
+  userId,
+  onPressEmoji,
+  handleShowReactDetails,
+  onPressDelete,
+  onPressEdit,
+  onReply,
+  onPressRecall,
+  loading,
+  previewImage,
+}) => {
+  const isSender = () => {
+    console.log("Message ID:", message?._id, "Sender ID:", message?.sender?._id, "User ID:", userId);
+    // Check if this is a temporary message (waiting to be sent)
+    if (message?.isTemp === true) {
+      return true;
+    }
+    
+    // Check sender ID against user ID (multiple ways to check for robustness)
+    const senderIdMatches = 
+      (message?.sender?._id === userId) || 
+      (message?.sender === userId) ||
+      (message?.senderId === userId);
+      
+    console.log("Is sender match:", senderIdMatches);
+    return senderIdMatches;
+  };
+
+  const isMessageRecalled = message?.status === MESSAGE_STATUS.recalled;
+
+  // Determine if the message is from the current user
+  if (isSender()) {
+    return (
+      <SenderMessage
+        message={message}
+        isMessageRecalled={isMessageRecalled}
+        onPressEmoji={onPressEmoji}
+        handleShowReactDetails={handleShowReactDetails}
+        onPressDelete={onPressDelete}
+        onPressEdit={onPressEdit}
+        onReply={onReply}
+        onPressRecall={onPressRecall}
+        loading={loading}
+        previewImage={previewImage}
+      />
+    );
+  } else {
+    return (
+      <ReceiverMessage
+        message={message}
+        isMessageRecalled={isMessageRecalled}
+        onPressEmoji={onPressEmoji}
+        handleShowReactDetails={handleShowReactDetails}
+        onReply={onReply}
+        previewImage={previewImage}
+      />
+    );
   }
-
-  const {_id, createdAt, sender, isDeleted, reactions = [], type} = message;
-  const time = dateUtils.formatMessageTime(createdAt);
-  const reactLength = reactions ? reactions.length : 0;
-
-  // Generate reaction summary
-  const reactStr = reactions ? commonFuc.getReactionVisibleInfo(reactions) : '';
-  const reactVisibleInfo = `${reactStr} ${reactLength}`;
-
-  // Handle deleted messages
-  const content = isDeleted ? 'Tin nhắn đã được thu hồi' : message.content;
-
-  // Open message options modal
-  const handleOpenOptionModal = () => {
-    const obj = {
-      isVisible: true,
-      isRecall: isDeleted ? true : false,
-      isMyMessage,
-      messageId: _id,
-      messageContent: content,
-      type,
-    };
-    setModalVisible(obj);
-  };
-
-  // Show reaction details
-  const handleShowReactDetails = () => {
-    const obj = {
-      isVisible: true,
-      messageId: _id,
-      reacts: reactions,
-    };
-    showReactDetails(obj);
-  };
-
-  // View image in fullscreen
-  const handleViewImage = (url, userName) => {
-    setImageProps({
-      isVisible: true,
-      userName: userName,
-      content: [{url: url || ''}],
-      isImage: true,
-    });
-  };
-
-  return isMyMessage ? (
-    <ReceiverMessage
-      message={message}
-      handleOpenOptionModal={handleOpenOptionModal}
-      handleShowReactDetails={handleShowReactDetails}
-      content={content}
-      time={time}
-      reactVisibleInfo={reactVisibleInfo}
-      reactLength={reactLength}
-      handleViewImage={handleViewImage}
-      isLastMessage={isLastMessage}
-      onLastView={onLastView}
-    />
-  ) : (
-    <SenderMessage
-      message={message}
-      handleOpenOptionModal={handleOpenOptionModal}
-      handleShowReactDetails={handleShowReactDetails}
-      content={content}
-      time={time}
-      reactVisibleInfo={reactVisibleInfo}
-      reactLength={reactLength}
-      handleViewImage={handleViewImage}
-    />
-  );
-}
+};
 
 ChatMessage.propTypes = {
   message: PropTypes.object,
-  navigation: PropTypes.object,
-  currentUserId: PropTypes.string,
-  isMyMessage: PropTypes.bool,
-  isLastMessage: PropTypes.bool,
-  setModalVisible: PropTypes.func,
-  showReactDetails: PropTypes.func,
-  setImageProps: PropTypes.func,
-  onLastView: PropTypes.func,
+  userId: PropTypes.string,
+  onPressEmoji: PropTypes.func,
+  handleShowReactDetails: PropTypes.func,
+  onPressDelete: PropTypes.func,
+  onPressEdit: PropTypes.func,
+  onReply: PropTypes.func,
+  onPressRecall: PropTypes.func,
+  loading: PropTypes.bool,
+  previewImage: PropTypes.func,
 };
 
 ChatMessage.defaultProps = {
   message: {},
-  navigation: {},
-  currentUserId: '',
-  isMyMessage: false,
-  isLastMessage: false,
-  setModalVisible: null,
-  showReactDetails: null,
-  setImageProps: null,
-  onLastView: null,
+  userId: '',
+  onPressEmoji: null,
+  handleShowReactDetails: null,
+  onPressDelete: null,
+  onPressEdit: null,
+  onReply: null,
+  onPressRecall: null,
+  loading: false,
+  previewImage: null,
 };
 
 export default ChatMessage;

@@ -1,14 +1,9 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import MessageScreen from '../screens/MessageScreen';
-import FriendDetailsScreen from '../screens/FriendDetailsScreen';
-import MemberScreen from '../screens/MemberScreen';
-import ConversationOptionsScreen from '../screens/ConversationOptionsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import MessageScreen from '../screens/MessageScreen';
 import NewConversationScreen from '../screens/NewConversationScreen';
-import FriendSuggestionsScreen from '../screens/FriendSuggestionsScreen';
-import FriendRequestsScreen from '../screens/FriendRequestsScreen';
 
 // Tab Navigator chính (điều hướng giữa các tab)
 import TabNavigator from './TabNavigator';
@@ -26,26 +21,35 @@ const MainStackNavigator = () => {
       {/* TabNavigator chứa 3 tabs chính: Tin nhắn, Bạn bè, Cá nhân */}
       <Stack.Screen name="Main" component={TabNavigator} />
       
-      {/* Màn hình chuyển hướng từ các tabs */}
-      <Stack.Screen name="NewConversation" component={NewConversationScreen} />
-      <Stack.Screen name="Message" component={MessageScreen} />
-      <Stack.Screen name="FriendDetails" component={FriendDetailsScreen} />
-      <Stack.Screen name="Member" component={MemberScreen} />
-      
-      {/* Màn hình quản lý bạn bè */}
-      <Stack.Screen name="FriendSuggestions" component={FriendSuggestionsScreen} />
-      <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
-      
-      {/* Màn hình khác */}
-      <Stack.Screen 
-        name="ConversationOptions" 
-        component={ConversationOptionsScreen}
-        options={{
-          presentation: 'modal',
-        }}
-      />
+      {/* Màn hình quản lý tài khoản */}
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+      
+      {/* Màn hình chat */}
+      <Stack.Screen 
+        name="MessageScreen" 
+        component={MessageScreen} 
+        options={{
+          headerShown: true,
+          headerBackVisible: false, // Hide the default back button
+          headerTitle: () => null, // Remove default title
+          headerStyle: {
+            backgroundColor: '#2196F3',
+            elevation: 2, // For Android shadow
+            shadowOpacity: 0.2, // For iOS shadow
+          },
+          headerTintColor: '#fff',
+          headerLeft: null, // This allows our custom MessageHeaderLeft to be used
+        }}
+      />
+      <Stack.Screen 
+        name="NewConversationScreen" 
+        component={NewConversationScreen} 
+        options={{
+          headerShown: false, // Ẩn header mặc định để tránh trùng lặp
+          headerBackTitleVisible: false
+        }}
+      />
     </Stack.Navigator>
   );
 };

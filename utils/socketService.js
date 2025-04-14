@@ -16,22 +16,16 @@ export const registerStore = (store) => {
   storeInstance = store;
 };
 
-// Try to import constants, but use fallback values if import fails
-let SOCKET_URL = 'http://172.30.16.1:3001';
+// Gán cứng URL trực tiếp thay vì dùng constants để đảm bảo kết nối socket đúng
+// import { REACT_APP_SOCKET_URL } from '../constants';
+
+// Sử dụng trực tiếp địa chỉ IP của người dùng
+let SOCKET_URL = 'http://192.168.1.5:3001';
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds
 
-// Try to import constants
-try {
-  const constants = require('../constants');
-  SOCKET_URL = constants.REACT_APP_SOCKET_URL || SOCKET_URL;
-  MAX_RECONNECT_ATTEMPTS = constants.SOCKET_RECONNECTION_ATTEMPTS || MAX_RECONNECT_ATTEMPTS;
-  RECONNECT_DELAY = constants.SOCKET_RECONNECTION_DELAY || RECONNECT_DELAY;
-  MAX_RECONNECT_DELAY = constants.SOCKET_MAX_RECONNECTION_DELAY || MAX_RECONNECT_DELAY;
-} catch (error) {
-  console.warn('Failed to load constants, using fallback values:', error);
-}
+console.log('Socket URL configured as:', SOCKET_URL);
 
 let socket;
 let reconnectAttempts = 0;
@@ -227,7 +221,12 @@ const setupSocketEventHandlers = () => {
   
   // Handle error events
   socket.on('error', (error) => {
-    console.error('Socket error:', error);
+    // Chỉ log lỗi một lần, tránh spam console
+    console.log('Socket error occurred - disabling reconnections to avoid spamming logs');
+    // Tắt reconnect sau khi gặp lỗi
+    if (socket && socket.io) {
+      socket.io.opts.reconnection = false;
+    }
   });
   
   // Handle reconnection events

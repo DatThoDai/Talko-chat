@@ -11,18 +11,20 @@ import {
 import {useDispatch} from 'react-redux';
 import {addReaction} from '../../redux/chatSlice';
 import CustomAvatar from '../CustomAvatar';
-import {REACTIONS} from '../../constants';
+// Ensure REACTIONS is imported from the correct path
+import {REACTIONS} from '../../constants/index';
 
 const ReactionModal = ({reactProps, setReactProps}) => {
   const dispatch = useDispatch();
-  const {isVisible, messageId, reacts} = reactProps;
+  // Sửa tên trường từ 'reacts' thành 'reactions' để khớp với MessageScreen
+  const {isVisible, messageId, reactions = []} = reactProps || {}; // Thêm fallback khi reactProps là undefined
 
   // Function to close the modal
   const handleClose = () => {
     setReactProps({
       isVisible: false,
       messageId: '',
-      reacts: [],
+      reactions: [], // Sửa từ reacts thành reactions để khớp với DEFAULT_REACTION_MODAL_VISIBLE
     });
   };
 
@@ -45,9 +47,12 @@ const ReactionModal = ({reactProps, setReactProps}) => {
 
   // Render reaction selector at the top
   const renderReactionSelector = () => {
+    // Check if REACTIONS is defined to prevent map errors
+    const emojiReactions = REACTIONS || ['👍', '♥️', '😄', '😲', '😭', '😡'];
+    
     return (
       <View style={styles.reactionsSelector}>
-        {REACTIONS.map((reaction, index) => (
+        {emojiReactions.map((reaction, index) => (
           <TouchableOpacity
             key={`reaction-${index}`}
             style={styles.reactionItem}
@@ -61,16 +66,20 @@ const ReactionModal = ({reactProps, setReactProps}) => {
 
   // Group reactions by type
   const groupReactionsByType = () => {
-    if (!reacts || reacts.length === 0) return [];
+    // Đảm bảo reactions luôn là một mảng
+    if (!Array.isArray(reactions) || reactions.length === 0) return [];
+    
+    // Handle case when any reaction is undefined
+    const validReactions = reactions.filter(reaction => reaction != null);
 
     const groupedReactions = {};
     
-    reacts.forEach(react => {
-      const type = react.type || '👍';
+    validReactions.forEach(reaction => {
+      const type = reaction.type || '👍';
       if (!groupedReactions[type]) {
         groupedReactions[type] = [];
       }
-      groupedReactions[type].push(react);
+      groupedReactions[type].push(reaction);
     });
 
     return Object.entries(groupedReactions).map(([type, reactions]) => ({
@@ -82,7 +91,10 @@ const ReactionModal = ({reactProps, setReactProps}) => {
 
   // Render a single reaction group
   const renderReactionGroup = ({item}) => {
-    const {type, reactions, count} = item;
+    // Ensure we have valid item with all required properties
+    if (!item) return null;
+    
+    const {type = '👍', reactions = [], count = 0} = item;
 
     return (
       <View style={styles.reactionGroup}>
@@ -92,9 +104,10 @@ const ReactionModal = ({reactProps, setReactProps}) => {
         </View>
         
         <FlatList
-          data={reactions}
-          keyExtractor={(item, index) => `reaction-user-${index}-${item.userId}`}
+          data={Array.isArray(reactions) ? reactions : []}
+          keyExtractor={(item, index) => `reaction-user-${index}-${(item && item.userId) || index}`}
           renderItem={({item}) => (
+            item ? (
             <View style={styles.userItem}>
               <CustomAvatar
                 size={36}
@@ -102,8 +115,9 @@ const ReactionModal = ({reactProps, setReactProps}) => {
                 avatar={item.userAvatar}
                 color={item.userAvatarColor}
               />
-              <Text style={styles.userName}>{item.userName}</Text>
+              <Text style={styles.userName}>{item.userName || 'Unknown User'}</Text>
             </View>
+            ) : null
           )}
           showsVerticalScrollIndicator={false}
         />
@@ -111,10 +125,13 @@ const ReactionModal = ({reactProps, setReactProps}) => {
     );
   };
 
+  // Ensure we have valid props
+  const safeIsVisible = Boolean(isVisible);
+  
   return (
     <Modal
       transparent
-      visible={isVisible}
+      visible={safeIsVisible}
       animationType="fade"
       onRequestClose={handleClose}>
       <TouchableWithoutFeedback onPress={handleClose}>
@@ -132,7 +149,7 @@ const ReactionModal = ({reactProps, setReactProps}) => {
               
               <FlatList
                 data={groupReactionsByType()}
-                keyExtractor={(item) => `reaction-group-${item.type}`}
+                keyExtractor={(item) => `reaction-group-${(item && item.type) || 'unknown'}`}
                 renderItem={renderReactionGroup}
                 contentContainerStyle={styles.reactionList}
                 showsVerticalScrollIndicator={false}

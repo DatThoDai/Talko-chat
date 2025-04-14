@@ -244,4 +244,6 @@ const styles = StyleSheet.create({
   },
 });
 
-export default StickyBoard;
+// Đảm bảo export chính xác
+const StickyBoardComponent = StickyBoard;
+export default StickyBoardComponent;

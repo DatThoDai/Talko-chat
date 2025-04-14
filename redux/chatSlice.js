@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { messageApi } from '../api';
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from '../constants/messageConstants';
+import { DEFAULT_MESSAGE_PARAMS } from '../constants';
 
 // Tránh vòng lặp import bằng cách tạo service riêng
 const chatService = {
@@ -25,7 +25,7 @@ const chatService = {
 // Fetch messages for a conversation
 export const fetchMessages = createAsyncThunk(
   'chat/fetchMessages',
-  async ({ conversationId, page = DEFAULT_PAGE, size = DEFAULT_PAGE_SIZE }, { rejectWithValue }) => {
+  async ({ conversationId, page = DEFAULT_MESSAGE_PARAMS.page, size = DEFAULT_MESSAGE_PARAMS.size }, { rejectWithValue }) => {
     try {
       return await chatService.getMessages(conversationId, page, size);
     } catch (error) {

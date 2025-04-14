@@ -1,7 +1,65 @@
 // Cấu hình API URL và các hằng số khác
-// Sử dụng IP máy của bạn thay vì localhost khi phát triển với Expo trên điện thoại thật
-export const REACT_APP_API_URL = 'http://192.168.1.5:3001'; // Thay đổi IP và port phù hợp
-export const REACT_APP_SOCKET_URL = 'http://192.168.1.5:3001'; // Thay đổi IP và port phù hợp
+
+export const REACT_APP_API_URL = 'http://192.168.1.5:3001';
+export const REACT_APP_SOCKET_URL = 'http://192.168.1.5:3001';
+
+// CẤU HÌNH ĐÚNG THEO BACKEND CNM_CHAT (FIXED)
+// Đã phân tích code CNM_Chat/routes/index.js
+export const API_ENDPOINTS = {
+  // Conversation routes: CNM_Chat/routes/index.js có dòng:
+  // app.use('/conversations', auth, conversationRouter)
+  CONVERSATIONS: '/conversations',
+  CREATE_CONVERSATION: '/conversations',
+  ADD_MEMBER: '/conversations/members',
+  LEAVE_CONVERSATION: '/conversations/leave',
+  UPDATE_CONVERSATION: '/conversations',
+  
+  // Message routes: CNM_Chat/routes/index.js có dòng:
+  // app.use('/messages', auth, messageRouter)
+  MESSAGES: '/messages',
+  CREATE_MESSAGE: '/messages/text',
+  PIN_MESSAGE: '/messages/pin',
+  DELETE_MESSAGE: '/messages',
+  REACT_MESSAGE: '/messages/reacts',
+  
+  // Auth endpoints không cần /me/ prefix (hoạt động OK)
+  AUTH: '/auth',
+  LOGIN: '/auth/login',
+  REGISTER: '/auth/register',
+  LOGOUT: '/auth/logout',
+  
+  // Users endpoints cũng cần /me/ prefix
+  USERS: '/me/users',
+  USERS_SEARCH: '/me/search',  // Đã xác nhận hoạt động trong logs
+  USER_PROFILE: '/me/profile',  // Đã xác nhận hoạt động trong logs
+  
+  // Friends endpoints cũng cần /me/ prefix
+  FRIENDS: '/me/friends',
+  FRIEND_REQUESTS: '/me/friends/requests',
+  ADD_FRIEND: '/me/friends/add',
+  ACCEPT_FRIEND: '/me/friends/accept',
+  
+  // Classify endpoints (có thể trong /common/ hoặc /me/)
+  CLASSIFIES: '/common/classifies',
+  
+  // Các endpoint khác
+  MEMBERS: '/me/members',
+  
+  // Giữ lại các endpoint đã xác nhận hoạt động trong logs
+  ME_PROFILE: '/me/profile',
+  ME_SEARCH: '/me/search',
+  
+  // Các alias để hỗ trợ cả hai kiểu API
+  CHAT_MESSAGES: '/me/messages',
+  PROFILE: '/me/profile',
+};
+
+// Log endpoints để debug
+console.log('Using CONVERSATIONS endpoint:', API_ENDPOINTS.CONVERSATIONS);
+
+// Log cấu hình API URL và Socket URL để debug
+console.log('Config - API URL:', REACT_APP_API_URL);
+console.log('Config - Socket URL:', REACT_APP_SOCKET_URL);
 
 // Các tham số mặc định
 export const DEFAULT_MESSAGE_PARAMS = {

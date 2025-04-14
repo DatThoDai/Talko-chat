@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearError } from '../redux/authSlice';
 import { colors, typography, spacing, borderRadius } from '../styles';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import authApi from '../api/authService';
+import { authService } from '../api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
@@ -68,32 +68,20 @@ const LoginScreen = ({ navigation }) => {
     setIsLoggingIn(true);
     
     try {
-      // Call login API
-      const response = await authApi.login(username, password);
+      // Gọi Redux action để đăng nhập - sẽ thực hiện API call và cập nhật state
+      // Redux thunk sẽ xử lý việc lưu vào AsyncStorage
+      const resultAction = await dispatch(loginUser({
+        email: username,
+        password: password
+      }));
       
-      // Store auth data in AsyncStorage
-      if (response.token) {
-        await AsyncStorage.setItem('token', response.token);
-        
-        if (response.refreshToken) {
-          await AsyncStorage.setItem('refreshToken', response.refreshToken);
-        }
-        
-        if (response.user) {
-          await AsyncStorage.setItem('user', JSON.stringify(response.user));
-        }
-        
-        // Dispatch login action to update Redux state
-        dispatch(loginUser({
-          user: response.user,
-          token: response.token,
-          refreshToken: response.refreshToken
-        }));
-        
-        // Navigation to home will be handled by the app navigator based on auth state
-      } else {
-        setLoginError('Đăng nhập thất bại: Không nhận được token');
+      // Kiểm tra kết quả từ Redux action
+      if (loginUser.rejected.match(resultAction)) {
+        // Nếu action bị reject, hiển thị lỗi
+        const errorMessage = resultAction.payload || 'Đăng nhập thất bại';
+        setLoginError(errorMessage);
       }
+      // Navigation to home sẽ được xử lý tự động bởi app navigator khi state thay đổi
     } catch (error) {
       console.error('Login error:', error);
       setLoginError(

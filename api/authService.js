@@ -1,19 +1,71 @@
 import api from './axios';
+import { REACT_APP_API_URL } from '../constants';
 
 // Auth services
 export const authService = {
   // Đăng nhập
   login: async (email, password) => {
     try {
-      // Su1eeda lu1ea1i: Lu01b0u request body u0111u1ec3 debug
-      const loginData = { username: email, password };
+      console.log('Attempting login with:', { email, password: '****' });
+      
+      // Đảm bảo format request phù hợp với backend CNM_Chat-test
+      // Backend mong đợi { username, password }
+      // Kiểm tra các giá trị input
+      if (!email || !password) {
+        throw new Error('Email và mật khẩu là bắt buộc');
+      }
+      
+      // Mặc định cho login API của CNM_Chat-test
+      const loginData = { 
+        username: email, 
+        password: password,
+      };
 
-      // u0110u0103ng nhu1eadp u0111u1ec3 lu1ea5y token - simpler, more direct
-      const loginResponse = await api.post('/auth/login', loginData);
+      console.log('Login request data:', { username: loginData.username, password: '****' });
+      console.log('API endpoint:', '/auth/login');
+      
+      // Gọi API login với Content-Type rõ ràng
+      const loginResponse = await api.post('/auth/login', loginData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Log kết quả trả về (an toàn)
+      console.log('Login response received:', loginResponse ? 'Success' : 'Empty response');
+      
+      // Kiểm tra cấu trúc response
+      if (!loginResponse) {
+        console.error('Empty login response');
+        throw new Error('Empty response from server');
+      }
       
       return loginResponse;
     } catch (error) {
-      throw error.response || { message: 'Lu1ed7i ku1ebft nu1ed1i u0111u1ebfn server' };
+      console.error('Login error details:', error);
+      
+      // Log chi tiết hơn về lỗi để debug
+      if (error.response) {
+        console.error('Server response error:', error.response);
+        
+        // Kiểm tra các lỗi cụ thể và đưa ra thông báo hữu ích
+        if (error.response.status === 404) {
+          // Lỗi User not found - đảm bảo thông báo rõ ràng cho người dùng
+          throw { message: 'Tài khoản không tồn tại. Vui lòng kiểm tra lại email hoặc đăng ký mới.' };
+        } else if (error.response.status === 401) {
+          // Lỗi mật khẩu không đúng
+          throw { message: 'Mật khẩu không chính xác. Vui lòng thử lại hoặc sử dụng chức năng quên mật khẩu.' };
+        }
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+        // Lỗi không nhận được phản hồi từ server
+        throw { message: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.' };
+      } else {
+        console.error('Error details:', error.message);
+      }
+      
+      // Trả về thông báo mặc định nếu không xác định được lỗi cụ thể
+      throw error.response || { message: 'Lỗi đăng nhập. Vui lòng thử lại sau.' };
     }
   },
 

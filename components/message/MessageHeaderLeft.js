@@ -5,73 +5,98 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import Icon from 'react-native-vector-icons/Ionicons';
 import CustomAvatar from '../CustomAvatar';
+import PropTypes from 'prop-types';
 
-const MessageHeaderLeft = ({
-  conversationName,
-  avatar,
-  avatarColor,
-  onBack,
-  onPress,
-}) => {
+// Very simple header component with back button, avatar and text
+const MessageHeaderLeft = ({ conversationName, avatar, avatarColor, onBack, onPress }) => {
+  console.log('[MessageHeaderLeft] Rendering with:', conversationName);
+  
   return (
     <View style={styles.container}>
+      {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
-        onPress={onBack}
-        hitSlop={{top: 10, right: 10, bottom: 10, left: 10}}>
-        <Icon name="arrow-back" size={24} color="#000" />
+        onPress={onBack}>
+        <Icon name="arrow-back" size={28} color="#fff" />
       </TouchableOpacity>
       
-      <TouchableOpacity
-        style={styles.conversationInfo}
-        onPress={onPress}
-        activeOpacity={0.7}>
+      {/* Avatar and text */}
+      <TouchableOpacity 
+        style={styles.profileSection}
+        onPress={onPress}>
+        
+        {/* Avatar */}
         <CustomAvatar
-          size={40}
+          size={36}
           name={conversationName}
-          avatar={avatar}
-          color={avatarColor}
+          avatarColor={avatarColor}
+          imageUrl={avatar}
         />
-        <View style={styles.textContainer}>
-          <Text style={styles.name} numberOfLines={1}>
-            {conversationName}
-          </Text>
-          <Text style={styles.status}>Đang hoạt động</Text>
+        
+        {/* Text information */}
+        <View style={styles.textSection}>
+          <Text style={styles.nameText}>{conversationName || 'Cuộc trò chuyện'}</Text>
+          <Text style={styles.statusText}>Đang hoạt động</Text>
         </View>
       </TouchableOpacity>
     </View>
   );
 };
 
+MessageHeaderLeft.propTypes = {
+  conversationName: PropTypes.string,
+  avatar: PropTypes.string,
+  avatarColor: PropTypes.string,
+  onBack: PropTypes.func,
+  onPress: PropTypes.func,
+};
+
+MessageHeaderLeft.defaultProps = {
+  conversationName: 'Cuộc trò chuyện',
+  avatar: null,
+  avatarColor: '#1982FC',
+  onBack: () => {},
+  onPress: () => {},
+};
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    width: 260,
   },
   backButton: {
-    padding: 8,
-    marginRight: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  conversationInfo: {
+  profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '82%',
+    flex: 1,
   },
-  textContainer: {
+  textSection: {
     marginLeft: 10,
     justifyContent: 'center',
   },
-  name: {
+  nameText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
   },
-  status: {
+  statusText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: '#4CAF50',
+    opacity: 0.8,
+    marginTop: 2,
   },
 });
 

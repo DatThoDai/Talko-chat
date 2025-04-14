@@ -2,28 +2,29 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useSelector } from 'react-redux';
-import ConversationsScreen from '../screens/ConversationsScreen';
-import FriendsScreen from '../screens/FriendsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ConversationsScreen from '../screens/ConversationsScreen';
 import { colors } from '../styles';
+import { useSelector } from 'react-redux';
+import { createSelector } from '@reduxjs/toolkit';
 
 const Tab = createMaterialTopTabNavigator();
 
+// Sử dụng createSelector đúng cách để tránh re-render không cần thiết
+// Lưu ý: cần sử dụng các input selector đơn giản
+// không trả về các object/array mới
+const selectChat = state => state.chat;
+const selectChatConversations = createSelector(
+  [selectChat],
+  (chat) => (chat && chat.conversations) || []
+);
+
 export default function TabNavigator() {
-  const { conversations } = useSelector(state => state.chat);
-  const { user } = useSelector(state => state.auth);
+  // Sử dụng selector cố định thay vì tạo mới inline function mỗi lần
+  const conversations = useSelector(selectChatConversations);
   
-  // Hàm tính tổng số tin nhắn chưa đọc
-  const getTotalUnreadCount = () => {
-    if (!conversations || !Array.isArray(conversations)) {
-      return 0;
-    }
-    
-    return conversations.reduce((total, conversation) => {
-      return total + (conversation.unreadCount || 0);
-    }, 0);
-  };
+  // Tính toán unreadCount đơn giản
+  const unreadCount = conversations.reduce((sum, conversation) => sum + (conversation.unreadCount || 0), 0);
   
   return (
     <Tab.Navigator
@@ -41,38 +42,22 @@ export default function TabNavigator() {
         
         tabBarIcon: ({ focused, color }) => {
           let iconName;
-          let count = 0;
           
-          switch (route.name) {
-            case 'Tin nhắn': {
-              iconName = 'chat';
-              count = getTotalUnreadCount();
-              break;
-            }
-            case 'Bạn bè': {
-              iconName = 'people';
-              // Số lời mời kết bạn (trong ứng dụng thực tế sẽ lấy từ state)
-              count = 0;
-              break;
-            }
-            case 'Cá nhân': {
-              iconName = 'person';
-              count = 0;
-              break;
-            }
-            default:
-              iconName = 'chat';
-              count = 0;
-              break;
+          if (route.name === 'Tin nhắn') {
+            iconName = 'chat';
+          } else if (route.name === 'Cá nhân') {
+            iconName = 'person';
           }
           
           return (
-            <View style={{ flex: 1 }}>
+            <View style={styles.iconContainer}>
               <Icon name={iconName} size={24} color={color} />
-              {count > 0 && (
-                <View style={styles.iconBadge}>
-                  <Text style={styles.badgeElement}>
-                    {count > 99 ? '99+' : count}
+              
+              {/* Hiển thị số lượng tin nhắn chưa đọc */}
+              {route.name === 'Tin nhắn' && unreadCount > 0 && (
+                <View style={styles.badgeContainer}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </Text>
                 </View>
               )}
@@ -86,10 +71,6 @@ export default function TabNavigator() {
         component={ConversationsScreen} 
       />
       <Tab.Screen 
-        name="Bạn bè" 
-        component={FriendsScreen} 
-      />
-      <Tab.Screen 
         name="Cá nhân" 
         component={ProfileScreen} 
       />
@@ -98,21 +79,27 @@ export default function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
-  badgeElement: { 
-    color: 'white', 
-    fontSize: 10 
-  },
-  iconBadge: {
-    color: 'white',
-    fontSize: 10,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+  iconContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    position: 'relative',
+  },
+  badgeContainer: {
     position: 'absolute',
     top: -5,
-    right: -5,
+    right: -10,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingHorizontal: 4,
   },
 });

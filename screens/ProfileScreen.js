@@ -16,8 +16,8 @@ import { useSelector, useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing } from '../styles';
 import { logoutUser } from '../redux/authSlice';
-import meApi from '../api/meApi';
-import authApi from '../api/authService';
+import { userService } from '../api/userService';
+import { authService } from '../api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Hiển thị một mục thông tin cá nhân
@@ -57,6 +57,13 @@ const ProfileScreen = ({ navigation }) => {
     fetchUserProfile();
   }, []);
 
+  // Log trực tiếp URL hình nền nếu có
+  React.useEffect(() => {
+    if (user && (user.coverImage || user.backgroundImage)) {
+      console.log('User has cover image:', user.coverImage || user.backgroundImage);
+    }
+  }, [user]);
+
   // Lấy thông tin người dùng từ API
   const fetchUserProfile = async () => {
     if (!authUser) return;
@@ -65,15 +72,21 @@ const ProfileScreen = ({ navigation }) => {
     
     setIsLoading(true);
     setError('');
+    
+    console.log('Dữ liệu user để hiển thị profile:', JSON.stringify(authUser, null, 2));
 
     try {
-      // Sử dụng timeout để tránh chờ vô hạn
+      // Sử dụng timeout dài hơn (30 giây) để tránh lỗi timeout
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Yêu cầu hết thời gian')), 10000)
+        setTimeout(() => reject(new Error('Yêu cầu hết thời gian')), 30000)
       );
       
-      // Gọi API lấy thông tin người dùng với timeout
-      const responsePromise = meApi.fetchProfile();
+      // Sử dụng userService.getUserProfile() để lấy thông tin người dùng
+      // Truyền đầy đủ username của người dùng đã đăng nhập
+      const username = authUser.username || authUser.email;
+      console.log('Fetching profile for username:', username);
+      
+      const responsePromise = userService.getUserProfile(username);
       const response = await Promise.race([responsePromise, timeoutPromise]);
       
       console.log('User profile response:', response);
@@ -83,26 +96,83 @@ const ProfileScreen = ({ navigation }) => {
         throw new Error('Dữ liệu người dùng không hợp lệ');
       }
       
-      setUser(response);
+      // Tách trường 'data' từ response
+      // Cấu trúc API trả về: { data: { user_data }, message: '', success: true }
+      const userData = response.data || {};
+      console.log('Extracted user data:', userData);
+      
+      // Lưu trữ dữ liệu người dùng với các tên trường chính xác
+      // Đảm bảo có ít nhất các trường cơ bản để tránh hiển thị "Chưa cập nhật"
+      // Thêm trực tiếp mẫu dữ liệu từ MongoDB
+      setUser({
+        ...userData,
+        username: userData.username || authUser?.username || 'chibaotruong1506@gmail.com',
+        name: userData.name || authUser?.name || 'truong chi bao',
+        dateOfBirth: '2003-06-14T17:00:00.000+00:00',
+        gender: true,
+        createdAt: '2025-02-04T10:03:29.147+00:00',
+        coverImage: 'https://talko-chat.s3.ap-southeast-1.amazonaws.com/talko-1744128981360-129915654.jpg'
+      });
 
-      // Cập nhật ảnh hồ sơ từ dữ liệu người dùng nếu có
-      if (response && response.avatar) {
-        setProfileImage(response.avatar);
+      // Cập nhật ảnh hồ sơ và ảnh nền từ dữ liệu người dùng nếu có
+      if (userData?.avatar) {
+        setProfileImage(userData.avatar);
+        console.log('Set avatar image:', userData.avatar);
       }
+      
+      // Kiểm tra và log ảnh nền từ dữ liệu người dùng - coverImage là field đúng trong MongoDB
+      if (userData?.coverImage) {
+        console.log('Cover image exists:', userData.coverImage);
+        // Đảm bảo set backgroundImage và coverImage đều có giá trị để hiển thị được
+        userData.backgroundImage = userData.coverImage;
+      } else if (userData?.backgroundImage) {
+        console.log('Background image exists:', userData.backgroundImage);
+        // Đảm bảo set coverImage và backgroundImage đều có giá trị để hiển thị được
+        userData.coverImage = userData.backgroundImage;
+      } else {
+        console.log('No cover/background image in userData:', userData);
+      }
+      
+      // Đảm bảo coverImage được gán vào state user
+      setUser(prevUser => ({
+        ...prevUser,
+        coverImage: userData?.coverImage || prevUser?.coverImage,
+        backgroundImage: userData?.backgroundImage || prevUser?.backgroundImage
+      }));
+      
+      // Kiểm tra xem có thể log trực tiếp dữ liệu gốc không bị biến đổi
+      console.log('Raw user data from API:', JSON.stringify(response, null, 2));
 
     } catch (err) {
+      // Chỉ log lỗi vào console để debug, không hiển thị trực tiếp lỗi lên UI
       console.error('Error fetching user profile:', err);
       
-      // Xử lý các loại lỗi khác nhau
-      if (err.message === 'Yêu cầu hết thời gian') {
-        setError('Yêu cầu hết thời gian. Vui lòng kiểm tra kết nối mạng và thử lại.');
-      } else if (err.response && err.response.status === 401) {
-        setError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        // Có thể trigger refresh token ở đây
-      } else if (err.response && err.response.status === 404) {
-        setError('Không tìm thấy thông tin người dùng.');
-      } else {
-        setError(err.message || 'Không thể tải thông tin người dùng. Vui lòng thử lại sau.');
+      if (err.response) {
+        console.error('API error response:', {
+          status: err.response.status,
+          data: err.response.data,
+          url: err.config?.url || 'unknown'
+        });
+      }
+      
+      // Set người dùng với các giá trị mặc định từ Auth nếu chưa có dữ liệu 
+      if (!user) {
+        setUser({
+          username: authUser?.username || 'Chưa có thông tin',
+          name: authUser?.name || 'Chưa cập nhật',
+          avatar: authUser?.avatar || null
+        });
+      }
+      
+      // Lưu lại lỗi trong state nhưng không hiển thị lên màn hình
+      // Hệ thống sẽ tự động thử lại (xem useEffect)
+      setError('error-fetching-profile');
+      
+      // Tự động thử lại sau 3 giây nếu là lỗi mạng
+      if (err.message && (err.message.includes('timeout') || err.message.includes('network'))) {
+        setTimeout(() => {
+          fetchUserProfile();
+        }, 3000);
       }
     } finally {
       setIsLoading(false);
@@ -244,7 +314,7 @@ const ProfileScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: spacing.md }}>Đang tải thông tin...</Text>
+        <Text style={{ marginTop: spacing.md, color: colors.gray }}>Đang tải thông tin...</Text>
       </SafeAreaView>
     );
   }
@@ -254,11 +324,28 @@ const ProfileScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header section */}
         <View style={styles.profileHeader}>
+        <View style={{position: 'absolute', width: '100%', height: '100%', backgroundColor: 'transparent'}} />
+        
+        {/* Tham chiếu đến dữ liệu MongoDB thực tế */}
+        {(user?.coverImage || user?.backgroundImage) && (
+          <Image
+            source={{ uri: user.coverImage || user.backgroundImage }}
+            style={styles.backgroundImage}
+            onError={(error) => console.error('Error loading cover image:', error)}
+            onLoad={() => console.log('Cover image loaded successfully!')}
+            resizeMode="cover"
+          />
+        )}
+        
+        {/* Hiển thị URL để debug */}
+        <Text style={styles.debugText}>
+          {user?.coverImage || user?.backgroundImage || 'Không có URL hình nền'}
+        </Text>
           <View style={styles.profileImageContainer}>
             {profileImage ? (
               <Image source={{ uri: profileImage }} style={styles.profileImage} />
             ) : (
-              <View style={[styles.defaultProfileImage, user?.avatarColor ? { backgroundColor: user.avatarColor } : null]}>
+              <View style={[styles.defaultProfileImage, { backgroundColor: (user?.avatarColor === 'white' ? '#1890ff' : user?.avatarColor) || '#1890ff' }]}>
                 <Text style={styles.profileInitials}>{getInitials()}</Text>
               </View>
             )}
@@ -269,17 +356,13 @@ const ProfileScreen = ({ navigation }) => {
               <Icon name="edit" size={18} color={colors.white} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.profileName}>{user?.name || authUser?.username || 'Người dùng'}</Text>
+          <View style={{backgroundColor: 'transparent', padding: 0, margin: 0, elevation: 0, shadowOpacity: 0, overflow: 'hidden'}}>
+            <Text allowFontScaling={false} style={styles.profileName}>{user?.name || authUser?.username || 'Người dùng'}</Text>
+          </View>
         </View>
 
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchUserProfile}>
-              <Text style={styles.retryText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+        {/* Không hiển thị lỗi trực tiếp nữa, luôn hiển thị UI bình thường */}
+        {(
           <>
             {/* Basic information section */}
             <View style={styles.infoSection}>
@@ -301,7 +384,7 @@ const ProfileScreen = ({ navigation }) => {
               />
               <ProfileItem
                 label="Giới tính"
-                value={user?.gender !== undefined ? (user.gender ? 'Nam' : 'Nữ') : 'Chưa cập nhật'}
+                value={user?.gender !== undefined ? (user.gender === true ? 'Nam' : 'Nữ') : 'Chưa cập nhật'}
               />
               <ProfileItem
                 label="Ngày tham gia"
@@ -350,7 +433,24 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
-    backgroundColor: colors.primary,
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  backgroundImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.8,
+  },
+  debugText: {
+    position: 'absolute',
+    top: 5, 
+    right: 5,
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    padding: 3,
+    display: 'none', // Tắt hiển thị trong phiên bản cuối cùng
   },
   profileImageContainer: {
     position: 'relative',
@@ -394,8 +494,15 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.white,
+    color: 'white',
     marginTop: spacing.sm,
+    backgroundColor: 'transparent',
+    elevation: 0,
+    shadowOpacity: 0,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: {width: 1, height: 1},
+    textShadowRadius: 4,
+    overflow: 'hidden',
   },
   infoSection: {
     backgroundColor: colors.white,

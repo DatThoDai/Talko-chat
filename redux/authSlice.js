@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authService, meApi } from '../api';
+// Import trực tiếp từ file service thay vì qua index.js
+import { authService } from '../api/authService';
+import meApi from '../api/meApi';
 
 const initialState = {
   user: null,
@@ -37,7 +39,9 @@ export const loginUser = createAsyncThunk(
       }
       
       // Get user data from response
-      let user = response.user;
+      let user = response.user || (response.data && response.data.user);
+      
+      console.log('Original user data:', user);
       
       // If user data is not available, create minimal user object
       if (!user) {
@@ -53,8 +57,26 @@ export const loginUser = createAsyncThunk(
       // Đảm bảo user có trường _id (cần thiết cho socket)
       if (!user._id && user.id) {
         user._id = user.id; // Dùng id nếu có
-      } else if (!user._id && user.email) {
-        user._id = user.email; // Dùng email như là ID dự phòng
+      } else if (!user._id) {
+        if (user.username && user.username.includes('@')) {
+          // Nếu username là email, dùng làm ID
+          user._id = user.username;
+          user.email = user.username;
+        } else if (user.email) {
+          user._id = user.email; // Dùng email như là ID dự phòng
+        } else {
+          // Trường hợp cuối cùng, dùng email từ credentials
+          user._id = credentials.email;
+          user.email = credentials.email;
+        }
+      }
+      
+      // Đảm bảo user có trường username và email
+      if (!user.username) {
+        user.username = user.email || credentials.email;
+      }
+      if (!user.email) {
+        user.email = user.username || credentials.email;
       }
       
       console.log('User data to be stored:', user);

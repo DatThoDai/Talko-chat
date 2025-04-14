@@ -43,38 +43,45 @@ const NewConversationScreen = ({ navigation }) => {
     return () => clearTimeout(timer);
   }, [searchText]);
   
-  // Search for users
+  // Search for users with mock data
   const searchUsers = async () => {
     if (searchText.trim().length < 2) return;
     
     setIsSearching(true);
     
     try {
-      // Setup API timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000)
+      console.log('Searching users with query:', searchText);
+      
+      // Dữ liệu mẫu thay thế cho API call
+      const mockUsers = [
+        { _id: '1', username: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@example.com', avatar: null },
+        { _id: '2', username: 'user_2', name: 'Trần Thị B', email: 'tranthib@example.com', avatar: null },
+        { _id: '3', username: 'user_3', name: 'Lê Văn C', email: 'levanc@example.com', avatar: null },
+        { _id: '4', username: 'user_4', name: 'Phạm Thị D', email: 'phamthid@example.com', avatar: null },
+        { _id: '5', username: 'user_5', name: 'Hoàng Văn E', email: 'hoangvane@example.com', avatar: null },
+      ];
+      
+      // Lọc kết quả theo các ký tự được nhập
+      const filteredMockUsers = mockUsers.filter(user => 
+        user.name.toLowerCase().includes(searchText.toLowerCase()) || 
+        user.username.toLowerCase().includes(searchText.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchText.toLowerCase())
       );
       
-      // Actual API call
-      const apiPromise = userService.searchUsers(searchText);
-      
-      // Race between timeout and API call
-      const response = await Promise.race([apiPromise, timeoutPromise]);
+      // Đợi 1s để giả lập API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Filter out current user and already selected users
-      const filteredUsers = response.filter(user => 
-        user._id !== currentUser._id && 
+      const filteredUsers = filteredMockUsers.filter(user => 
+        user._id !== (currentUser?._id || '0') && 
         !selectedUsers.some(selected => selected._id === user._id)
       );
       
+      console.log(`Found ${filteredUsers.length} users matching search criteria`);
       setUsers(filteredUsers);
     } catch (error) {
       console.error('Error searching users:', error);
-      Alert.alert(
-        'Lỗi tìm kiếm',
-        'Không thể tìm kiếm người dùng. Vui lòng thử lại sau.',
-        [{ text: 'OK' }]
-      );
+      setUsers([]); 
     } finally {
       setIsSearching(false);
     }
@@ -92,7 +99,7 @@ const NewConversationScreen = ({ navigation }) => {
     setSelectedUsers(selectedUsers.filter(u => u._id !== user._id));
   };
   
-  // Handle creating a conversation
+  // Handle creating a conversation with mock data
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) {
       Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một người dùng.');
@@ -107,22 +114,35 @@ const NewConversationScreen = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      const userIds = selectedUsers.map(user => user._id);
+      // Tạo ObjectId hợp lệ cho MongoDB (24 ký tự hex)
+      const objectIdHex = [
+        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
+        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
+        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
+        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0')
+      ].join('');
+      const mockConversationId = objectIdHex;
+      const conversationName = isGroup ? groupName.trim() : selectedUsers[0].name;
       
-      const data = {
-        userIds,
-        type: isGroup ? 'GROUP' : null,
-        name: isGroup ? groupName.trim() : null
-      };
+      console.log('Creating mock conversation with ID:', mockConversationId);
+      console.log('Conversation details:', {
+        name: conversationName,
+        isGroup: isGroup,
+        selectedUsers: selectedUsers.map(u => u.name || u.username)
+      });
       
-      const result = await conversationService.createConversation(data);
+      // Giả lập thời gian API call
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      navigation.replace('Message', {
-        conversationId: result._id,
-        name: result.name,
-        isGroup: !!result.type,
-        avatar: result.avatar,
-        avatarColor: result.avatarColor
+      // Chuyển đến màn hình MessageScreen với dữ liệu mẫu
+      navigation.replace('MessageScreen', {
+        conversationId: mockConversationId,
+        name: conversationName,
+        conversationName: conversationName,
+        isGroup: isGroup,
+        avatar: null,
+        avatarColor: '#' + Math.floor(Math.random()*16777215).toString(16),
+        participants: selectedUsers
       });
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -154,18 +174,25 @@ const NewConversationScreen = ({ navigation }) => {
       style={styles.userItem} 
       onPress={() => handleSelectUser(item)}
     >
-      <UserItem 
-        size={40} 
-        imageUrl={item.avatar}
-        name={item.name || item.username || 'User'}
-        color={item.avatarColor}
-      />
+      <View style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: item.avatarColor || '#' + Math.floor(Math.random()*16777215).toString(16),
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10
+      }}>
+        <Text style={{color: 'white', fontWeight: 'bold'}}>
+          {(item.name || item.username || 'U').charAt(0).toUpperCase()}
+        </Text>
+      </View>
       <View style={styles.userInfo}>
         <Text style={styles.userName}>
-          {item.name || 'User'}
+          {item.name || item.username || 'User'}
         </Text>
         <Text style={styles.userEmail} numberOfLines={1}>
-          {item.username}
+          {item.email || item.username || ''}
         </Text>
       </View>
     </TouchableOpacity>

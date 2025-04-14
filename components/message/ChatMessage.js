@@ -3,7 +3,6 @@ import PropTypes from 'prop-types';
 import {View, Text} from 'react-native';
 import {messageType} from '../../constants';
 import commonFuc from '../../utils/commonFuc';
-// Sửa cách import để dùng named exports thay vì default export
 import { formatMessageTime } from '../../utils/dateUtils';
 import ReceiverMessage from './ReceiverMessage';
 import SenderMessage from './SenderMessage';
@@ -27,28 +26,64 @@ const ChatMessage = ({
   onPressRecall,
   loading,
   previewImage,
+  isMyMessage, // Thêm prop isMyMessage để đảm bảo chắc chắn
 }) => {
+  // Cải thiện hàm xác định người gửi
   const isSender = () => {
-    console.log("Message ID:", message?._id, "Sender ID:", message?.sender?._id, "User ID:", userId);
-    // Check if this is a temporary message (waiting to be sent)
+    // Ưu tiên kiểm tra prop isMyMessage được truyền vào nếu có
+    if (isMyMessage !== undefined) {
+      return isMyMessage;
+    }
+    
+    // Đảm bảo log đầy đủ cho việc debug
+    console.log(
+      "Message check:", 
+      JSON.stringify({
+        messageId: message?._id?.toString().substring(0, 8) || 'undefined',
+        senderId: message?.sender?._id?.toString() || 'undefined', 
+        userId: userId?.toString() || 'undefined',
+        isTemp: message?.isTemp,
+        forceMyMessage: message?.forceMyMessage
+      })
+    );
+    
+    // Thứ tự ưu tiên để xác định là người gửi
+    
+    // 1. Nếu tin nhắn đã đánh dấu rõ là của mình
+    if (message?.isMyMessage === true || message?.forceMyMessage === true) {
+      return true;
+    }
+    
+    // 2. Kiểm tra nếu là tin nhắn tạm thời
     if (message?.isTemp === true) {
       return true;
     }
     
-    // Check sender ID against user ID (multiple ways to check for robustness)
+    // 3. Kiểm tra ID tạm thời
+    if (message?._id && typeof message._id === 'string' && 
+        message._id.startsWith('temp-')) {
+      return true;
+    }
+    
+    // 4. So sánh ID người gửi với các trường hợp
     const senderIdMatches = 
       (message?.sender?._id === userId) || 
       (message?.sender === userId) ||
       (message?.senderId === userId);
-      
-    console.log("Is sender match:", senderIdMatches);
+    
     return senderIdMatches;
   };
 
   const isMessageRecalled = message?.status === MESSAGE_STATUS.recalled;
 
+  // Xác định trước khi render để log
+  const messageIsSender = isSender();
+  
+  // Log kết quả cuối cùng
+  console.log(`Message ${message?._id?.substr(0, 8)} is ${messageIsSender ? 'SENDER' : 'RECEIVER'}`);
+
   // Determine if the message is from the current user
-  if (isSender()) {
+  if (messageIsSender) {
     return (
       <SenderMessage
         message={message}
@@ -77,9 +112,11 @@ const ChatMessage = ({
   }
 };
 
+// Cập nhật propTypes
 ChatMessage.propTypes = {
   message: PropTypes.object,
   userId: PropTypes.string,
+  isMyMessage: PropTypes.bool, // Thêm propType cho isMyMessage
   onPressEmoji: PropTypes.func,
   handleShowReactDetails: PropTypes.func,
   onPressDelete: PropTypes.func,
@@ -93,6 +130,7 @@ ChatMessage.propTypes = {
 ChatMessage.defaultProps = {
   message: {},
   userId: '',
+  isMyMessage: undefined, // Default là undefined để không ảnh hưởng đến logic cũ
   onPressEmoji: null,
   handleShowReactDetails: null,
   onPressDelete: null,

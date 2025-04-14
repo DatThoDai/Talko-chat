@@ -4,6 +4,13 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import MessageScreen from '../screens/MessageScreen';
 import NewConversationScreen from '../screens/NewConversationScreen';
+import HomeScreen from '../screens/HomeScreen';
+import ContactScreen from '../screens/ContactScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import FriendsScreen from '../screens/FriendsScreen';
+import FriendDetailsScreen from '../screens/FriendDetailsScreen';
+import FriendRequestsScreen from '../screens/FriendRequestsScreen';
+import FriendSuggestionsScreen from '../screens/FriendSuggestionsScreen';
 
 // Tab Navigator chính (điều hướng giữa các tab)
 import TabNavigator from './TabNavigator';
@@ -50,6 +57,13 @@ const MainStackNavigator = () => {
           headerBackTitleVisible: false
         }}
       />
+      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Contact" component={ContactScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Friends" component={FriendsScreen} />
+      <Stack.Screen name="FriendDetails" component={FriendDetailsScreen} />
+      <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
+      <Stack.Screen name="FriendSuggestions" component={FriendSuggestionsScreen} />
     </Stack.Navigator>
   );
 };

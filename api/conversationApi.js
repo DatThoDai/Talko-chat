@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../constants';
 
 // Sử dụng endpoints đúng theo cấu trúc trong Talko-chat-web
 // Dựa vào cấu trúc MongoDB collections: conversations, members, messages, v.v.
-// Sử dụng IP network chính xác của người dùng: 192.168.1.5
+// Sử dụng IP network chính xác của người dùng: 172.30.16.1
 const BASE_URL = API_ENDPOINTS.CONVERSATIONS;
 
 // Log để debug endpoint

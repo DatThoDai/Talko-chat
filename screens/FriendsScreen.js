@@ -64,9 +64,9 @@ const FriendsScreen = ({ navigation }) => {
     setRefreshing(true);
     
     try {
-      const friendList = await friendApi.getFriends();
-      setFriends(friendList || []);
-      setFilteredFriends(friendList || []);
+      const response = await friendApi.fetchFriends();
+      setFriends(response.data || []);
+      setFilteredFriends(response.data || []);
     } catch (error) {
       console.error('Failed to load friends:', error);
       Alert.alert(
@@ -115,7 +115,7 @@ const FriendsScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await friendApi.unfriend(friend._id);
+              await friendApi.deleteFriend(friend._id);
               // Refresh friend list
               loadFriends();
               Alert.alert('Thành công', 'Đã xóa bạn bè thành công');

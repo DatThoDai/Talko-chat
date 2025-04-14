@@ -7,7 +7,7 @@ import ConversationsScreen from '../screens/ConversationsScreen';
 import { colors } from '../styles';
 import { useSelector } from 'react-redux';
 import { createSelector } from '@reduxjs/toolkit';
-
+import FriendsScreen from '../screens/FriendsScreen';
 const Tab = createMaterialTopTabNavigator();
 
 // Sử dụng createSelector đúng cách để tránh re-render không cần thiết
@@ -73,6 +73,10 @@ export default function TabNavigator() {
       <Tab.Screen 
         name="Cá nhân" 
         component={ProfileScreen} 
+      />
+      <Tab.Screen
+        name="Bạn bè" 
+        component={FriendsScreen}
       />
     </Tab.Navigator>
   );

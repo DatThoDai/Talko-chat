@@ -123,7 +123,10 @@ const HomeScreen = ({ navigation }) => {
       />
       
       <View style={styles.bottomTabs}>
-        <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+        <TouchableOpacity 
+          style={[styles.tabButton, styles.activeTab]}
+          onPress={() => navigation.navigate('Home')}
+        >
           <Icon name="chat" size={24} color={colors.primary} />
           <Text style={styles.activeTabText}>Tin nhắn</Text>
         </TouchableOpacity>
@@ -134,6 +137,14 @@ const HomeScreen = ({ navigation }) => {
         >
           <Icon name="people" size={24} color={colors.gray} />
           <Text style={styles.tabText}>Danh bạ</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.tabButton}
+          onPress={() => navigation.navigate('Friends')}
+        >
+          <Icon name="person-add" size={24} color={colors.gray} />
+          <Text style={styles.tabText}>Bạn bè</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 

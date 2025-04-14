@@ -39,14 +39,14 @@ const RequestItem = ({ request, onAccept, onDecline }) => {
       <View style={styles.actionButtons}>
         <TouchableOpacity 
           style={[styles.actionButton, styles.acceptButton]}
-          onPress={() => onAccept(request)}
+          onPress={() => onAccept(request._id || request.sender._id)}
         >
           <Text style={styles.actionButtonText}>Đồng ý</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={[styles.actionButton, styles.declineButton]}
-          onPress={() => onDecline(request)}
+          onPress={() => onDecline(request._id || request.sender._id)}
         >
           <Text style={styles.declineButtonText}>Từ chối</Text>
         </TouchableOpacity>
@@ -93,75 +93,80 @@ const FriendRequestsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('received'); // 'received' or 'sent'
   
-  const loadFriendRequests = useCallback(async () => {
-    if (refreshing) return;
-    
+  const loadRequests = useCallback(async () => {
     setIsLoading(true);
-    setRefreshing(true);
     
     try {
-      const [receivedList, sentList] = await Promise.all([
-        friendApi.getFriendInvites(),
-        friendApi.getSentFriendRequests()
-      ]);
+      // Load received requests
+      const receivedResponse = await friendApi.fetchFriendRequests();
+      setReceivedRequests(receivedResponse.data || []);
       
-      setReceivedRequests(receivedList || []);
-      setSentRequests(sentList || []);
+      // Load sent requests
+      const sentResponse = await friendApi.fetchMyFriendRequests();
+      setSentRequests(sentResponse.data || []);
     } catch (error) {
-      console.error('Failed to load friend requests:', error);
-      Alert.alert(
-        'Lỗi',
-        'Không thể tải lời mời kết bạn. Vui lòng thử lại sau.',
-        [{ text: 'OK' }]
-      );
+      console.error('Error loading friend requests:', error);
+      Alert.alert('Lỗi', 'Không thể tải lời mời kết bạn. Vui lòng thử lại sau.');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
-  }, [refreshing]);
+  }, []);
   
   // Load friend requests when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadFriendRequests();
-    }, [loadFriendRequests])
+      loadRequests();
+    }, [loadRequests])
   );
   
-  const handleAcceptRequest = useCallback(async (request) => {
+  const handleAccept = useCallback(async (userId) => {
     try {
-      await friendApi.acceptFriendRequest(request._id);
-      // Refresh requests
-      loadFriendRequests();
+      await friendApi.acceptFriend(userId);
+      await loadRequests();
       Alert.alert('Thành công', 'Đã chấp nhận lời mời kết bạn');
     } catch (error) {
       console.error('Error accepting friend request:', error);
-      Alert.alert('Lỗi', 'Không thể chấp nhận lời mời. Vui lòng thử lại sau.');
+      Alert.alert('Lỗi', 'Không thể chấp nhận lời mời kết bạn. Vui lòng thử lại sau.');
     }
-  }, [loadFriendRequests]);
+  }, [loadRequests]);
   
-  const handleDeclineRequest = useCallback(async (request) => {
+  const handleDecline = useCallback(async (userIdOrRequest) => {
     try {
-      await friendApi.declineFriendRequest(request._id);
-      // Refresh requests
-      loadFriendRequests();
+      const userId = typeof userIdOrRequest === 'object' 
+        ? (userIdOrRequest._id || userIdOrRequest.sender._id)
+        : userIdOrRequest;
+      
+      if (!userId) {
+        throw new Error('Invalid user ID');
+      }
+      
+      await friendApi.deleteFriendRequest(userId);
+      await loadRequests();
       Alert.alert('Thành công', 'Đã từ chối lời mời kết bạn');
     } catch (error) {
       console.error('Error declining friend request:', error);
-      Alert.alert('Lỗi', 'Không thể từ chối lời mời. Vui lòng thử lại sau.');
+      Alert.alert('Lỗi', 'Không thể từ chối lời mời kết bạn. Vui lòng thử lại sau.');
     }
-  }, [loadFriendRequests]);
+  }, [loadRequests]);
   
-  const handleCancelRequest = useCallback(async (request) => {
+  const handleCancel = useCallback(async (userIdOrRequest) => {
     try {
-      await friendApi.cancelFriendRequest(request._id);
-      // Refresh requests
-      loadFriendRequests();
+      const userId = typeof userIdOrRequest === 'object' 
+        ? (userIdOrRequest._id || userIdOrRequest.receiver._id)
+        : userIdOrRequest;
+      
+      if (!userId) {
+        throw new Error('Invalid user ID');
+      }
+      
+      await friendApi.deleteMyFriendRequest(userId);
+      await loadRequests();
       Alert.alert('Thành công', 'Đã hủy lời mời kết bạn');
     } catch (error) {
-      console.error('Error cancelling friend request:', error);
-      Alert.alert('Lỗi', 'Không thể hủy lời mời. Vui lòng thử lại sau.');
+      console.error('Error canceling friend request:', error);
+      Alert.alert('Lỗi', 'Không thể hủy lời mời kết bạn. Vui lòng thử lại sau.');
     }
-  }, [loadFriendRequests]);
+  }, [loadRequests]);
   
   return (
     <SafeAreaView style={styles.container}>
@@ -224,14 +229,14 @@ const FriendRequestsScreen = ({ navigation }) => {
             renderItem={({ item }) => (
               <RequestItem 
                 request={item} 
-                onAccept={handleAcceptRequest}
-                onDecline={handleDeclineRequest}
+                onAccept={handleAccept}
+                onDecline={handleDecline}
               />
             )}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={loadFriendRequests}
+                onRefresh={loadRequests}
                 colors={[colors.primary]}
               />
             }
@@ -256,13 +261,13 @@ const FriendRequestsScreen = ({ navigation }) => {
             renderItem={({ item }) => (
               <SentRequestItem 
                 request={item} 
-                onCancel={handleCancelRequest}
+                onCancel={handleCancel}
               />
             )}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={loadFriendRequests}
+                onRefresh={loadRequests}
                 colors={[colors.primary]}
               />
             }

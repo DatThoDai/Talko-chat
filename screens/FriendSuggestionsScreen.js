@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  ActivityIndicator,
-  Alert,
-  Image,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, 
+  TextInput, ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomAvatar from '../components/CustomAvatar';
-import { colors, spacing, typography } from '../styles';
-import { friendService } from '../api';
+import { colors, spacing, typography, borderRadius } from '../styles';
+import friendApi from '../api/friendApi'; // Import friendApi
+import { userService } from '../api/userService'; // Import userService cho tìm kiếm người dùng
 
 const UserItem = ({ user, onSendRequest, isRequestSent }) => {
   return (
@@ -54,55 +48,46 @@ const UserItem = ({ user, onSendRequest, isRequestSent }) => {
 };
 
 const FriendSuggestionsScreen = ({ navigation }) => {
-  const [searchText, setSearchText] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [suggestedUsers, setSuggestedUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [sentRequests, setSentRequests] = useState([]);
   
-  // Load suggested friends and sent requests
-  const loadData = useCallback(async () => {
+  // Load gợi ý kết bạn và danh sách lời mời đã gửi
+  const loadSuggestions = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Get suggested friends
-      const suggestionsResponse = await friendService.fetchSuggestFriend();
-      const suggestions = Array.isArray(suggestionsResponse) ? suggestionsResponse : (suggestionsResponse.content || []);
-
-      // Get sent friend requests
-      const sentResponse = await friendService.fetchMyRequestFriend();
-      const sent = Array.isArray(sentResponse) ? sentResponse : [];
+      // Lấy gợi ý kết bạn
+      const suggestionResponse = await friendApi.fetchFriendSuggests();
+      setSuggestedUsers(suggestionResponse.data || []);
       
-      setSuggestedUsers(suggestions || []);
-      setSentRequests(sent || []);
+      // Lấy danh sách lời mời đã gửi
+      const sentResponse = await friendApi.fetchMyFriendRequests();
+      
+      // Lưu ID của người dùng đã nhận lời mời
+      const requestIds = sentResponse.data.map(request => request.receiver._id);
+      setSentRequests(requestIds);
     } catch (error) {
-      console.error('Failed to load friend suggestions:', error);
-      Alert.alert(
-        'Lỗi',
-        'Không thể tải gợi ý bạn bè. Vui lòng thử lại sau.',
-        [{ text: 'OK' }]
-      );
+      console.error('Error loading suggestions:', error);
+      Alert.alert('Lỗi', 'Không thể tải gợi ý kết bạn. Vui lòng thử lại sau.');
     } finally {
       setIsLoading(false);
     }
   }, []);
   
-  // Load data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
-  );
+  // Load gợi ý khi mở màn hình
+  useEffect(() => {
+    loadSuggestions();
+  }, [loadSuggestions]);
   
-  // Check if request was sent to a user
+  // Kiểm tra xem đã gửi lời mời cho người dùng nào chưa
   const isRequestSentToUser = useCallback((userId) => {
-    return sentRequests.some(request => {
-      // Different api might return different structures
-      const receiverId = request.receiver?._id || request.receiver;
-      return receiverId === userId;
-    });
+    return sentRequests.includes(userId);
   }, [sentRequests]);
   
+  // Tìm kiếm người dùng
   const handleSearch = useCallback(async () => {
     if (!searchText.trim()) {
       return;
@@ -111,45 +96,56 @@ const FriendSuggestionsScreen = ({ navigation }) => {
     setIsSearching(true);
     
     try {
-      // Use the userApi to search for users
-      const results = await userApi.fetchUser(searchText.trim());
-      // Normalize response to always be an array
-      const normalizedResults = Array.isArray(results) ? results : [results];
-      setSuggestedUsers(normalizedResults || []);
+      // Sử dụng userService thay vì userApi để tìm kiếm người dùng
+      const response = await userService.searchUsers(searchText);
+      console.log('Kết quả tìm kiếm:', response);
+      
+      if (response && response.data) {
+        setSuggestedUsers(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setSuggestedUsers([]);
+      }
     } catch (error) {
       console.error('Error searching users:', error);
       Alert.alert('Lỗi', 'Không thể tìm kiếm người dùng. Vui lòng thử lại sau.');
+      setSuggestedUsers([]);
     } finally {
       setIsSearching(false);
     }
   }, [searchText]);
   
+  // Gửi lời mời kết bạn
   const handleSendRequest = useCallback(async (user) => {
     try {
-      // Use the friendApi to send a friend request
-      await friendService.sendRequestFriend(user._id);
+      // Đảm bảo user có _id
+      if (!user || !user._id) {
+        console.error('User object invalid:', user);
+        Alert.alert('Lỗi', 'Thông tin người dùng không hợp lệ');
+        return;
+      }
       
-      // Update local state - we may need to transform the user object
-      // to match the structure expected by sentRequests
-      const newRequest = {
-        receiver: user._id,
-        status: 'PENDING'
-      };
+      await friendApi.addFriendRequest(user._id);
       
-      setSentRequests(prevSent => [...prevSent, newRequest]);
+      // Cập nhật danh sách yêu cầu đã gửi
+      setSentRequests(prev => [...prev, user._id]);
+      
       Alert.alert('Thành công', 'Đã gửi lời mời kết bạn');
     } catch (error) {
       console.error('Error sending friend request:', error);
-      Alert.alert('Lỗi', 'Không thể gửi lời mời kết bạn. Vui lòng thử lại sau.');
+      Alert.alert(
+        'Lỗi',
+        'Không thể gửi lời mời kết bạn. Vui lòng thử lại sau.',
+        [{ text: 'OK' }]
+      );
     }
   }, []);
   
   // Clear search results if search text is empty
   useEffect(() => {
     if (!searchText.trim()) {
-      loadData();
+      loadSuggestions();
     }
-  }, [searchText, loadData]);
+  }, [searchText, loadSuggestions]);
   
   return (
     <SafeAreaView style={styles.container}>

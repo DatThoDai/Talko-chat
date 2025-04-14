@@ -187,6 +187,25 @@ export const userService = {
       console.error('Error getting suggested users:', error);
       return { data: [] };
     }
+  },
+
+  // Thêm hàm mới để lấy userId từ email
+  getUserIdByEmail: async (email) => {
+    try {
+      if (!email) return null;
+      
+      // Gọi API để lấy thông tin user từ email
+      const response = await api.get(`/users/search/username/${encodeURIComponent(email)}`);
+      
+      if (response && response.data) {
+        // Trả về _id từ response
+        return response.data._id || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user ID from email:', error);
+      return null;
+    }
   }
 };
 

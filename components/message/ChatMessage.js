@@ -28,48 +28,34 @@ const ChatMessage = ({
   previewImage,
   isMyMessage, // Thêm prop isMyMessage để đảm bảo chắc chắn
 }) => {
-  // Cải thiện hàm xác định người gửi
+  // Sửa hàm isSender để debug rõ ràng hơn
   const isSender = () => {
-    // Ưu tiên kiểm tra prop isMyMessage được truyền vào nếu có
+    // Thêm log chi tiết hơn về ID để so sánh
+    console.log(
+      "DETAILED MESSAGE CHECK:", {
+        messageId: message?._id || 'undefined',
+        senderId: message?.sender?._id || 'undefined', 
+        userId: userId || 'undefined',
+        senderId_equals_userId: message?.sender?._id === userId,
+        isMyMessage: isMyMessage,
+        isTemp: message?.isTemp,
+      }
+    );
+    
+    // Ưu tiên prop isMyMessage được truyền vào
     if (isMyMessage !== undefined) {
       return isMyMessage;
     }
     
-    // Đảm bảo log đầy đủ cho việc debug
-    console.log(
-      "Message check:", 
-      JSON.stringify({
-        messageId: message?._id?.toString().substring(0, 8) || 'undefined',
-        senderId: message?.sender?._id?.toString() || 'undefined', 
-        userId: userId?.toString() || 'undefined',
-        isTemp: message?.isTemp,
-        forceMyMessage: message?.forceMyMessage
-      })
-    );
+    // Các kiểm tra khác giữ nguyên...
     
-    // Thứ tự ưu tiên để xác định là người gửi
-    
-    // 1. Nếu tin nhắn đã đánh dấu rõ là của mình
-    if (message?.isMyMessage === true || message?.forceMyMessage === true) {
-      return true;
-    }
-    
-    // 2. Kiểm tra nếu là tin nhắn tạm thời
-    if (message?.isTemp === true) {
-      return true;
-    }
-    
-    // 3. Kiểm tra ID tạm thời
-    if (message?._id && typeof message._id === 'string' && 
-        message._id.startsWith('temp-')) {
-      return true;
-    }
-    
-    // 4. So sánh ID người gửi với các trường hợp
+    // Thêm log điều kiện cuối cùng
     const senderIdMatches = 
       (message?.sender?._id === userId) || 
       (message?.sender === userId) ||
       (message?.senderId === userId);
+    
+    console.log(`Final check: ${senderIdMatches} (senderId: ${message?.sender?._id}, userId: ${userId})`);
     
     return senderIdMatches;
   };

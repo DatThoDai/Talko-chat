@@ -47,7 +47,7 @@ export const loginUser = createAsyncThunk(
       if (!user) {
         console.log('No user data in response, creating minimal user object');
         user = {
-          _id: credentials.email, // Sử dụng email như là ID trong trường hợp không có ID thực
+          _id: credentials._id, // Sử dụng email như là ID trong trường hợp không có ID thực
           username: credentials.email,
           name: credentials.email.split('@')[0],
           email: credentials.email

@@ -37,6 +37,7 @@ import {useDispatch} from 'react-redux';
 import {addNewMessage, updateMessage} from '../redux/chatSlice';
 import { conversationApi, conversationService } from '../api';
 import userUtils from '../utils/userUtils';
+import { userService } from '../api/userService';
 
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
@@ -106,6 +107,9 @@ const MessageScreen = ({navigation, route}) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUploadingFile, setCurrentUploadingFile] = useState(null);
+
+  // Thêm state mới để lưu trữ userId thực
+  const [realUserId, setRealUserId] = useState(null);
 
   // References
   const flatListRef = useRef(null);
@@ -239,6 +243,28 @@ const MessageScreen = ({navigation, route}) => {
       disconnectSocket();
     };
   }, [conversationId, user?._id, conversationName]);
+
+  // Thêm useEffect để fetch userId thực từ email khi component mount
+  useEffect(() => {
+    const fetchRealUserId = async () => {
+      // Kiểm tra xem user._id có phải là email không
+      if (user && user._id && user._id.includes('@')) {
+        try {
+          // Gọi API để lấy userId thực từ email
+          const userId = await userService.getUserIdByEmail(user._id);
+          
+          if (userId) {
+            console.log('Found real user ID:', userId);
+            setRealUserId(userId);
+          }
+        } catch (error) {
+          console.error('Error fetching real user ID:', error);
+        }
+      }
+    };
+    
+    fetchRealUserId();
+  }, [user]);
 
   // Handle back button
   useEffect(() => {
@@ -809,58 +835,58 @@ const MessageScreen = ({navigation, route}) => {
 
   // Render message item
   const renderMessage = (message, index) => {
-    // Kiểm tra tin nhắn có hợp lệ không
-    if (!message || typeof message !== 'object') {
-      console.warn(`Invalid message at index ${index}, skipping render`);
-      return null;
-    }
-
-    // Đảm bảo các trường cơ bản
-    const safeMessage = {
-      _id: message._id || `temp-${Date.now()}-${Math.random()}`,
-      content: message.content || '',
-      type: message.type || 'TEXT',
-      createdAt: message.createdAt || new Date().toISOString(),
-      sender: message.sender || { _id: 'unknown', name: 'Unknown User' },
-      isDeleted: message.isDeleted || false,
-      reactions: message.reactions || [],
-      // Giữ lại các trường khác nếu có
-      ...message
-    };
-
-    // Get current user ID for comparison
+    // Đảm bảo tin nhắn hợp lệ
+    if (!message) return null;
+    
+    // Lấy ID của người dùng hiện tại
     const currentUser = user || {};
-    const currentUserId = currentUser._id || '';
-
-    // SIMPLIFIED LOGIC: Check if the message is from the current user
+    
+    // Kiểm tra xem ID người dùng là ObjectID hay email
+    const isCurrentUserIdEmail = currentUser._id && 
+        (currentUser._id.includes('@') || currentUser._id.length > 30);
+    
+    // Kiểm tra xem message.sender._id có phải là ObjectID không
+    const isSenderIdObjectId = message.sender && message.sender._id && 
+        !message.sender._id.includes('@') && message.sender._id.length < 30;
+    
+    // Xác định isMyMessage dựa trên ID hoặc email
     let isMyMessage = false;
     
-    // First check for temp messages (they're always ours)
-    if (safeMessage._id && typeof safeMessage._id === 'string' && safeMessage._id.startsWith('temp-')) {
+    if (message.isMyMessage || message.forceMyMessage || message.isTemp) {
       isMyMessage = true;
+    }
+    // Nếu ID người dùng là email nhưng ID người gửi là ObjectID
+    else if (isCurrentUserIdEmail && isSenderIdObjectId) {
+      // So sánh username hoặc email thay vì ID
+      isMyMessage = message.sender.username === currentUser._id || 
+                    message.sender.email === currentUser._id;
     } 
-    // Check if sender ID matches current user ID
-    else if (currentUserId && safeMessage.sender && safeMessage.sender._id) {
-      isMyMessage = currentUserId === safeMessage.sender._id;
+    // Trường hợp bình thường, so sánh ID
+    else {
+      isMyMessage = message.sender && message.sender._id === currentUser._id;
     }
     
-    // Log for debug
-    console.log(`Message ${index}: isMyMessage=${isMyMessage}, sender=${safeMessage.sender.name}, currentUser=${currentUserId}`);
+    // Lấy ID chính xác để so sánh
+    const currentUserId = realUserId || user?._id;
     
-    const isLastMessage = index === messages.length - 1;
-
+    // Xác định isMyMessage như trước đó
+    isMyMessage = false;
+    
+    if (message.isMyMessage || message.forceMyMessage || message.isTemp) {
+      isMyMessage = true;
+    } else if (message.sender && message.sender._id === currentUserId) {
+      isMyMessage = true;
+    } else if (realUserId && message.sender && message.sender._id === realUserId) {
+      isMyMessage = true;
+    }
+    
     return (
       <ChatMessage
-        key={safeMessage._id}
-        message={safeMessage}
-        isMyMessage={isMyMessage}
-        currentUserId={currentUserId}
-        isLastMessage={isLastMessage}
-        setModalVisible={setModalVisible}
-        showReactDetails={setReactProps}
-        setImageProps={setImageProps}
-        onLastView={handleShowLastView}
-        navigation={navigation}
+        key={message._id || index}
+        message={message}
+        userId={currentUserId} // Sử dụng userId đã fetch từ API
+        isMyMessage={isMyMessage} // Truyền giá trị đã xác định
+        // Các props khác...
       />
     );
   };

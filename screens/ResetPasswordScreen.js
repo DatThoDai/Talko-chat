@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
-import { authApi } from '../api/authService';
+import { authService } from '../api/authService';
 
 const ResetPasswordScreen = ({ route, navigation }) => {
   const { username, otp } = route.params || {};
@@ -66,7 +66,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
     
     try {
       // Gửi API đặt lại mật khẩu
-      await authApi.resetPassword(username, otp, password);
+      await authService.resetPassword(username, otp, password);
       setIsLoading(false);
       
       // Hiển thị thông báo thành công và chuyển hướng về màn hình đăng nhập

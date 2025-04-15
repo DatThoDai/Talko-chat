@@ -16,6 +16,9 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { messageType } from '../../constants';
 import MessageActions from './MessageActions';
 import CustomAvatar from '../CustomAvatar';
+import { downloadFile, openFile } from '../../utils/downloadUtils';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 function ReceiverMessage(props) {
   const {
@@ -56,47 +59,185 @@ function ReceiverMessage(props) {
                       ? sender.email.split('@')[0] 
                       : 'Unknown User');
 
+  // Thêm hàm formatFileSize
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
+
+  // Cập nhật renderFile method trong ReceiverMessage.js
+  const renderFile = () => {
+    return (
+      <TouchableOpacity 
+        style={styles.fileContainer}
+        onPress={() => {
+          if (fileUrl) {
+            Alert.alert(
+              'Tệp đính kèm',
+              `Bạn muốn làm gì với file ${message.fileName || 'này'}?`,
+              [
+                { text: 'Hủy', style: 'cancel' },
+                { 
+                  text: 'Tải xuống', 
+                  onPress: () => downloadFile(fileUrl, message.fileName, message.type) 
+                },
+                { 
+                  text: 'Mở', 
+                  onPress: () => openFile(fileUrl, message.fileName)
+                },
+                { 
+                  text: 'Chia sẻ', 
+                  onPress: async () => {
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      // Hiển thị thông báo đang tải về để chia sẻ
+                      Alert.alert('Đang chuẩn bị chia sẻ...', 'Vui lòng đợi trong giây lát');
+                      
+                      // Tải file về bộ nhớ tạm trước khi chia sẻ
+                      const fileUri = FileSystem.documentDirectory + (message.fileName || 'file');
+                      
+                      const downloadResumable = FileSystem.createDownloadResumable(
+                        fileUrl,
+                        fileUri
+                      );
+                      
+                      const { uri } = await downloadResumable.downloadAsync();
+                      await Sharing.shareAsync(uri);
+                    } else {
+                      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        }}
+      >
+        <View style={styles.fileIconContainer}>
+          <Icon 
+            name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
+            size={24} 
+            color="#2196F3" 
+          />
+        </View>
+        <View style={styles.fileInfoContainer}>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {message.fileName || 'Tệp đính kèm'}
+          </Text>
+          {message.fileSize && (
+            <Text style={styles.fileSize}>
+              {formatFileSize(message.fileSize)}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Thêm các hàm này sau renderFile() và trước renderContent()
+
+  // Hiển thị tin nhắn hình ảnh
+  const renderImage = () => {
+    // Lấy URL hình ảnh từ message
+    const imageUrl = message.fileUrl || message.content;
+    
+    if (!imageUrl) {
+      return <Text style={styles.content}>Hình ảnh không khả dụng</Text>;
+    }
+    
+    return (
+      <TouchableOpacity 
+        onPress={() => handleViewImage(imageUrl)}
+        activeOpacity={0.9}
+      >
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
+    );
+  };
+
+  // Hiển thị tin nhắn video
+  const renderVideo = () => {
+    const videoUrl = message.fileUrl || message.content;
+    const thumbnailUrl = message.thumbnail || null;
+    
+    if (!videoUrl) {
+      return <Text style={styles.content}>Video không khả dụng</Text>;
+    }
+    
+    return (
+      <TouchableOpacity 
+        style={styles.videoContainer}
+        onPress={() => {
+          if (videoUrl) {
+            Alert.alert(
+              'Video đính kèm',
+              `Bạn muốn làm gì với video này?`,
+              [
+                { text: 'Hủy', style: 'cancel' },
+                { 
+                  text: 'Xem', 
+                  onPress: () => openFile(videoUrl, message.fileName || 'video.mp4') 
+                },
+                { 
+                  text: 'Tải xuống', 
+                  onPress: () => downloadFile(videoUrl, message.fileName || 'video.mp4', 'VIDEO')
+                },
+                { 
+                  text: 'Chia sẻ', 
+                  onPress: async () => {
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      Alert.alert('Đang chuẩn bị chia sẻ...', 'Vui lòng đợi trong giây lát');
+                      
+                      const fileUri = FileSystem.documentDirectory + (message.fileName || 'video.mp4');
+                      
+                      const downloadResumable = FileSystem.createDownloadResumable(
+                        videoUrl,
+                        fileUri
+                      );
+                      
+                      const { uri } = await downloadResumable.downloadAsync();
+                      await Sharing.shareAsync(uri);
+                    } else {
+                      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        }}
+      >
+        <Image 
+          source={{ uri: thumbnailUrl || 'https://via.placeholder.com/200x150?text=Video' }} 
+          style={styles.videoThumbnail}
+        />
+        <View style={styles.playButton}>
+          <Icon name="play" size={30} color="#fff" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   // Render appropriate message content based on type
   const renderContent = () => {
     switch (type) {
       case messageType.IMAGE:
-        return (
-          <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, senderName)}>
-            <Image
-              source={{ uri: fileUrl }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          </TouchableWithoutFeedback>
-        );
+        return renderImage();
       
       case messageType.FILE:
-        return (
-          <View style={styles.fileContainer}>
-            <Icon name="document-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.fileName} numberOfLines={1}>
-              {message.fileName || 'Tệp đính kèm'}
-            </Text>
-          </View>
-        );
+        return renderFile();
       
       case messageType.VIDEO:
-        return (
-          <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, senderName, false)}>
-            <View style={styles.videoContainer}>
-              <Image
-                source={{ uri: message.thumbnail || fileUrl }}
-                style={styles.videoThumbnail}
-                resizeMode="cover"
-              />
-              <View style={styles.playButton}>
-                <Icon name="play" size={24} color="#FFFFFF" />
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        );
+        return renderVideo();
       
       default:
         return <Text style={styles.content}>{content}</Text>;
@@ -273,11 +414,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginVertical: 4,
   },
-  fileName: {
-    marginLeft: 8,
-    color: '#333',
-    fontSize: 14,
+  fileIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e3f2fd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileInfoContainer: {
     flex: 1,
+    marginLeft: 8,
+  },
+  fileName: {
+    color: '#2196F3',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  fileSize: {
+    color: '#78909c',
+    fontSize: 12,
+    marginTop: 2,
   },
   videoContainer: {
     width: 200,

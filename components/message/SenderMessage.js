@@ -16,6 +16,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { messageType } from '../../constants';
 import CustomAvatar from '../CustomAvatar';
 import MessageActions from './MessageActions';
+import { downloadFile, openFile } from '../../utils/downloadUtils';
+import * as Sharing from 'expo-sharing';
 
 function SenderMessage(props) {
   const {
@@ -145,16 +147,31 @@ function SenderMessage(props) {
       <TouchableOpacity 
         style={styles.fileContainer}
         onPress={() => {
-          // Mở file hoặc tải xuống file
           if (fileUrl) {
-            // Có thể thêm logic để mở file hoặc tải xuống tại đây
             Alert.alert(
               'Tệp đính kèm',
               `Bạn muốn làm gì với file ${fileName || 'này'}?`,
               [
                 { text: 'Hủy', style: 'cancel' },
-                { text: 'Tải xuống', onPress: () => console.log('Download file:', fileUrl) },
-                { text: 'Chia sẻ', onPress: () => console.log('Share file:', fileUrl) },
+                { 
+                  text: 'Tải xuống', 
+                  onPress: () => downloadFile(fileUrl, fileName, message.type) 
+                },
+                { 
+                  text: 'Mở', 
+                  onPress: () => openFile(fileUrl, fileName)
+                },
+                { 
+                  text: 'Chia sẻ', 
+                  onPress: async () => {
+                    const canShare = await Sharing.isAvailableAsync();
+                    if (canShare) {
+                      Sharing.shareAsync(fileUrl);
+                    } else {
+                      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                    }
+                  }
+                }
               ]
             );
           }

@@ -121,35 +121,43 @@ export const messageApi = {
     }
   },
 
-  sendFileMessage: async (fileData, onProgress) => {
+  sendFileMessage: async (data, onProgress) => {
     try {
-      const { file, conversationId, type = 'IMAGE' } = fileData;
+      const { file, conversationId, type = 'FILE' } = data;
       
-      // Kiểm tra dữ liệu đầu vào
-      if (!conversationId) {
-        throw new Error('conversationId is required');
+      // Ánh xạ các loại file chi tiết sang 3 loại server chấp nhận
+      let serverType = 'FILE';
+      if (type === 'IMAGE' || file.isImage) {
+        serverType = 'IMAGE';
+      } else if (type === 'VIDEO' || file.isVideo) {
+        serverType = 'VIDEO';
+      } else {
+        // Tất cả các loại khác (PDF, DOC, EXCEL, vv.) đều là FILE
+        serverType = 'FILE';
       }
       
-      // Tạo FormData
-      const formData = new FormData();
+      console.log('File được gửi với type:', {
+        originalType: type,
+        mappedType: serverType
+      });
       
-      // Thêm file vào FormData
+      // Tạo FormData như trước
+      const formData = new FormData();
       formData.append('file', {
         uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
-        type: file.type || 'image/jpeg',
-        name: file.name || `image-${Date.now()}.jpg`
+        type: file.type || 'application/octet-stream',
+        name: file.name || `file-${Date.now()}`
       });
       
-      // QUAN TRỌNG: THÊM conversationId và type VÀO QUERY STRING
-      const url = `${BASE_URL}/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(type.toUpperCase())}`;
+      // Quan trọng: Sử dụng serverType đã ánh xạ thay vì type gốc
+      formData.append('type', serverType);
+      formData.append('conversationId', conversationId);
       
-      console.log(`Uploading file to URL: ${url}`);
-      console.log('File details:', {
-        name: file.name || 'unnamed',
-        type: file.type || 'unknown',
-        size: file.size || 0
-      });
-
+      // URL cũng sử dụng serverType đã ánh xạ
+      const url = `${BASE_URL}/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(serverType)}`;
+      
+      console.log('Uploading to URL:', url);
+      
       // Cấu hình request với progress tracking
       const config = {
         headers: {

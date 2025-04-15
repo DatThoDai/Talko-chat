@@ -618,120 +618,120 @@ const handleSendFileMessage = async (file) => {
     setUploadProgress(0);
     setCurrentUploadingFile(file);
     
+    // Hàm chuyển đổi fileType chi tiết sang loại server chấp nhận
+    const mapToServerType = (detailedType) => {
+      if (detailedType === 'IMAGE' || file.isImage) {
+        return 'IMAGE';
+      } else if (detailedType === 'VIDEO' || file.isVideo) {
+        return 'VIDEO'; 
+      } else {
+        // Tất cả các loại khác (PDF, DOC, EXCEL, vv.) đều là FILE
+        return 'FILE';
+      }
+    };
+    
     // Xác định loại file
-    let fileType = 'FILE';
-    if (file.isImage || (file.type && file.type.includes('image'))) {
-      fileType = 'IMAGE';
-    } else if (file.type && file.type.includes('video')) {
-      fileType = 'VIDEO';
+    let fileType = file.fileType || 'FILE'; // Ưu tiên dùng fileType đã có trong file object
+
+    if (!fileType || fileType === 'FILE') {
+      // Nếu không có fileType hoặc fileType là FILE, dùng logic phát hiện cũ
+      if (file.isImage || (file.type && file.type.includes('image'))) {
+        fileType = 'IMAGE';
+      } else if (file.type && file.type.includes('video')) {
+        fileType = 'VIDEO';
+      }
     }
     
-    console.log('Processing file:', {
-      uri: file.uri,
-      type: file.type,
-      name: file.name,
-      size: file.size,
-      fileType: fileType
-    });
+    console.log('Processing file with fileType:', fileType);
     
-    // Tạo tin nhắn tạm thời
+    // Chuyển đổi thành loại server chấp nhận
+    const serverType = mapToServerType(fileType);
+    
+    console.log('Converted to server type:', serverType);
+    
+    // Chuẩn bị thông tin file message
     const tempMessage = {
       _id: tempId,
       conversationId,
       sender: {
         _id: user._id,
-        name: user.name,
-        username: user.username,
+        name: user.name || user.username,
         avatar: user.avatar
       },
       createdAt: new Date().toISOString(),
-      type: fileType,
+      type: fileType, // Giữ fileType chi tiết cho UI
       fileName: file.name,
       fileSize: file.size,
-      fileUrl: file.uri, // URI tạm thời cho preview
+      fileUrl: file.uri,
       isTemp: true,
       status: 'uploading',
-      uploadProgress: 0,
-      isMyMessage: true,
-      forceMyMessage: true,
+      uploadProgress: 0
     };
     
     // Thêm tin nhắn tạm thời
-    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    setMessages(prevMessages => [tempMessage, ...prevMessages]);
     
-    // Progress tracking
+    // Tracking upload progress
     const updateProgress = (progress) => {
       setUploadProgress(progress);
-      setMessages(prev => 
-        prev.map(msg => 
-          msg._id === tempId 
-            ? {...msg, uploadProgress: progress} 
-            : msg
-        )
-      );
+      setMessages(prevMessages => prevMessages.map(msg => 
+        msg._id === tempId ? {...msg, uploadProgress: progress} : msg
+      ));
     };
     
-    // Import và sử dụng messageApi
-    const messageApiModule = await import('../api/messageApi');
-    const { messageApi } = messageApiModule;
-    
-    console.log('Sending file with conversation ID:', conversationId);
-    
-    // Gọi API sendFileMessage
+    // Gọi API gửi file với serverType thay vì fileType
     const response = await messageApi.sendFileMessage({
-      file,
-      conversationId,
-      type: fileType
+      file: file,
+      conversationId: conversationId,
+      type: serverType // Sử dụng server type
     }, updateProgress);
     
-    console.log('Response received:', response);
+    console.log('File upload response:', response);
     
+    // Cập nhật UI với thông tin từ server
     if (response && response.data) {
-      // Log để debug
-      console.log('File response from server:', response.data);
+      // Cập nhật thông tin tin nhắn
+      const actualMessage = response.data;
       
-      // Tạo object với đầy đủ thông tin cần thiết
-      const updatedMessage = {
-        ...response.data,
-        // Đảm bảo type là IMAGE cho hình ảnh
-        type: fileType || 'IMAGE',
-        // Đảm bảo có fileUrl cho hiển thị
-        fileUrl: response.data.fileUrl || response.data.url || response.data.mediaUrl || file.uri,
-        // Thông tin khác
-        isMyMessage: true,
-        forceMyMessage: true,
-        status: 'sent'
+      // Tạo thông tin người gửi hiện tại
+      const currentUserInfo = {
+        _id: user._id,
+        name: user.name || user.username,
+        username: user.username,
+        avatar: user.avatar
       };
       
-      console.log('Updated image message:', {
-        id: updatedMessage._id,
-        type: updatedMessage.type,
-        fileUrl: updatedMessage.fileUrl
-      });
-      
-      setMessages(prev => 
-        prev.map(msg => 
-          msg._id === tempId ? updatedMessage : msg
-        )
-      );
+      setMessages(prevMessages => prevMessages.map(msg => 
+        msg._id === tempId 
+          ? {
+              ...actualMessage,
+              type: fileType, // Giữ fileType chi tiết cho UI
+              isTemp: false,
+              status: 'sent',
+              isMyMessage: true,  // THÊM: đảm bảo isMyMessage được đặt
+              forceMyMessage: true, // THÊM: đảm bảo forceMyMessage được đặt
+              sender: currentUserInfo // THÊM: đảm bảo thông tin người gửi chính xác
+            }
+          : msg
+      ));
     }
     
+    // Reset upload state
     setIsUploading(false);
     setUploadProgress(0);
     setCurrentUploadingFile(null);
   } catch (error) {
     console.error('Error sending file message:', error);
     
-    // Cập nhật trạng thái tin nhắn thành lỗi
-    setMessages(prev => 
-      prev.map(msg => 
-        msg._id === tempId 
-          ? {...msg, status: 'failed'} 
-          : msg
-      )
-    );
+    // Cập nhật trạng thái tin nhắn
+    setMessages(prevMessages => prevMessages.map(msg => 
+      msg._id === tempId ? {...msg, status: 'error'} : msg
+    ));
     
-    Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại sau.');
+    // Hiển thị thông báo lỗi
+    Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại.');
+    
+    // Reset upload state
     setIsUploading(false);
     setUploadProgress(0);
     setCurrentUploadingFile(null);

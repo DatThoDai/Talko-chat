@@ -116,19 +116,74 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
         multiple: false
       });
       
-      if (result.type === 'success') {
+      console.log('DocumentPicker result:', result);
+      
+      // Xử lý kết quả theo API mới của DocumentPicker
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // API mới - sử dụng result.assets[0]
+        const selectedAsset = result.assets[0];
+        
         // Check file size
-        const validSize = await checkFileSize(result.uri);
+        const validSize = await checkFileSize(selectedAsset.uri);
         if (!validSize) return;
+        
+        // Check supported file types
+        const supportedTypes = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'];
+        const fileExtension = selectedAsset.name.split('.').pop().toLowerCase();
+        
+        if (!supportedTypes.includes(fileExtension)) {
+          showNotification(`Định dạng file ${fileExtension} không được hỗ trợ.`);
+          return;
+        }
+        
+        // Xác định fileType dựa trên định dạng file
+        let fileType = 'FILE';
+        switch (fileExtension) {
+          case 'pdf':
+            fileType = 'PDF';
+            break;
+          case 'doc':
+          case 'docx':
+            fileType = 'DOC';
+            break;
+          case 'xls':
+          case 'xlsx':
+            fileType = 'EXCEL';
+            break;
+          case 'ppt':
+          case 'pptx':
+            fileType = 'PPT';
+            break;
+          case 'zip':
+          case 'rar':
+            fileType = 'ARCHIVE';
+            break;
+          default:
+            fileType = 'FILE';
+        }
         
         // Chuẩn bị thông tin file
         const fileInfo = {
-          uri: result.uri,
-          name: result.name,
-          type: result.mimeType || 'application/octet-stream',
-          size: result.size,
+          uri: selectedAsset.uri,
+          name: selectedAsset.name,
+          type: selectedAsset.mimeType || getMimeType(fileExtension),
+          size: selectedAsset.size,
           isFile: true,
+          fileType: fileType
         };
+        
+        console.log('File được chọn (API mới):', fileInfo);
+        
+        setSelectedFile(fileInfo);
+        onFileSelected(fileInfo);
+        showNotification('Đã chọn file thành công');
+      } 
+      // Hỗ trợ cả API cũ cho các phiên bản Expo cũ hơn
+      else if (result.type === 'success') {
+        // API cũ - nội dung xử lý giữ nguyên
+        // Check file size
+        const validSize = await checkFileSize(result.uri);
+        if (!validSize) return;
         
         // Check supported file types
         const supportedTypes = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'];
@@ -139,16 +194,71 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
           return;
         }
         
+        // Xác định fileType dựa trên định dạng file
+        let fileType = 'FILE';
+        switch (fileExtension) {
+          case 'pdf':
+            fileType = 'PDF';
+            break;
+          case 'doc':
+          case 'docx':
+            fileType = 'DOC';
+            break;
+          case 'xls':
+          case 'xlsx':
+            fileType = 'EXCEL';
+            break;
+          case 'ppt':
+          case 'pptx':
+            fileType = 'PPT';
+            break;
+          case 'zip':
+          case 'rar':
+            fileType = 'ARCHIVE';
+            break;
+          default:
+            fileType = 'FILE';
+        }
+        
+        // Chuẩn bị thông tin file VỚI FILETYPE
+        const fileInfo = {
+          uri: result.uri,
+          name: result.name,
+          type: result.mimeType || 'application/octet-stream',
+          size: result.size,
+          isFile: true,
+          fileType: fileType  // QUAN TRỌNG: Thêm fileType
+        };
+        
+        console.log('File được chọn:', fileInfo);
+        
         setSelectedFile(fileInfo);
         onFileSelected(fileInfo);
         showNotification('Đã chọn file thành công');
       }
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi chọn file. Vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi chọn file. Vui lòng thử lại sau.');
     }
   };
   
+  // Thêm helper function để xác định MIME type
+  const getMimeType = (extension) => {
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'zip': 'application/zip',
+      'rar': 'application/vnd.rar',
+      'txt': 'text/plain'
+    };
+    return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
+  };
+
   // Xử lý khi chụp ảnh từ camera
   const handleTakePhoto = async () => {
     try {

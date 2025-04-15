@@ -11,9 +11,10 @@ import {
   ToastAndroid,
   Platform,
   Alert,
+  Vibration,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { messageType } from '../../constants';
+import { messageType, MESSAGE_RECALL_TEXT, MESSAGE_DELETE_TEXT } from '../../constants';
 import CustomAvatar from '../CustomAvatar';
 import MessageActions from './MessageActions';
 
@@ -29,7 +30,8 @@ function SenderMessage(props) {
     onPressRecall,
     loading,
     previewImage,
-    navigation // Thêm navigation vào danh sách các props
+    navigation, // Thêm navigation vào danh sách các props
+    conversationId // Thêm conversationId vào danh sách các props
   } = props;
   
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
@@ -37,7 +39,8 @@ function SenderMessage(props) {
   const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
   const reactLength = message?.reactions?.length || 0;
   const reactVisibleInfo = reactLength > 0 ? `${reactLength}` : '';
-  const conversationId = message?.conversationId;
+  // Ưu tiên sử dụng conversationId từ props, nếu không có thì lấy từ message
+  const msgConversationId = conversationId || message?.conversationId;
   const currentUserId = message?.sender?._id;
   const messageStatus = message?.status || 'sent';
 
@@ -57,8 +60,9 @@ function SenderMessage(props) {
   // Force message to be recognized as from current user
   const isMyMessage = true;
   
-  // State for message actions modal
+  // State for message actions modal and position
   const [showActions, setShowActions] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
   
   // Chuyển đổi dung lượng file sang định dạng readable
   const formatFileSize = (bytes) => {
@@ -148,8 +152,30 @@ function SenderMessage(props) {
   };
 
   // Handle long press to open message actions
-  const handleLongPress = () => {
+  const handleLongPress = (event) => {
+    // Trích xuất tọa độ từ sự kiện press
+    const { pageX, pageY } = event.nativeEvent;
+    
+    // Lưu vị trí tin nhắn để hiển thị menu gần đó
+    const position = {
+      x: pageX,
+      y: pageY
+    };
+    
+    // Vibrate để feedback
+    if (Platform.OS === 'android' && typeof Vibration !== 'undefined') {
+      Vibration.vibrate(50); // Rung nhẹ 50ms
+    }
+    
+    // Cập nhật vị trí và hiển thị modal
+    setMenuPosition(position);
     setShowActions(true);
+  };
+
+  // Close the message actions
+  const handleCloseActions = () => {
+    setShowActions(false);
+    setMenuPosition(null);
   };
 
   // Handle text selection for copy
@@ -269,13 +295,15 @@ function SenderMessage(props) {
       
       <MessageActions
         visible={showActions}
-        onClose={() => setShowActions(false)}
+        onClose={handleCloseActions}
         message={message}
         currentUserId={currentUserId}
         onReply={onReply}
         onSelect={handleCopyText}
+        onPressRecall={onPressRecall}
         navigation={navigation}
-        conversationId={conversationId}
+        conversationId={msgConversationId}
+        position={menuPosition}
       />
     </View>
   );
@@ -479,24 +507,16 @@ SenderMessage.propTypes = {
 
 SenderMessage.defaultProps = {
   message: {},
-  isMessageRecalled: false,
-  onPressEmoji: null,
   handleShowReactDetails: null,
-  onPressDelete: null,
-  onPressEdit: null, 
-  onReply: () => {},
-  onPressRecall: null,
-  loading: false,
-  previewImage: null,
-  navigation: {},
-  // Giữ lại các defaultProps cũ để tương thích
   content: '',
   time: '',
   reactVisibleInfo: '',
   reactLength: 0,
   handleViewImage: null,
+  navigation: {},
   conversationId: '',
-  currentUserId: ''
+  currentUserId: '',
+  onReply: () => {},
 };
 
 export default SenderMessage;

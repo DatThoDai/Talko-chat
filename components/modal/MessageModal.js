@@ -12,7 +12,8 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import {useDispatch} from 'react-redux';
-import {deleteMessage, recallMessage} from '../../redux/chatSlice';
+import {deleteMessage, recallMessage, updateMessage, removeMessage} from '../../redux/chatSlice';
+import {MESSAGE_RECALL_TEXT, MESSAGE_STATUS} from '../../constants/index';
 
 // Fix import path - messageType nằm trong constants/index.js chứ không phải constants.js
 import {messageType} from '../../constants/index';
@@ -23,7 +24,8 @@ const MessageModal = ({
   setModalVisible,
   navigation,
   handleOnReplyMessagePress,
-  onDeleteMessage, // Đổi tên từ handleDeleteMessage thành onDeleteMessage
+  onDeleteMessage, // For deleting messages
+  onRecallMessage, // For recalling messages (new prop)
 }) => {
   const {
     isVisible,
@@ -67,6 +69,9 @@ const MessageModal = ({
       case 'delete':
         handleDeleteMessage();
         break;
+      case 'recall':
+        handleRecallMessage();
+        break;
       default:
         break;
     }
@@ -104,7 +109,7 @@ const MessageModal = ({
     }
   };
 
-  // Delete a message
+  // Delete a message - complete deletion
   const handleDeleteMessage = async () => {
     if (!messageId) return;
     
@@ -123,22 +128,15 @@ const MessageModal = ({
             try {
               setLoading(true);
               
-              // Xóa tin nhắn cho tất cả nếu là người gửi, ngược lại chỉ xóa cho mình
-              if (isMyMessage) {
-                // Xóa cho tất cả
-                await dispatch(deleteMessage(messageId));
-                
-                // Gọi hàm callback nếu được cung cấp
-                if (typeof onDeleteMessage === 'function') {
-                  onDeleteMessage(messageId, true); // true = xóa cho mọi người
-                }
+              // Call the callback function to perform the delete
+              if (typeof onDeleteMessage === 'function') {
+                await onDeleteMessage(messageId);
               } else {
-                // Xóa chỉ cho mình
-                await dispatch(deleteMessage(messageId, true));
-                
-                // Gọi hàm callback nếu được cung cấp
-                if (typeof onDeleteMessage === 'function') {
-                  onDeleteMessage(messageId, false); // false = chỉ xóa cho bản thân
+                // Fallback if no callback provided
+                if (isMyMessage) {
+                  await dispatch(deleteMessage({messageId}));
+                } else {
+                  await dispatch(deleteMessage({messageId, onlyMe: true}));
                 }
               }
             } catch (error) {
@@ -154,14 +152,14 @@ const MessageModal = ({
     );
   };
   
-  // Thu hồi tin nhắn (chỉ có người gửi mới có quyền này)
+  // Thu hồi tin nhắn (recall - not delete) - shows "Tin nhắn đã được thu hồi"
   const handleRecallMessage = async () => {
     if (!messageId || !isMyMessage) return;
     
     // Confirm before recalling
     Alert.alert(
       'Thu hồi tin nhắn',
-      'Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn sẽ bị xóa với tất cả mọi người.',
+      'Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn đã gửi sẽ hiển thị là "Tin nhắn đã được thu hồi".',
       [
         { text: 'Hủy', style: 'cancel' },
         { 
@@ -170,7 +168,23 @@ const MessageModal = ({
           onPress: async () => {
             try {
               setLoading(true);
-              await dispatch(recallMessage(messageId));
+              
+              // Call the callback function for recall if available
+              if (typeof onRecallMessage === 'function') {
+                await onRecallMessage(messageId);
+              } else {
+                // Fallback if no callback provided - update UI and call API
+                dispatch(updateMessage({
+                  _id: messageId,
+                  content: MESSAGE_RECALL_TEXT,
+                  status: MESSAGE_STATUS.RECALLED,
+                  isRecalled: true
+                }));
+                
+                await dispatch(recallMessage(messageId));
+              }
+              
+              console.log('Tin nhắn đã được thu hồi thành công:', messageId);
             } catch (error) {
               console.error('Error recalling message:', error);
               Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn. Vui lòng thử lại sau.');
@@ -230,13 +244,13 @@ const MessageModal = ({
                         <Text style={styles.modalButtonText}>Chuyển tiếp</Text>
                       </TouchableOpacity>
 
-                      {/* Thu hồi option - only for my messages */}
+                      {/* Thu hồi option - only for my messages - make this clear and distinct */}
                       {isMyMessage && (
                         <TouchableOpacity
-                          style={styles.modalButton}
-                          onPress={handleRecallMessage}>
+                          style={[styles.modalButton, styles.recallButton]}
+                          onPress={() => handleRecallMessage()}>
                           <MaterialIcon name="undo" size={24} color="#FF9800" />
-                          <Text style={[styles.modalButtonText, {color: '#FF9800'}]}>Thu hồi</Text>
+                          <Text style={[styles.modalButtonText, {color: '#FF9800'}]}>Thu hồi tin nhắn</Text>
                         </TouchableOpacity>
                       )}
 
@@ -297,6 +311,9 @@ const styles = StyleSheet.create({
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  recallButton: {
+    backgroundColor: '#FFF8E1',  // Light orange background to highlight the recall button
   },
   modalButtonText: {
     marginLeft: 10,

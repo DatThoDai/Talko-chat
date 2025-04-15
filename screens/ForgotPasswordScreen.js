@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
-import { authApi } from '../api/authService';
+import { authService } from '../api/authService';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -44,7 +44,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
     
     try {
       // Gửi API reset OTP
-      await authApi.forgotPassword(email);
+      await authService.forgotPassword(email);
       
       setIsLoading(false);
       

@@ -38,6 +38,7 @@ import {addNewMessage, updateMessage} from '../redux/chatSlice';
 import { conversationApi, conversationService } from '../api';
 import userUtils from '../utils/userUtils';
 import { userService } from '../api/userService';
+import { messageApi } from '../api/messageApi';
 
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
@@ -204,6 +205,27 @@ const MessageScreen = ({navigation, route}) => {
       // Load initial messages
       loadMessages();
       
+      // Set up socket event listener for real-time message deletion
+      const handleMessageDeleted = (data) => {
+        const messageId = data.messageId || data.id;
+        
+        console.log('Socket delete event received in MessageScreen:', messageId);
+        if (messageId) {
+          // Filter out the deleted message from state
+          setMessages(prevMessages => 
+            prevMessages.filter(msg => msg._id !== messageId)
+          );
+        }
+      };
+      
+      // Access the global socket instance
+      const socketInstance = global.socket || window.socket;
+      if (socketInstance) {
+        // Listen for both possible event names
+        socketInstance.on('delete-message', handleMessageDeleted);
+        socketInstance.on('message-deleted', handleMessageDeleted);
+      }
+      
       // Prepare header data
       const actualName = route.params?.name || route.params?.conversationName || conversationName || 'Cuộc trò chuyện';
       const actualAvatar = route.params?.avatar || avatar;
@@ -236,12 +258,16 @@ const MessageScreen = ({navigation, route}) => {
         headerTitle: () => null,
         headerRight: () => null,
       });
+      
+      // Cleanup socket when unmounting
+      return () => {
+        if (socketInstance) {
+          socketInstance.off('delete-message', handleMessageDeleted);
+          socketInstance.off('message-deleted', handleMessageDeleted);
+        }
+        disconnectSocket();
+      };
     }
-    
-    // Cleanup socket when unmounting
-    return () => {
-      disconnectSocket();
-    };
   }, [conversationId, user?._id, conversationName]);
 
   // Thêm useEffect để fetch userId thực từ email khi component mount
@@ -772,22 +798,58 @@ const MessageScreen = ({navigation, route}) => {
   // Handle delete message
   const handleDeleteMessage = async (messageId) => {
     try {
-      await conversationService.redoMessage(messageId);
+      console.log('Permanently deleting message:', messageId);
       
-      // Update local messages list
+      // Immediately remove the message from UI
       setMessages(prevMessages => 
-        prevMessages.map(msg => 
-          msg._id === messageId 
-            ? { ...msg, isDeleted: true, content: 'Tin nhắn đã bị xóa' } 
-            : msg
-        )
+        prevMessages.filter(msg => msg._id !== messageId)
       );
+      
+      // Use messageApi instead of conversationService.redoMessage
+      await messageApi.deleteMessage(messageId);
       
       // Close modal
       setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error deleting message:', error);
       Alert.alert('Lỗi', 'Không thể xóa tin nhắn. Vui lòng thử lại sau.');
+    }
+  };
+  
+  // Handle recall message (distinct from delete)
+  const handleRecallMessage = async (messageId) => {
+    try {
+      console.log('Recalling message:', messageId);
+      
+      // Find the message in state
+      const messageToRecall = messages.find(m => m._id === messageId);
+      if (!messageToRecall) {
+        console.error('Message not found for recall:', messageId);
+        return;
+      }
+      
+      // Update the UI immediately to show "Tin nhắn đã được thu hồi"
+      const updatedMessages = messages.map(msg => {
+        if (msg._id === messageId) {
+          return {
+            ...msg,
+            content: 'Tin nhắn đã được thu hồi',
+            status: 'recalled',
+            isRecalled: true
+          };
+        }
+        return msg;
+      });
+      
+      setMessages(updatedMessages);
+      
+      // Call the API to recall the message
+      await messageApi.recallMessage(messageId);
+      console.log('Message recalled successfully:', messageId);
+      
+    } catch (error) {
+      console.error('Error recalling message:', error);
+      Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn. Vui lòng thử lại sau.');
     }
   };
 
@@ -886,7 +948,10 @@ const MessageScreen = ({navigation, route}) => {
         message={message}
         userId={currentUserId} // Sử dụng userId đã fetch từ API
         isMyMessage={isMyMessage} // Truyền giá trị đã xác định
-        // Các props khác...
+        onPressRecall={handleRecallMessage} // Pass recall function
+        onReply={handleOnReplyMessagePress} // Pass reply function
+        navigation={navigation} // QUAN TRỌNG: Truyền navigation cho chức năng chuyển tiếp
+        conversationId={conversationId} // Truyền conversationId hiện tại
       />
     );
   };
@@ -924,9 +989,13 @@ const MessageScreen = ({navigation, route}) => {
           <FlatList
             ref={flatListRef}
             onEndReached={goToNextPage}
-            // Sắp xếp tin nhắn theo thời gian (mới nhất ở dưới)
-            data={[...messages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))}
-            keyExtractor={item => String(item._id) + '-' + String(Math.random()).substring(2, 8)}
+            // Sắp xếp tin nhắn theo thời gian (mới nhất ở dưới) và lọc bỏ tin nhắn đã xóa
+            data={[...messages]
+              .filter(msg => !msg.isDeleted) // Lọc bỏ các tin nhắn đã xóa
+              .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+            }
+            extraData={messages.length}
+            keyExtractor={item => String(item._id)}
             renderItem={({item, index}) => renderMessage(item, index)}
             initialNumToRender={20}
             maxToRenderPerBatch={10}
@@ -1011,6 +1080,7 @@ const MessageScreen = ({navigation, route}) => {
             navigation={navigation}
             handleOnReplyMessagePress={handleOnReplyMessagePress}
             onDeleteMessage={handleDeleteMessage}
+            onRecallMessage={handleRecallMessage}
           />
           
           {imageProps.isVisible && (

@@ -326,24 +326,46 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.profileHeader}>
         <View style={{position: 'absolute', width: '100%', height: '100%', backgroundColor: 'transparent'}} />
         
-        {/* Tham chiếu đến dữ liệu MongoDB thực tế */}
+        {/* Luôn hiển thị màu nền mặc định trước */}
+        <View 
+          style={[styles.backgroundImage, { 
+            backgroundColor: user?.avatarColor || '#1890ff',
+            opacity: 0.7 
+          }]} 
+        />
+        
+        {/* Thử hiển thị ảnh bìa nếu có */}
         {(user?.coverImage || user?.backgroundImage) && (
           <Image
-            source={{ uri: user.coverImage || user.backgroundImage }}
-            style={styles.backgroundImage}
-            onError={(error) => console.error('Error loading cover image:', error)}
+            source={{ 
+              uri: user.coverImage || user.backgroundImage,
+              headers: { 'Cache-Control': 'no-cache' }, // Tránh sử dụng cache gây lỗi
+              cache: 'reload'
+            }}
+            style={[styles.backgroundImage, { opacity: 0.9 }]}
+            onError={(error) => {
+              console.log('Cover image error details:', error.nativeEvent);
+              // Không cần làm gì nếu lỗi vì đã có nền màu dự phòng
+            }}
             onLoad={() => console.log('Cover image loaded successfully!')}
             resizeMode="cover"
           />
         )}
-        
-        {/* Hiển thị URL để debug */}
-        <Text style={styles.debugText}>
-          {user?.coverImage || user?.backgroundImage || 'Không có URL hình nền'}
-        </Text>
           <View style={styles.profileImageContainer}>
             {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+              <Image 
+                source={{ 
+                  uri: profileImage,
+                  headers: { 'Cache-Control': 'no-cache' },
+                  cache: 'reload'
+                }} 
+                style={styles.profileImage}
+                onError={(error) => {
+                  console.log('Profile image error:', error.nativeEvent);
+                  setProfileImage(null); // Đặt lại profileImage để hiển thị mặc định
+                }}
+                onLoad={() => console.log('Profile image loaded successfully')}
+              />
             ) : (
               <View style={[styles.defaultProfileImage, { backgroundColor: (user?.avatarColor === 'white' ? '#1890ff' : user?.avatarColor) || '#1890ff' }]}>
                 <Text style={styles.profileInitials}>{getInitials()}</Text>

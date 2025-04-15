@@ -160,15 +160,10 @@ export const userService = {
     try {
       console.log('Changing password for user:', username);
       
-      let fullUsername = username;
-      if (!username.includes('@')) {
-        fullUsername = `${username}@gmail.com`;
-      }
-      
-      const response = await api.post('/auth/change-password', { 
-        username: fullUsername, 
-        oldPassword, 
-        newPassword 
+      // Sử dụng đúng endpoint và phương thức HTTP
+      const response = await api.patch('/me/password', { 
+        oldPassword: oldPassword,     // Dùng đúng tên trường theo backend
+        newPassword: newPassword 
       });
       return response;
     } catch (error) {

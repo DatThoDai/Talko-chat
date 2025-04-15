@@ -11,6 +11,7 @@ import FriendsScreen from '../screens/FriendsScreen';
 import FriendDetailsScreen from '../screens/FriendDetailsScreen';
 import FriendRequestsScreen from '../screens/FriendRequestsScreen';
 import FriendSuggestionsScreen from '../screens/FriendSuggestionsScreen';
+import ForwardMessage from '../screens/ForwardMessage';
 
 // Tab Navigator chính (điều hướng giữa các tab)
 import TabNavigator from './TabNavigator';
@@ -64,6 +65,18 @@ const MainStackNavigator = () => {
       <Stack.Screen name="FriendDetails" component={FriendDetailsScreen} />
       <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
       <Stack.Screen name="FriendSuggestions" component={FriendSuggestionsScreen} />
+      <Stack.Screen 
+        name="ForwardMessage" 
+        component={ForwardMessage} 
+        options={{
+          headerShown: true,
+          title: "Chuyển tiếp tin nhắn",
+          headerStyle: {
+            backgroundColor: '#2196F3',
+          },
+          headerTintColor: '#fff',
+        }}
+      />
     </Stack.Navigator>
   );
 };

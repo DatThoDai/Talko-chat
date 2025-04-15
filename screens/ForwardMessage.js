@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -17,7 +18,7 @@ import { messageApi } from '../api/messageApi';
 import CustomAvatar from '../components/CustomAvatar';
 
 const ForwardMessage = ({ route, navigation }) => {
-  const { messageId, currentConversationId } = route.params;
+  const { messageId, currentConversationId, originalContent, messageType } = route.params;
   const [conversations, setConversations] = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
   const [search, setSearch] = useState('');
@@ -95,19 +96,44 @@ const ForwardMessage = ({ route, navigation }) => {
     try {
       setSending(true);
       
-      // Create an array of promises to forward the message to all selected conversations
-      const forwardPromises = selectedConversationIds.map(conversationId => 
-        messageApi.forwardMessage(messageId, conversationId)
-      );
+      // Theo dõi kết quả chuyển tiếp
+      const results = {
+        success: [],
+        failed: []
+      };
       
-      // Wait for all forwards to complete
-      await Promise.all(forwardPromises);
+      // Chuyển tiếp từng hội thoại một để có thể xử lý lỗi riêng
+      for (const conversationId of selectedConversationIds) {
+        try {
+          await messageApi.forwardMessage(messageId, conversationId, originalContent, messageType);
+          results.success.push(conversationId);
+        } catch (error) {
+          console.error(`Failed to forward to conversation ${conversationId}:`, error);
+          results.failed.push(conversationId);
+        }
+      }
       
-      Alert.alert(
-        'Thành công',
-        'Tin nhắn đã được chuyển tiếp',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      // Hiển thị thông báo kết quả
+      if (results.success.length > 0) {
+        if (results.failed.length > 0) {
+          Alert.alert(
+            'Chuyển tiếp tin nhắn',
+            `Đã chuyển tiếp đến ${results.success.length} hội thoại thành công và ${results.failed.length} thất bại.`,
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        } else {
+          Alert.alert(
+            'Thành công',
+            `Đã chuyển tiếp tin nhắn đến ${results.success.length} hội thoại.`,
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        }
+      } else {
+        Alert.alert(
+          'Thất bại',
+          'Không thể chuyển tiếp tin nhắn. Vui lòng thử lại sau.'
+        );
+      }
     } catch (error) {
       console.error('Error forwarding message:', error);
       Alert.alert(
@@ -175,9 +201,10 @@ const ForwardMessage = ({ route, navigation }) => {
           isSelected && styles.selectedItem
         ]}
         onPress={() => toggleSelection(item._id)}
+        activeOpacity={0.7}
       >
         <CustomAvatar
-          size={40}
+          size={50}
           name={getConversationName(item)}
           avatar={getConversationAvatar(item)}
           color={getConversationColor(item)}
@@ -187,29 +214,46 @@ const ForwardMessage = ({ route, navigation }) => {
           <Text style={styles.conversationName} numberOfLines={1}>
             {getConversationName(item)}
           </Text>
-          <Text style={styles.membersCount} numberOfLines={1}>
-            {item.members?.length || 0} thành viên
-          </Text>
+          {item.members && (
+            <Text style={styles.membersCount} numberOfLines={1}>
+              {item.members.length || 0} thành viên
+            </Text>
+          )}
         </View>
         
-        {isSelected && (
-          <Icon name="check-circle" size={24} color={colors.primary} />
-        )}
+        <View style={styles.checkboxContainer}>
+          {isSelected ? (
+            <View style={styles.checkedBox}>
+              <Icon name="check" size={20} color={colors.white} />
+            </View>
+          ) : (
+            <View style={styles.uncheckedBox} />
+          )}
+        </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>Chuyển tiếp tin nhắn</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
+      
+      <View style={styles.searchWrapper}>
+        <View style={styles.searchContainer}>
+          <Icon name="search" size={20} color={colors.lightGrey} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm hội thoại..."
+            placeholderTextColor={colors.lightGrey}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Icon name="close" size={20} color={colors.lightGrey} />
+            </TouchableOpacity>
+          )}
+        </View>
         
         <TouchableOpacity
           style={[
@@ -227,20 +271,13 @@ const ForwardMessage = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
       
-      <View style={styles.searchContainer}>
-        <Icon name="search" size={20} color={colors.grey} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm hội thoại..."
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Icon name="close" size={20} color={colors.grey} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {selectedConversationIds.length > 0 && (
+        <View style={styles.selectedBanner}>
+          <Text style={styles.selectedCount}>
+            Đã chọn {selectedConversationIds.length} hội thoại
+          </Text>
+        </View>
+      )}
       
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -248,27 +285,28 @@ const ForwardMessage = ({ route, navigation }) => {
           <Text style={styles.loadingText}>Đang tải danh sách hội thoại...</Text>
         </View>
       ) : (
-        <>
-          <Text style={styles.selectedCount}>
-            Đã chọn: {selectedConversationIds.length}
-          </Text>
-          
-          <FlatList
-            data={filteredConversations}
-            renderItem={renderItem}
-            keyExtractor={item => item._id}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {search.length > 0
-                    ? 'Không tìm thấy hội thoại phù hợp'
-                    : 'Không có hội thoại nào'}
-                </Text>
-              </View>
-            }
-          />
-        </>
+        <FlatList
+          data={filteredConversations}
+          renderItem={renderItem}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Icon name="people" size={64} color={colors.lightGrey} />
+              <Text style={styles.emptyText}>
+                {search.length > 0
+                  ? 'Không tìm thấy hội thoại phù hợp'
+                  : 'Không có hội thoại nào'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {search.length > 0
+                  ? 'Thử tìm kiếm với từ khóa khác'
+                  : 'Hãy tạo một cuộc trò chuyện mới để chia sẻ'}
+              </Text>
+            </View>
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -279,63 +317,72 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-  header: {
+  searchWrapper: {
+    backgroundColor: colors.primary,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.medium,
-    paddingVertical: spacing.small,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  forwardButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  disabledButton: {
-    backgroundColor: colors.lightGrey,
-  },
-  forwardButtonText: {
-    color: colors.white,
-    fontWeight: 'bold',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: spacing.medium,
-    paddingHorizontal: spacing.medium,
-    backgroundColor: colors.lightBackground,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 24,
+    height: 44,
+    flex: 1,
+    marginRight: 12
   },
   searchInput: {
     flex: 1,
     paddingVertical: 10,
-    marginLeft: spacing.small,
+    marginLeft: 8,
+    color: colors.white,
+    fontSize: 15,
+  },
+  forwardButton: {
+    backgroundColor: colors.accent || '#FF9800',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    elevation: 2,
+  },
+  disabledButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    elevation: 0,
+  },
+  forwardButtonText: {
+    color: colors.white,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  selectedBanner: {
+    backgroundColor: colors.lightPrimary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   selectedCount: {
-    marginHorizontal: spacing.medium,
-    marginBottom: spacing.small,
-    color: colors.text,
+    color: colors.primary,
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   listContent: {
-    paddingBottom: spacing.large,
+    paddingBottom: 20,
   },
   conversationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.medium,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -343,7 +390,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lightPrimary,
   },
   conversationInfo: {
-    marginLeft: spacing.medium,
+    marginLeft: 16,
     flex: 1,
   },
   conversationName: {
@@ -356,13 +403,35 @@ const styles = StyleSheet.create({
     color: colors.grey,
     marginTop: 2,
   },
+  checkboxContainer: {
+    width: 24,
+    height: 24,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uncheckedBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.grey,
+  },
+  checkedBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 24,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: spacing.medium,
+    marginTop: 16,
     color: colors.text,
   },
   emptyContainer: {
@@ -370,10 +439,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 100,
+    paddingHorizontal: 32,
   },
   emptyText: {
+    marginTop: 16,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    marginTop: 8,
     color: colors.grey,
-    fontSize: 16,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

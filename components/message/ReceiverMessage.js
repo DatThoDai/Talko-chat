@@ -11,9 +11,10 @@ import {
   ToastAndroid,
   Platform,
   Alert,
+  Vibration,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { messageType } from '../../constants';
+import { messageType, MESSAGE_RECALL_TEXT, MESSAGE_DELETE_TEXT } from '../../constants';
 import MessageActions from './MessageActions';
 import CustomAvatar from '../CustomAvatar';
 
@@ -24,7 +25,8 @@ function ReceiverMessage(props) {
     onPressEmoji,
     handleShowReactDetails,
     onReply,
-    previewImage
+    previewImage,
+    onPressRecall
   } = props;
   
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
@@ -45,8 +47,9 @@ function ReceiverMessage(props) {
     return null;
   }
   
-  // State for message actions modal
+  // State for message actions modal and position
   const [showActions, setShowActions] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
 
   const { type, fileUrl, _id, sender = {} } = message;
   
@@ -104,8 +107,30 @@ function ReceiverMessage(props) {
   };
 
   // Handle long press to open message actions
-  const handleLongPress = () => {
+  const handleLongPress = (event) => {
+    // Trích xuất tọa độ từ sự kiện press
+    const { pageX, pageY } = event.nativeEvent;
+    
+    // Lưu vị trí tin nhắn để hiển thị menu gần đó
+    const position = {
+      x: pageX,
+      y: pageY
+    };
+    
+    // Vibrate để feedback
+    if (Platform.OS === 'android' && typeof Vibration !== 'undefined') {
+      Vibration.vibrate(50); // Rung nhẹ 50ms
+    }
+    
+    // Cập nhật vị trí và hiển thị modal
+    setMenuPosition(position);
     setShowActions(true);
+  };
+
+  // Close the message actions
+  const handleCloseActions = () => {
+    setShowActions(false);
+    setMenuPosition(null);
   };
 
   // Handle text selection for copy
@@ -146,16 +171,16 @@ function ReceiverMessage(props) {
         <TouchableWithoutFeedback onLongPress={handleLongPress}>
           <View style={messageStyle}>
             {isRecalled ? (
-              <Text style={styles.recalledText}>Tin nhắn đã bị thu hồi</Text>
+              <Text style={styles.recalledText}>{MESSAGE_RECALL_TEXT}</Text>
             ) : isDeleted ? (
-              <Text style={styles.recalledText}>Tin nhắn đã bị xóa</Text>
+              <Text style={styles.recalledText}>{MESSAGE_DELETE_TEXT}</Text>
             ) : (
               renderContent()
             )}
             <View style={styles.timeContainer}>
               <Text style={styles.time}>{time}</Text>
               
-              {isLastMessage && (
+              {isLastMessage && !isDeleted && !isRecalled && (
                 <TouchableOpacity
                   onPress={() => onLastView && onLastView(_id)}
                   style={styles.seenButton}>
@@ -166,7 +191,7 @@ function ReceiverMessage(props) {
           </View>
         </TouchableWithoutFeedback>
         
-        {reactLength > 0 && (
+        {reactLength > 0 && !isDeleted && !isRecalled && (
           <TouchableOpacity
             style={styles.reactContainer}
             onPress={handleShowReactDetails}>
@@ -177,13 +202,15 @@ function ReceiverMessage(props) {
       
       <MessageActions
         visible={showActions}
-        onClose={() => setShowActions(false)}
+        onClose={handleCloseActions}
         message={message}
         currentUserId={currentUserId}
         onReply={onReply}
         onSelect={handleCopyText}
+        onPressRecall={onPressRecall}
         navigation={navigation}
         conversationId={conversationId}
+        position={menuPosition}
       />
     </View>
   );
@@ -323,6 +350,7 @@ ReceiverMessage.propTypes = {
   conversationId: PropTypes.string,
   currentUserId: PropTypes.string,
   onReply: PropTypes.func,
+  onPressRecall: PropTypes.func,
 };
 
 ReceiverMessage.defaultProps = {
@@ -339,6 +367,7 @@ ReceiverMessage.defaultProps = {
   conversationId: '',
   currentUserId: '',
   onReply: () => {},
+  onPressRecall: () => {},
 };
 
 export default ReceiverMessage;

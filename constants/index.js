@@ -1,7 +1,7 @@
 // Cấu hình API URL và các hằng số khác
 
-export const REACT_APP_API_URL = 'http://172.30.16.1:3001';
-export const REACT_APP_SOCKET_URL = 'http://172.30.16.1:3001';
+export const REACT_APP_API_URL = 'http://192.168.1.5:3001';
+export const REACT_APP_SOCKET_URL = 'http://192.168.1.5:3001';
 
 // CẤU HÌNH ĐÚNG THEO BACKEND CNM_CHAT (FIXED)
 // Đã phân tích code CNM_Chat/routes/index.js
@@ -93,6 +93,19 @@ export const messageType = {
   VOICE: 'VOICE',
   STICKER: 'STICKER',
 };
+
+// Trạng thái tin nhắn
+export const MESSAGE_STATUS = {
+  DELETED: 'DELETED',
+  SENT: 'SENT',
+  RECEIVED: 'RECEIVED',
+  SEEN: 'SEEN',
+  RECALLED: 'RECALLED'
+};
+
+// Hằng số liên quan đến thu hồi tin nhắn
+export const MESSAGE_RECALL_TEXT = 'Tin nhắn đã bị thu hồi';
+export const MESSAGE_RECALL_TIMEOUT = 600000; // 10 phút (600,000 ms)
 
 // Các loại mối quan hệ bạn bè
 export const friendType = {

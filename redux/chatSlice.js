@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { messageApi } from '../api';
-import { DEFAULT_MESSAGE_PARAMS } from '../constants';
+import { DEFAULT_MESSAGE_PARAMS, MESSAGE_RECALL_TEXT, MESSAGE_STATUS } from '../constants';
 
 // Tránh vòng lặp import bằng cách tạo service riêng
 const chatService = {
@@ -19,6 +19,10 @@ const chatService = {
   
   sendFileMessage: (file, conversationId) => {
     return messageApi.sendFileBase64Message(file, { conversationId });
+  },
+  
+  recallMessage: (messageId) => {
+    return messageApi.recallMessage(messageId);
   }
 };
 
@@ -67,6 +71,19 @@ export const deleteMessage = createAsyncThunk(
       return { messageId, conversationId };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to delete message');
+    }
+  }
+);
+
+// Recall a message (marking it as recalled rather than deleting it)
+export const recallMessage = createAsyncThunk(
+  'chat/recallMessage',
+  async (messageId, { rejectWithValue }) => {
+    try {
+      await chatService.recallMessage(messageId);
+      return { messageId };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to recall message');
     }
   }
 );
@@ -187,7 +204,15 @@ const chatSlice = createSlice({
     },
     removeMessage: (state, action) => {
       const messageId = action.payload;
-      state.messages = state.messages.filter(msg => msg._id !== messageId);
+      console.log('Redux: removeMessage được gọi với ID:', messageId);
+      
+      // Thay vì xóa hoàn toàn tin nhắn, chỉ đánh dấu là đã bị xóa/thu hồi
+      // Điều này giúp hiển thị "Tin nhắn đã bị thu hồi" thay vì biến mất
+      state.messages = state.messages.map(msg => 
+        msg._id === messageId
+          ? { ...msg, isDeleted: true, content: MESSAGE_RECALL_TEXT }
+          : msg
+      );
     },
     setCurrentConversation: (state, action) => {
       state.currentConversation = action.payload;
@@ -302,12 +327,28 @@ const chatSlice = createSlice({
       // Delete message
       .addCase(deleteMessage.fulfilled, (state, action) => {
         const { messageId } = action.payload;
-        state.messages = state.messages.map(msg => 
-          msg._id === messageId ? { ...msg, isDeleted: true } : msg
-        );
+        state.messages = state.messages.filter(msg => msg._id !== messageId);
       })
       .addCase(deleteMessage.rejected, (state, action) => {
         state.error = action.payload || 'Failed to delete message';
+      })
+      
+      // Recall message
+      .addCase(recallMessage.fulfilled, (state, action) => {
+        const { messageId } = action.payload;
+        state.messages = state.messages.map(msg => 
+          msg._id === messageId 
+            ? { 
+                ...msg, 
+                content: MESSAGE_RECALL_TEXT, 
+                status: MESSAGE_STATUS.RECALLED,
+                isRecalled: true 
+              } 
+            : msg
+        );
+      })
+      .addCase(recallMessage.rejected, (state, action) => {
+        state.error = action.payload || 'Failed to recall message';
       })
       
       // Add reaction

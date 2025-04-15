@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius, typography } from '../styles';
-import authApi from '../api/authService';
+import { authService } from '../api/authService';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -65,20 +65,35 @@ const RegisterScreen = ({ navigation }) => {
     
     setIsLoading(true);
     try {
-      // Sử dụng authApi để đăng ký
-      const response = await authApi.registry(name, email, password, phone);
+      // Tạo đối tượng userData theo yêu cầu backend
+      const userData = {
+        name: name,
+        username: email, // Backend yêu cầu username phải là email hoặc số điện thoại hợp lệ
+        password: password,
+        phone: phone
+      };
+      
+      console.log('Dữ liệu đăng ký:', { ...userData, password: '***' });
+      
+      // Sử dụng authService.register để đăng ký
+      const response = await authService.register(userData);
       
       setIsLoading(false);
       
       // Kiểm tra phản hồi từ API
       if (response) {
-        // Chuyển sang màn hình nhập OTP nếu cần
+        console.log('Đăng ký thành công:', response);
+        
+        // Chuyển sang màn hình OTP để xác thực
         Alert.alert(
           'Đăng ký thành công',
-          'Vui lòng xác nhận tài khoản qua email hoặc đăng nhập vào ứng dụng.',
+          'Vui lòng xác nhận tài khoản bằng mã OTP đã được gửi đến email của bạn.',
           [{ 
-            text: 'OK', 
-            onPress: () => navigation.navigate('Login')
+            text: 'Xác thực ngay', 
+            onPress: () => navigation.navigate('ConfirmOTP', {
+              username: userData.username,
+              isResetPassword: false
+            })
           }]
         );
       }

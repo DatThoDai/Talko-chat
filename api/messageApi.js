@@ -74,7 +74,14 @@ export const messageApi = {
   },
   deleteMessage: messageId => {
     const url = `${BASE_URL}/${messageId}`;
-    return api.delete(url);
+    console.log('Permanently deleting message:', messageId);
+    // Add permanent=true parameter to ensure message is fully deleted
+    return api.delete(url, {
+      params: {
+        permanent: true,
+        force: true
+      }
+    });
   },
   deleteMessageOnlyMe: messageId => {
     const url = `${BASE_URL}/${messageId}/only`;
@@ -120,17 +127,44 @@ export const messageApi = {
     }
   },
 
-  forwardMessage: (messageId, conversationId) => {
-    const url = `${BASE_URL}/${messageId}/forward`;
-    return api.post(url, {conversationId});
+  forwardMessage: async (messageId, targetConversationId, originalContent, messageType = 'TEXT') => {
+    try {
+      console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`);
+      // Không có API /messages/{id}/forward, nên chúng ta sẽ:
+      // 1. Sử dụng nội dung message gốc được truyền từ UI
+      // 2. Tạo message mới với nội dung đó ở conversation đích
+      
+      // Nếu không có nội dung được truyền vào, sử dụng nội dung mặc định
+      if (!originalContent) {
+        originalContent = 'Tin nhắn được chuyển tiếp';
+        console.log('Không có nội dung gốc, sử dụng nội dung mặc định');
+      } else {
+        console.log('Sử dụng nội dung gốc được truyền vào:', originalContent);
+      }
+      
+      // Tạo message mới với dữ liệu từ message gốc
+      const newMessage = {
+        conversationId: targetConversationId,
+        content: originalContent, // Sử dụng nội dung đã lấy được hoặc được truyền vào
+        type: messageType || 'TEXT' // Sử dụng messageType nếu được truyền vào, nếu không dùng TEXT
+      };
+      
+      // Forward nội dung qua sendMessage API
+      console.log('Sending forwarded message:', newMessage);
+      return messageApi.sendMessage(newMessage);
+    } catch (error) {
+      console.error('Error forwarding message:', error.message);
+      throw error;
+    }
   },
   
   // Recall message (undo send - only for sender)
+  // Cập nhật để sử dụng endpoint xoá tin nhắn thay vì endpoint thu hồi tin nhắn
   recallMessage: (messageId) => {
     try {
-      console.log('Recalling message:', messageId);
-      const url = `${BASE_URL}/${messageId}/recall`;
-      return api.post(url);
+      console.log('Recalling message (using delete endpoint):', messageId);
+      // Sử dụng phương thức deleteMessage thay vì tạo endpoint mới
+      return messageApi.deleteMessage(messageId);
     } catch (error) {
       console.error('Error recalling message:', error.message);
       throw error;

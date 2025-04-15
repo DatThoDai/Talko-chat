@@ -27,7 +27,14 @@ const ChatMessage = ({
   loading,
   previewImage,
   isMyMessage, // Thêm prop isMyMessage để đảm bảo chắc chắn
+  navigation, // QUAN TRỌNG: Thêm prop navigation để chuyển tiếp tin nhắn
+  conversationId, // Thêm conversationId hiện tại
 }) => {
+  // Skip rendering completely if the message is deleted (but NOT if it's recalled)
+  if (message?.isDeleted && !message?.isRecalled) {
+    return null;
+  }
+
   // Sửa hàm isSender để debug rõ ràng hơn
   const isSender = () => {
     // Thêm log chi tiết hơn về ID để so sánh
@@ -60,7 +67,8 @@ const ChatMessage = ({
     return senderIdMatches;
   };
 
-  const isMessageRecalled = message?.status === MESSAGE_STATUS.recalled;
+  // Check if message has been recalled
+  const isMessageRecalled = message?.isRecalled || message?.status === MESSAGE_STATUS.recalled;
 
   // Xác định trước khi render để log
   const messageIsSender = isSender();
@@ -82,6 +90,8 @@ const ChatMessage = ({
         onPressRecall={onPressRecall}
         loading={loading}
         previewImage={previewImage}
+        navigation={navigation}
+        conversationId={conversationId}
       />
     );
   } else {
@@ -92,7 +102,10 @@ const ChatMessage = ({
         onPressEmoji={onPressEmoji}
         handleShowReactDetails={handleShowReactDetails}
         onReply={onReply}
+        onPressRecall={onPressRecall}
         previewImage={previewImage}
+        navigation={navigation}
+        conversationId={conversationId}
       />
     );
   }

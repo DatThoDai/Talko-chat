@@ -20,7 +20,7 @@ export const registerStore = (store) => {
 // import { REACT_APP_SOCKET_URL } from '../constants';
 
 // Sử dụng trực tiếp địa chỉ IP của người dùng
-let SOCKET_URL = 'http://172.30.16.1:3001';
+let SOCKET_URL = 'http://192.168.1.5:3001';
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds
@@ -195,9 +195,41 @@ const setupSocketEventHandlers = () => {
     }
   });
 
-  socket.on('message-deleted', (data) => {
-    console.log('Message deleted:', data.messageId);
+  // Handle message recall events
+  socket.on('message-recalled', (data) => {
+    console.log('Message recalled event received:', data);
     if (storeInstance) {
+      const messageId = data.messageId || data._id || data.id;
+      if (messageId) {
+        // Update the message to show as recalled
+        storeInstance.dispatch(updateMessage({
+          _id: messageId,
+          content: 'Tin nhắn đã được thu hồi',
+          status: 'recalled',
+          isRecalled: true
+        }));
+      }
+    }
+  });
+
+  // Handle both possible message deletion event formats from server
+  socket.on('delete-message', (data) => {
+    console.log('Delete message event received:', data);
+    if (storeInstance) {
+      // Handle different data formats: either {id}, {messageId}, or {conversationId, id/messageId}
+      const messageId = data.messageId || data.id;
+      if (messageId) {
+        console.log('Removing message:', messageId);
+        storeInstance.dispatch(removeMessage(messageId));
+      }
+    }
+  });
+  
+  // Also handle legacy message-deleted event for backward compatibility
+  socket.on('message-deleted', (data) => {
+    console.log('Legacy message-deleted event received:', data);
+    if (storeInstance && data && data.messageId) {
+      console.log('Removing message from legacy event:', data.messageId);
       storeInstance.dispatch(removeMessage(data.messageId));
     }
   });

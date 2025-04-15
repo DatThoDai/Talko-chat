@@ -36,6 +36,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useDispatch} from 'react-redux';
 import {addNewMessage, updateMessage} from '../redux/chatSlice';
 import { conversationApi, conversationService } from '../api';
+import messageApi from '../api/messageApi'; // Thêm import này
 import userUtils from '../utils/userUtils';
 import { userService } from '../api/userService';
 
@@ -604,170 +605,138 @@ const MessageScreen = ({navigation, route}) => {
     }
   };
 
-  // Handle send file message with progress tracking
-  const handleSendFileMessage = async (file) => {
-    if (!file) return;
+  // Sửa lại hàm handleSendFileMessage
+const handleSendFileMessage = async (file) => {
+  if (!file) return;
+  
+  // Tạo ID tạm thời cho tin nhắn file
+  const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  
+  try {
+    // Start tracking upload progress
+    setIsUploading(true);
+    setUploadProgress(0);
+    setCurrentUploadingFile(file);
     
-    try {
-      // Start tracking upload progress
-      setIsUploading(true);
-      setUploadProgress(0);
-      setCurrentUploadingFile(file);
-      
-      // Tạo ID tạm thời cho tin nhắn file
-      const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-      
-      // Xác định loại file
-      let fileType = 'FILE';
-      if (file.isImage) {
-        fileType = 'IMAGE';
-      } else if (file.type && file.type.includes('video')) {
-        fileType = 'VIDEO';
-      }
-      
-      // Tạo tin nhắn tạm thời
-      const tempMessage = {
-        _id: tempId,
-        conversationId,
-        sender: {
-          _id: user._id,
-          name: user.name,
-          username: user.username,
-          avatar: user.avatar
-        },
-        createdAt: new Date().toISOString(),
-        type: fileType,
-        fileName: file.name,
-        fileSize: file.size,
-        fileUrl: file.uri, // URI tạm thời cho preview
-        isTemp: true,
-        status: 'uploading',
-        uploadProgress: 0,
-      };
-      
-      // Cập nhật danh sách tin nhắn với tin nhắn tạm thời
-      setMessages(prevMessages => [...prevMessages, tempMessage]);
-      
-      // Cuộn xuống dưới cùng
-      setTimeout(() => scrollToBottom(true, true), 50);
-      
-      // Tạo FormData để upload
-      const formData = new FormData();
-      formData.append('conversationId', conversationId);
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name || `file.${file.uri.split('.').pop()}`,
-        type: file.type || 'application/octet-stream',
-      });
-      formData.append('tempId', tempId);
-      
-      // Cấu trúc info cho attachment
-      const attachInfo = {
-        type: fileType,
-        conversationId,
-        tempId,
-      };
-      
-      // Upload file với progress tracking
-      try {
-        // Lưu ý: Nếu backend chưa hoàn thiện, chúng ta sẽ giả lập response
-        // Dựa vào memory, biết rằng các endpoint API liên quan đến chat chưa có
-        const updateProgress = (progress) => {
-          // Cập nhật tiến trình upload
-          setUploadProgress(progress);
-          
-          // Cập nhật tin nhắn với tiến trình hiện tại
-          setMessages(prev => 
-            prev.map(msg => 
-              msg._id === tempId 
-                ? {...msg, uploadProgress: progress} 
-                : msg
-            )
-          );
-        };
-        
-        // Simulate upload progress (mô phỏng tiến trình upload)
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += 10;
-          if (progress <= 100) {
-            updateProgress(progress);
-          } else {
-            clearInterval(interval);
-          }
-        }, 300);
-        
-        // Giả lập API call thành công sau 3 giây
-        setTimeout(() => {
-          clearInterval(interval);
-          
-          // Tạo một response giả lập
-          const mockResponse = {
-            success: true,
-            message: 'File uploaded successfully',
-            data: {
-              _id: `server-${tempId}`,
-              conversationId,
-              sender: {
-                _id: user._id,
-                name: user.name,
-                username: user.username,
-                avatar: user.avatar
-              },
-              createdAt: new Date().toISOString(),
-              type: fileType,
-              fileName: file.name,
-              fileSize: file.size,
-              fileUrl: file.uri, // Trong thực tế, đây sẽ là URL từ server
-              status: 'sent',
-            }
-          };
-          
-          // Cập nhật tin nhắn tạm thời với dữ liệu từ "server"
-          setMessages(prev => 
-            prev.map(msg => 
-              msg._id === tempId
-                ? {...mockResponse.data, isTemp: false} 
-                : msg
-            )
-          );
-          
-          // Reset upload state
-          setIsUploading(false);
-          setUploadProgress(0);
-          setCurrentUploadingFile(null);
-          
-          console.log('Upload file thành công (mô phỏng):', mockResponse);
-        }, 3000);
-        
-        // Lưu ý: Trong thực tế, chúng ta sẽ gọi API thật
-        // const response = await conversationService.uploadFile(formData, updateProgress);
-        // console.log('Upload file thành công:', response);
-      } catch (uploadError) {
-        console.error('Error uploading file:', uploadError);
-        
-        // Đánh dấu tin nhắn là thất bại
-        setMessages(prev => 
-          prev.map(msg => 
-            msg._id === tempId 
-              ? {...msg, status: 'failed'} 
-              : msg
-          )
-        );
-        
-        // Thông báo lỗi
-        Alert.alert('Lỗi', 'Không thể tải file lên. Vui lòng thử lại sau.');
-      }
-      
-      // Tự động cuộn đến tin nhắn mới nhất (phần dưới cùng) sau khi gửi tin nhắn
-      setTimeout(() => {
-        scrollToBottom();
-      }, 300);
-    } catch (error) {
-      console.error('Error sending file message:', error);
-      Alert.alert('Lỗi', 'Không thể gửi tập tin. Vui lòng thử lại sau.');
+    // Xác định loại file
+    let fileType = 'FILE';
+    if (file.isImage || (file.type && file.type.includes('image'))) {
+      fileType = 'IMAGE';
+    } else if (file.type && file.type.includes('video')) {
+      fileType = 'VIDEO';
     }
-  };
+    
+    console.log('Processing file:', {
+      uri: file.uri,
+      type: file.type,
+      name: file.name,
+      size: file.size,
+      fileType: fileType
+    });
+    
+    // Tạo tin nhắn tạm thời
+    const tempMessage = {
+      _id: tempId,
+      conversationId,
+      sender: {
+        _id: user._id,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatar
+      },
+      createdAt: new Date().toISOString(),
+      type: fileType,
+      fileName: file.name,
+      fileSize: file.size,
+      fileUrl: file.uri, // URI tạm thời cho preview
+      isTemp: true,
+      status: 'uploading',
+      uploadProgress: 0,
+      isMyMessage: true,
+      forceMyMessage: true,
+    };
+    
+    // Thêm tin nhắn tạm thời
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    
+    // Progress tracking
+    const updateProgress = (progress) => {
+      setUploadProgress(progress);
+      setMessages(prev => 
+        prev.map(msg => 
+          msg._id === tempId 
+            ? {...msg, uploadProgress: progress} 
+            : msg
+        )
+      );
+    };
+    
+    // Import và sử dụng messageApi
+    const messageApiModule = await import('../api/messageApi');
+    const { messageApi } = messageApiModule;
+    
+    console.log('Sending file with conversation ID:', conversationId);
+    
+    // Gọi API sendFileMessage
+    const response = await messageApi.sendFileMessage({
+      file,
+      conversationId,
+      type: fileType
+    }, updateProgress);
+    
+    console.log('Response received:', response);
+    
+    if (response && response.data) {
+      // Log để debug
+      console.log('File response from server:', response.data);
+      
+      // Tạo object với đầy đủ thông tin cần thiết
+      const updatedMessage = {
+        ...response.data,
+        // Đảm bảo type là IMAGE cho hình ảnh
+        type: fileType || 'IMAGE',
+        // Đảm bảo có fileUrl cho hiển thị
+        fileUrl: response.data.fileUrl || response.data.url || response.data.mediaUrl || file.uri,
+        // Thông tin khác
+        isMyMessage: true,
+        forceMyMessage: true,
+        status: 'sent'
+      };
+      
+      console.log('Updated image message:', {
+        id: updatedMessage._id,
+        type: updatedMessage.type,
+        fileUrl: updatedMessage.fileUrl
+      });
+      
+      setMessages(prev => 
+        prev.map(msg => 
+          msg._id === tempId ? updatedMessage : msg
+        )
+      );
+    }
+    
+    setIsUploading(false);
+    setUploadProgress(0);
+    setCurrentUploadingFile(null);
+  } catch (error) {
+    console.error('Error sending file message:', error);
+    
+    // Cập nhật trạng thái tin nhắn thành lỗi
+    setMessages(prev => 
+      prev.map(msg => 
+        msg._id === tempId 
+          ? {...msg, status: 'failed'} 
+          : msg
+      )
+    );
+    
+    Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại sau.');
+    setIsUploading(false);
+    setUploadProgress(0);
+    setCurrentUploadingFile(null);
+  }
+};
 
   // Handle delete message
   const handleDeleteMessage = async (messageId) => {
@@ -833,6 +802,27 @@ const MessageScreen = ({navigation, route}) => {
     }
   };
 
+  // Thêm hàm handlePreviewImage vào MessageScreen component
+  // Thêm vào cùng khu vực với các hàm xử lý khác
+
+  // Hàm xử lý xem trước hình ảnh khi click vào tin nhắn dạng ảnh
+  const handlePreviewImage = (imageUrl, allUrls = []) => {
+    // Đảm bảo imageUrl không bị null hoặc undefined
+    if (!imageUrl) {
+      console.warn('Attempted to preview image with empty URL');
+      return;
+    }
+    
+    // Hiển thị modal xem hình ảnh
+    setImageProps({
+      isVisible: true,
+      imageUrl: imageUrl,
+      imageUrls: allUrls.length > 0 ? allUrls : [imageUrl]
+    });
+    
+    console.log('Previewing image:', imageUrl);
+  };
+
   // Render message item
   const renderMessage = (message, index) => {
     // Đảm bảo tin nhắn hợp lệ
@@ -886,7 +876,14 @@ const MessageScreen = ({navigation, route}) => {
         message={message}
         userId={currentUserId} // Sử dụng userId đã fetch từ API
         isMyMessage={isMyMessage} // Truyền giá trị đã xác định
-        // Các props khác...
+        //onRetry={() => handleRetryMessage(message)} // Thêm prop onRetry
+        onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
+        handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
+        onPressDelete={(messageId) => handleDeleteMessage(messageId)}
+        onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
+        onReply={(messageId) => handleOnReplyMessagePress(messageId)} // Sửa từ handleReplyMessage thành handleOnReplyMessagePress
+        onPressRecall={(messageId) => handleRecallMessage(messageId)}
+        previewImage={handlePreviewImage}
       />
     );
   };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,31 @@ import {
 } from 'react-native';
 import { colors, spacing } from '../styles';
 
-// Danh sách emoji phổ biến
-const emojis = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-  '😉', '😊', '😇', '🥰', '😍', '😘', '😗', '😚', '😙', '😋',
-  '😛', '😜', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨',
-  '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '😌', '😔', '😪',
-  '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '😵', '🤯',
-  '👍', '👎', '👏', '🙌', '👐', '🤝', '💋', '❤️', '💔', '😢',
-  '😭', '😡', '🔥', '💯', '⭐', '🎉', '🎂', '🎁', '👻', '💩'
+// Bổ sung thêm một số emoji vào danh sách và phân loại
+const emojiCategories = [
+  {
+    name: 'Phổ biến',
+    emojis: [
+      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+      '😉', '😊', '😇', '🥰', '😍', '😘', '😗', '😚', '😙', '😋',
+      '👍', '👎', '👏', '🙌', '👐', '🤝', '❤️', '💔', '💯', '🔥',
+    ]
+  },
+  {
+    name: 'Biểu cảm',
+    emojis: [
+      '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '☺️', '😊',
+      '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙',
+      '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎',
+    ]
+  },
+  {
+    name: 'Động vật',
+    emojis: [
+      '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
+      '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒',
+    ]
+  }
 ];
 
 // Danh sách emoji reaction
@@ -29,53 +45,48 @@ const { width } = Dimensions.get('window');
 const EMOJI_SIZE = 40;
 const EMOJI_PER_ROW = 8;
 
+// Điều chỉnh component EmojiPicker để hiển thị theo từng danh mục
 const EmojiPicker = ({ visible, onClose, onEmojiSelected, title = 'Chọn emoji' }) => {
+  const [activeCategory, setActiveCategory] = useState(0);
+  
   const renderEmoji = ({ item }) => (
     <TouchableOpacity 
       style={styles.emojiButton} 
-      onPress={() => {
-        onEmojiSelected(item);
-        onClose();
-      }}
+      onPress={() => onEmojiSelected(item)}
     >
       <Text style={styles.emoji}>{item}</Text>
     </TouchableOpacity>
   );
-
+  
+  // Để vừa với giao diện nhập tin nhắn, không cần modal
+  if (!visible) return null;
+  
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity 
-          activeOpacity={1}
-          style={styles.container}
-        >
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <FlatList
-            data={emojis}
-            renderItem={renderEmoji}
-            keyExtractor={(item, index) => `emoji-${index}`}
-            numColumns={EMOJI_PER_ROW}
-            showsVerticalScrollIndicator={false}
-            style={styles.emojiList}
-          />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+    <View style={styles.inlineContainer}>
+      <View style={styles.categoryTabs}>
+        {emojiCategories.map((category, index) => (
+          <TouchableOpacity
+            key={`cat-${index}`}
+            style={[
+              styles.categoryTab,
+              activeCategory === index ? styles.activeCategory : {}
+            ]}
+            onPress={() => setActiveCategory(index)}
+          >
+            <Text style={styles.categoryText}>{category.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      <FlatList
+        data={emojiCategories[activeCategory].emojis}
+        renderItem={renderEmoji}
+        keyExtractor={(item, index) => `emoji-${index}`}
+        numColumns={8}
+        showsVerticalScrollIndicator={false}
+        style={styles.emojiList}
+      />
+    </View>
   );
 };
 
@@ -161,7 +172,31 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: {
     fontSize: 18,
-  }
+  },
+  // Thêm styles mới
+  inlineContainer: {
+    backgroundColor: colors.white,
+    height: 250,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryTab: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  activeCategory: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  categoryText: {
+    fontSize: 14,
+    color: colors.text,
+  },
 });
 
 export default EmojiPicker;

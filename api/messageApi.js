@@ -1,5 +1,6 @@
 import api from './axios';
 import { API_ENDPOINTS } from '../constants';
+import { Platform } from 'react-native'; // Thêm dòng này
 
 // Đồng bộ với conversationApi, sử dụng endpoint chuẩn
 const BASE_URL = API_ENDPOINTS.MESSAGES;
@@ -117,6 +118,63 @@ export const messageApi = {
     } catch (error) {
       console.error('Error uploading file:', error.message);
       throw error; // Rethrow để component có thể hiển thị lỗi upload
+    }
+  },
+
+  sendFileMessage: async (fileData, onProgress) => {
+    try {
+      const { file, conversationId, type = 'IMAGE' } = fileData;
+      
+      // Kiểm tra dữ liệu đầu vào
+      if (!conversationId) {
+        throw new Error('conversationId is required');
+      }
+      
+      // Tạo FormData
+      const formData = new FormData();
+      
+      // Thêm file vào FormData
+      formData.append('file', {
+        uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
+        type: file.type || 'image/jpeg',
+        name: file.name || `image-${Date.now()}.jpg`
+      });
+      
+      // QUAN TRỌNG: THÊM conversationId và type VÀO QUERY STRING
+      const url = `${BASE_URL}/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(type.toUpperCase())}`;
+      
+      console.log(`Uploading file to URL: ${url}`);
+      console.log('File details:', {
+        name: file.name || 'unnamed',
+        type: file.type || 'unknown',
+        size: file.size || 0
+      });
+
+      // Cấu hình request với progress tracking
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`Upload progress: ${percentCompleted}%`);
+          if (onProgress) {
+            onProgress(percentCompleted);
+          }
+        }
+      };
+
+      // Gọi API với URL đã bao gồm query params
+      const response = await api.post(url, formData, config);
+      console.log('File upload success:', response.data);
+      return response;
+    } catch (error) {
+      console.error('Error in sendFileMessage:', error);
+      // Log thêm chi tiết
+      if (error.response) {
+        console.error('Server response:', error.response.status, error.response.data);
+      }
+      throw error;
     }
   },
 

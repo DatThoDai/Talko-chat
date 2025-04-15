@@ -70,81 +70,161 @@ function SenderMessage(props) {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
+  // Thêm function này vào khu vực các phương thức xử lý sự kiện
+
+  const handleViewImage = (url, senderName) => {
+    if (previewImage && typeof previewImage === 'function') {
+      previewImage(url);
+    } else {
+      console.warn('previewImage function is not available');
+      // Fallback - Mở hình ảnh bằng cách khác nếu cần
+      if (url) {
+        Alert.alert(
+          'Hình ảnh',
+          'Tính năng xem trước hình ảnh không khả dụng.',
+          [
+            { text: 'Đóng', style: 'cancel' },
+            { 
+              text: 'Mở liên kết', 
+              onPress: () => {
+                // Sử dụng Linking để mở URL nếu cần
+                console.log('Opening image URL:', url);
+              }
+            }
+          ]
+        );
+      }
+    }
+  };
+
+  const getImageUrl = (message) => {
+    // Kiểm tra tất cả các trường có thể chứa URL
+    const possibleUrls = [
+      message.fileUrl,
+      message.url,
+      message.mediaUrl, 
+      message.content, // Một số API trả về URL trong content
+      message.file,
+      message.image,
+      message.imageUrl
+    ];
+    
+    // Tìm URL đầu tiên hợp lệ
+    const validUrl = possibleUrls.find(url => 
+      url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('file://'))
+    );
+    
+    console.log('Image source:', validUrl);
+    return validUrl;
+  };
+
   // Render appropriate message content based on type
   const renderContent = () => {
     switch (type) {
-      case messageType.IMAGE:
-        return (
-          <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, sender?.name)}>
-            <Image
-              source={{ uri: fileUrl }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          </TouchableWithoutFeedback>
-        );
-      
       case messageType.FILE:
-        return (
-          <TouchableOpacity 
-            style={styles.fileContainer}
-            onPress={() => {
-              // Mở file hoặc tải xuống file
-              if (fileUrl) {
-                // Có thể thêm logic để mở file hoặc tải xuống tại đây
-                Alert.alert(
-                  'Tệp đính kèm',
-                  `Bạn muốn làm gì với file ${fileName || 'này'}?`,
-                  [
-                    { text: 'Hủy', style: 'cancel' },
-                    { text: 'Tải xuống', onPress: () => console.log('Download file:', fileUrl) },
-                    { text: 'Chia sẻ', onPress: () => console.log('Share file:', fileUrl) },
-                  ]
-                );
-              }
-            }}
-          >
-            <View style={styles.fileIconContainer}>
-              <Icon 
-                name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
-                size={24} 
-                color="#2196F3" 
-              />
-            </View>
-            <View style={styles.fileInfoContainer}>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {fileName || 'Tệp đính kèm'}
-              </Text>
-              {fileSize && (
-                <Text style={styles.fileSize}>
-                  {formatFileSize(fileSize)}
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        );
-      
+        // Xử lý file
+        return renderFile();
+      case messageType.IMAGE:
+        // Xử lý ảnh
+        return renderImage();
       case messageType.VIDEO:
-        return (
-          <TouchableWithoutFeedback
-            onPress={() => handleViewImage(fileUrl, sender?.name, false)}>
-            <View style={styles.videoContainer}>
-              <Image
-                source={{ uri: message.thumbnail || fileUrl }}
-                style={styles.videoThumbnail}
-                resizeMode="cover"
-              />
-              <View style={styles.playButton}>
-                <Icon name="play" size={24} color="#FFFFFF" />
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        );
-      
+        // Xử lý video
+        return renderVideo();
       default:
+        // Kiểm tra nếu là tin nhắn emoji đơn lẻ
+        if (message.isOnlyEmoji === true) {
+          return <Text style={styles.bigEmoji}>{content}</Text>;
+        }
+        // Tin nhắn bình thường
         return <Text style={styles.content}>{content}</Text>;
     }
+  };
+
+  const renderFile = () => {
+    return (
+      <TouchableOpacity 
+        style={styles.fileContainer}
+        onPress={() => {
+          // Mở file hoặc tải xuống file
+          if (fileUrl) {
+            // Có thể thêm logic để mở file hoặc tải xuống tại đây
+            Alert.alert(
+              'Tệp đính kèm',
+              `Bạn muốn làm gì với file ${fileName || 'này'}?`,
+              [
+                { text: 'Hủy', style: 'cancel' },
+                { text: 'Tải xuống', onPress: () => console.log('Download file:', fileUrl) },
+                { text: 'Chia sẻ', onPress: () => console.log('Share file:', fileUrl) },
+              ]
+            );
+          }
+        }}
+      >
+        <View style={styles.fileIconContainer}>
+          <Icon 
+            name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
+            size={24} 
+            color="#2196F3" 
+          />
+        </View>
+        <View style={styles.fileInfoContainer}>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {fileName || 'Tệp đính kèm'}
+          </Text>
+          {fileSize && (
+            <Text style={styles.fileSize}>
+              {formatFileSize(fileSize)}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderImage = () => {
+    const imageUrl = getImageUrl(message);
+    console.log('Rendering image message with URL:', imageUrl);
+    
+    return (
+      <TouchableWithoutFeedback
+        onPress={() => {
+          if (imageUrl) {
+            if (previewImage && typeof previewImage === 'function') {
+              previewImage(imageUrl);
+            } else if (handleViewImage) {
+              handleViewImage(imageUrl, sender?.name);
+            }
+          } else {
+            console.warn('No valid image URL found');
+          }
+        }}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={(e) => console.log('Image load error:', e.nativeEvent.error)}
+          onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+        />
+      </TouchableWithoutFeedback>
+    );
+  };
+
+  const renderVideo = () => {
+    return (
+      <TouchableWithoutFeedback
+        onPress={() => handleViewImage(fileUrl, sender?.name, false)}>
+        <View style={styles.videoContainer}>
+          <Image
+            source={{ uri: message.thumbnail || fileUrl }}
+            style={styles.videoThumbnail}
+            resizeMode="cover"
+          />
+          <View style={styles.playButton}>
+            <Icon name="play" size={24} color="#FFFFFF" />
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    );
   };
 
   // Handle long press to open message actions
@@ -196,11 +276,11 @@ function SenderMessage(props) {
           <View style={styles.statusContainer}>
             <Icon name="alert-circle-outline" size={14} color="#f44336" />
             <Text style={styles.statusText}>Lỗi</Text>
-            {onRetry && (
+            {/* {onRetry && (
               <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
                 <Text style={styles.retryText}>Thử lại</Text>
               </TouchableOpacity>
-            )}
+            )} */}
           </View>
         );
       case 'retrying':
@@ -452,6 +532,14 @@ const styles = StyleSheet.create({
   tempMessage: {
     opacity: 0.8,
     backgroundColor: '#f5f8ff',
+  },
+  bigEmoji: {
+    fontSize: 40,
+    lineHeight: 50,
+    marginVertical: 5,
+    paddingHorizontal: 10,
+    // Không cần background cho emoji lớn
+    backgroundColor: 'transparent',
   },
 });
 

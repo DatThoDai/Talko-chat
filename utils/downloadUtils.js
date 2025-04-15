@@ -11,6 +11,8 @@ import { Alert, Platform } from 'react-native';
  */
 export const downloadFile = async (fileUrl, fileName, fileType) => {
   try {
+    console.log('Starting download for:', fileUrl);
+    
     // Kiểm tra quyền truy cập thư viện phương tiện
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== 'granted') {
@@ -25,11 +27,21 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
     // Hiển thị thông báo đang tải
     Alert.alert('Đang tải xuống...', 'Vui lòng đợi trong giây lát');
 
-    // Đảm bảo tên file hợp lệ
-    const sanitizedFileName = fileName ? fileName.replace(/[^a-zA-Z0-9\._-]/g, '_') : `file-${Date.now()}`;
+    // Đảm bảo fileName và phần mở rộng file hợp lệ
+    let sanitizedFileName = fileName || `file-${Date.now()}`;
     
-    // Tạo đường dẫn tệp tạm thời
+    // Đảm bảo file có phần mở rộng
+    if (!sanitizedFileName.includes('.')) {
+      // Thêm phần mở rộng dựa vào fileType hoặc URL
+      const extension = getExtensionFromTypeOrUrl(fileUrl, fileType);
+      sanitizedFileName = `${sanitizedFileName}.${extension}`;
+    }
+    
+    console.log('Saving file as:', sanitizedFileName);
+    
+    // Tạo đường dẫn tệp tạm thời với tên file đúng
     const fileUri = FileSystem.documentDirectory + sanitizedFileName;
+    console.log('Saving to:', fileUri);
 
     // Tạo callback để theo dõi tiến trình tải xuống
     const downloadResumable = FileSystem.createDownloadResumable(
@@ -58,8 +70,18 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
     } else {
       // Trên Android, lưu file vào bộ nhớ thiết bị
       try {
+        // Đối với file không phải media (không hỗ trợ bởi MediaLibrary)
+        if (!isMediaFile(sanitizedFileName)) {
+          // Sử dụng Sharing API thay vì MediaLibrary
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(uri);
+            return;
+          }
+        }
+        
+        // Thử lưu vào MediaLibrary cho file media
         const asset = await MediaLibrary.createAssetAsync(uri);
-        // Lưu vào album Downloads (tạo mới nếu chưa có)
         const album = await MediaLibrary.getAlbumAsync('Downloads');
         if (album === null) {
           await MediaLibrary.createAlbumAsync('Downloads', asset, false);
@@ -70,7 +92,12 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
       } catch (err) {
         console.error('Error saving to media library:', err);
         // Fallback: Chia sẻ file nếu không thể lưu
-        await Sharing.shareAsync(uri);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(uri);
+        } else {
+          Alert.alert('Thông báo', 'File đã được tải xuống nhưng không thể lưu vào thư viện. Đường dẫn: ' + uri);
+        }
       }
     }
   } catch (error) {
@@ -79,6 +106,40 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
   }
 };
 
+// Hàm phụ trợ để xác định phần mở rộng file từ fileType hoặc URL
+function getExtensionFromTypeOrUrl(fileUrl, fileType) {
+  // Thử lấy phần mở rộng từ URL trước
+  if (fileUrl && typeof fileUrl === 'string') {
+    const urlParts = fileUrl.split('?')[0].split('.');
+    if (urlParts.length > 1) {
+      const ext = urlParts.pop().toLowerCase();
+      if (ext && ext.length >= 2 && ext.length <= 5) { // Chỉ lấy phần mở rộng hợp lệ
+        return ext;
+      }
+    }
+  }
+  
+  // Xác định phần mở rộng dựa vào fileType
+  const typeMap = {
+    'PDF': 'pdf',
+    'DOC': 'doc',
+    'EXCEL': 'xlsx',
+    'PPT': 'pptx',
+    'IMAGE': 'jpg',
+    'VIDEO': 'mp4',
+    'FILE': 'dat'
+  };
+  
+  return typeMap[fileType] || 'bin';
+}
+
+// Kiểm tra xem file có phải là media file không
+function isMediaFile(fileName) {
+  const mediaExtensions = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'mp3', 'wav'];
+  const extension = fileName.split('.').pop().toLowerCase();
+  return mediaExtensions.includes(extension);
+}
+
 /**
  * Mở file với ứng dụng thích hợp
  * @param {string} fileUrl - URL của file cần mở
@@ -86,13 +147,24 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
  */
 export const openFile = async (fileUrl, fileName) => {
   try {
-    // Đảm bảo tên file hợp lệ
-    const sanitizedFileName = fileName ? fileName.replace(/[^a-zA-Z0-9\._-]/g, '_') : `file-${Date.now()}`;
+    console.log('Opening file:', fileUrl);
+    
+    // Đảm bảo fileName và phần mở rộng file hợp lệ
+    let sanitizedFileName = fileName || `file-${Date.now()}`;
+    
+    // Đảm bảo file có phần mở rộng
+    if (!sanitizedFileName.includes('.')) {
+      // Thêm phần mở rộng dựa vào URL
+      const extension = getExtensionFromTypeOrUrl(fileUrl);
+      sanitizedFileName = `${sanitizedFileName}.${extension}`;
+    }
+    
     const fileUri = FileSystem.documentDirectory + sanitizedFileName;
     
     // Kiểm tra xem file đã tải về chưa
     const fileInfo = await FileSystem.getInfoAsync(fileUri);
     
+    let finalUri;
     if (!fileInfo.exists) {
       // Hiển thị thông báo đang tải
       Alert.alert('Đang chuẩn bị mở file...', 'Vui lòng đợi trong giây lát');
@@ -102,23 +174,18 @@ export const openFile = async (fileUrl, fileName) => {
         fileUri
       );
       
-      const { uri } = await downloadResumable.downloadAsync();
-      
-      // Mở file với ứng dụng phù hợp
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri);
-      } else {
-        Alert.alert('Lỗi', 'Thiết bị không hỗ trợ mở file này');
-      }
+      const result = await downloadResumable.downloadAsync();
+      finalUri = result.uri;
     } else {
-      // File đã tồn tại, mở trực tiếp
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri);
-      } else {
-        Alert.alert('Lỗi', 'Thiết bị không hỗ trợ mở file này');
-      }
+      finalUri = fileUri;
+    }
+    
+    // Mở file với ứng dụng phù hợp
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(finalUri);
+    } else {
+      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ mở file này');
     }
   } catch (error) {
     console.error('Lỗi khi mở file:', error);

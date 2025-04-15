@@ -143,40 +143,62 @@ function SenderMessage(props) {
   };
 
   const renderFile = () => {
+    // Thêm console log để debug
+    console.log('Rendering file with data:', {
+      fileUrl: message.fileUrl || 'missing',
+      fileName: message.fileName || 'unnamed',
+      fileSize: message.fileSize
+    });
+    
+    // Lấy fileUrl từ các thuộc tính có thể có
+    const actualFileUrl = message.fileUrl || message.url || message.content;
+    
     return (
       <TouchableOpacity 
         style={styles.fileContainer}
         onPress={() => {
-          if (fileUrl) {
+          console.log('File clicked! URL:', actualFileUrl);
+          
+          if (actualFileUrl) {
             Alert.alert(
               'Tệp đính kèm',
-              `Bạn muốn làm gì với file ${fileName || 'này'}?`,
+              `Bạn muốn làm gì với file ${message.fileName || 'này'}?`,
               [
                 { text: 'Hủy', style: 'cancel' },
                 { 
                   text: 'Tải xuống', 
-                  onPress: () => downloadFile(fileUrl, fileName, message.type) 
+                  onPress: () => {
+                    try {
+                      console.log('Downloading file from:', actualFileUrl);
+                      downloadFile(actualFileUrl, message.fileName, message.type);
+                    } catch (error) {
+                      console.error('Download error:', error);
+                      Alert.alert('Lỗi', 'Không thể tải file. Chi tiết: ' + error.message);
+                    }
+                  }
                 },
                 { 
                   text: 'Mở', 
-                  onPress: () => openFile(fileUrl, fileName)
-                },
-                { 
-                  text: 'Chia sẻ', 
-                  onPress: async () => {
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      Sharing.shareAsync(fileUrl);
-                    } else {
-                      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                  onPress: () => {
+                    try {
+                      console.log('Opening file from:', actualFileUrl);
+                      openFile(actualFileUrl, message.fileName);
+                    } catch (error) {
+                      console.error('Open error:', error);
+                      Alert.alert('Lỗi', 'Không thể mở file. Chi tiết: ' + error.message);
                     }
                   }
-                }
+                },
+                // ... phần chia sẻ giữ nguyên
               ]
             );
+          } else {
+            // Thông báo khi URL không có
+            Alert.alert('Lỗi', 'Không thể truy cập file. URL không hợp lệ.');
           }
         }}
       >
+        {/* Thêm mới phần hiển thị UI file giống ReceiverMessage */}
         <View style={styles.fileIconContainer}>
           <Icon 
             name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
@@ -186,11 +208,11 @@ function SenderMessage(props) {
         </View>
         <View style={styles.fileInfoContainer}>
           <Text style={styles.fileName} numberOfLines={1}>
-            {fileName || 'Tệp đính kèm'}
+            {message.fileName || 'Tệp đính kèm'}
           </Text>
-          {fileSize && (
+          {message.fileSize && (
             <Text style={styles.fileSize}>
-              {formatFileSize(fileSize)}
+              {formatFileSize(message.fileSize)}
             </Text>
           )}
         </View>

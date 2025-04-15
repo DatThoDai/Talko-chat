@@ -69,13 +69,51 @@ function ReceiverMessage(props) {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
+  // Thêm hàm này vào sau dòng 'const senderName = ...'
+  const getFileIcon = (message) => {
+    // Xác định icon dựa trên loại file và phần mở rộng
+    const fileName = message.fileName || '';
+    const fileType = message.fileType || '';
+    const extension = fileName.split('.').pop().toLowerCase();
+    
+    // Kiểm tra các loại file phổ biến
+    if (fileType === 'PDF' || extension === 'pdf') {
+      return "document-text-outline";
+    } else if (['DOC', 'DOCX'].includes(fileType) || ['doc', 'docx'].includes(extension)) {
+      return "document-text-outline";
+    } else if (['XLS', 'XLSX', 'EXCEL'].includes(fileType) || ['xls', 'xlsx'].includes(extension)) {
+      return "document-outline";
+    } else if (['PPT', 'PPTX'].includes(fileType) || ['ppt', 'pptx'].includes(extension)) {
+      return "document-outline";
+    } else if (['ZIP', 'RAR'].includes(fileType) || ['zip', 'rar'].includes(extension)) {
+      return "archive-outline";
+    } else if (['TXT'].includes(fileType) || ['txt'].includes(extension)) {
+      return "document-text-outline";
+    }
+    
+    // Mặc định
+    return "document-outline";
+  };
+
   // Cập nhật renderFile method trong ReceiverMessage.js
   const renderFile = () => {
+    // Thêm console log để debug
+    console.log('Rendering file with data:', {
+      fileUrl: message.fileUrl || 'missing',
+      fileName: message.fileName || 'unnamed',
+      fileSize: message.fileSize
+    });
+    
+    // Lấy fileUrl từ các thuộc tính có thể có
+    const actualFileUrl = message.fileUrl || message.url || message.content;
+    
     return (
       <TouchableOpacity 
         style={styles.fileContainer}
         onPress={() => {
-          if (fileUrl) {
+          console.log('File clicked! URL:', actualFileUrl);
+          
+          if (actualFileUrl) {
             Alert.alert(
               'Tệp đính kèm',
               `Bạn muốn làm gì với file ${message.fileName || 'này'}?`,
@@ -83,43 +121,67 @@ function ReceiverMessage(props) {
                 { text: 'Hủy', style: 'cancel' },
                 { 
                   text: 'Tải xuống', 
-                  onPress: () => downloadFile(fileUrl, message.fileName, message.type) 
+                  onPress: () => {
+                    try {
+                      console.log('Downloading file from:', actualFileUrl);
+                      downloadFile(actualFileUrl, message.fileName, message.type);
+                    } catch (error) {
+                      console.error('Download error:', error);
+                      Alert.alert('Lỗi', 'Không thể tải file. Chi tiết: ' + error.message);
+                    }
+                  }
                 },
                 { 
                   text: 'Mở', 
-                  onPress: () => openFile(fileUrl, message.fileName)
+                  onPress: () => {
+                    try {
+                      console.log('Opening file from:', actualFileUrl);
+                      openFile(actualFileUrl, message.fileName);
+                    } catch (error) {
+                      console.error('Open error:', error);
+                      Alert.alert('Lỗi', 'Không thể mở file. Chi tiết: ' + error.message);
+                    }
+                  }
                 },
                 { 
                   text: 'Chia sẻ', 
                   onPress: async () => {
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      // Hiển thị thông báo đang tải về để chia sẻ
-                      Alert.alert('Đang chuẩn bị chia sẻ...', 'Vui lòng đợi trong giây lát');
-                      
-                      // Tải file về bộ nhớ tạm trước khi chia sẻ
-                      const fileUri = FileSystem.documentDirectory + (message.fileName || 'file');
-                      
-                      const downloadResumable = FileSystem.createDownloadResumable(
-                        fileUrl,
-                        fileUri
-                      );
-                      
-                      const { uri } = await downloadResumable.downloadAsync();
-                      await Sharing.shareAsync(uri);
-                    } else {
-                      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                    try {
+                      const canShare = await Sharing.isAvailableAsync();
+                      if (canShare) {
+                        // Hiển thị thông báo đang tải về để chia sẻ
+                        Alert.alert('Đang chuẩn bị chia sẻ...', 'Vui lòng đợi trong giây lát');
+                        
+                        // Tải file về bộ nhớ tạm trước khi chia sẻ
+                        const fileUri = FileSystem.documentDirectory + (message.fileName || 'file');
+                        
+                        const downloadResumable = FileSystem.createDownloadResumable(
+                          actualFileUrl,
+                          fileUri
+                        );
+                        
+                        const { uri } = await downloadResumable.downloadAsync();
+                        await Sharing.shareAsync(uri);
+                      } else {
+                        Alert.alert('Lỗi', 'Thiết bị không hỗ trợ chia sẻ');
+                      }
+                    } catch (error) {
+                      console.error('Share error:', error);
+                      Alert.alert('Lỗi', 'Không thể chia sẻ file. Chi tiết: ' + error.message);
                     }
                   }
                 }
               ]
             );
+          } else {
+            // Thông báo khi URL không có
+            Alert.alert('Lỗi', 'Không thể truy cập file. URL không hợp lệ.');
           }
         }}
       >
         <View style={styles.fileIconContainer}>
           <Icon 
-            name={message.fileType === 'pdf' ? "document-text-outline" : "document-outline"}
+            name={getFileIcon(message)}
             size={24} 
             color="#2196F3" 
           />
@@ -409,10 +471,11 @@ const styles = StyleSheet.create({
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: '#EFF4FB', // Thay đổi backgroundColor để giống với SenderMessage
     padding: 10,
     borderRadius: 8,
     marginVertical: 4,
+    width: 200, // Thêm chiều rộng cố định như SenderMessage
   },
   fileIconContainer: {
     width: 40,

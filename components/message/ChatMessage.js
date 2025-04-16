@@ -24,6 +24,7 @@ const ChatMessage = ({
   onPressEdit,
   onReply,
   onPressRecall,
+  //onRetry, // Thêm prop onRetry
   loading,
   previewImage,
   isMyMessage, // Thêm prop isMyMessage để đảm bảo chắc chắn
@@ -88,6 +89,7 @@ const ChatMessage = ({
         onPressEdit={onPressEdit}
         onReply={onReply}
         onPressRecall={onPressRecall}
+        //onRetry={onRetry} // Thêm prop này
         loading={loading}
         previewImage={previewImage}
         navigation={navigation}
@@ -122,6 +124,7 @@ ChatMessage.propTypes = {
   onPressEdit: PropTypes.func,
   onReply: PropTypes.func,
   onPressRecall: PropTypes.func,
+  //onRetry: PropTypes.func, // Thêm propType cho onRetry
   loading: PropTypes.bool,
   previewImage: PropTypes.func,
 };
@@ -136,6 +139,7 @@ ChatMessage.defaultProps = {
   onPressEdit: null,
   onReply: null,
   onPressRecall: null,
+  //onRetry: null, // Default là null
   loading: false,
   previewImage: null,
 };

@@ -1,13 +1,14 @@
 import api from './axios';
 import { API_ENDPOINTS } from '../constants';
+import { Platform } from 'react-native'; // Thêm dòng này
 
 // Đồng bộ với conversationApi, sử dụng endpoint chuẩn
 const BASE_URL = API_ENDPOINTS.MESSAGES;
 
 console.log('Using messages endpoint:', BASE_URL);
 
-// Export với named export để tránh vòng lặp import
-export const messageApi = {
+// Tạo messageApi object để export ở cuối file
+const messageApi = {
   fetchMessage: (conversationId, params) => {
     try {
       console.log('Fetching messages for conversation:', conversationId);
@@ -25,7 +26,6 @@ export const messageApi = {
 
   sendMessage: message => {
     try {
-      // GIẢI PHÁP TRIỆT ĐỂ: ĐẢM BẢO ĐÚNG ĐỊNH DẠNG NHƯ ZELO-APP-CHAT
       
       // CHỦ QUAN TRỌNG: Endpoint phải là /messages/text (không phải /messages)
       const endpoint = '/messages/text';
@@ -127,6 +127,72 @@ export const messageApi = {
     }
   },
 
+  // sendFileMessage từ origin/chat-emoji - để gửi ảnh, video, tệp đính kèm
+  sendFileMessage: async (data, onProgress) => {
+    try {
+      const { file, conversationId, type = 'FILE' } = data;
+      
+      // Ánh xạ các loại file chi tiết sang 3 loại server chấp nhận
+      let serverType = 'FILE';
+      if (type === 'IMAGE' || file.isImage) {
+        serverType = 'IMAGE';
+      } else if (type === 'VIDEO' || file.isVideo) {
+        serverType = 'VIDEO';
+      } else {
+        // Tất cả các loại khác (PDF, DOC, EXCEL, vv.) đều là FILE
+        serverType = 'FILE';
+      }
+      
+      console.log('File được gửi với type:', {
+        originalType: type,
+        mappedType: serverType
+      });
+      
+      // Tạo FormData như trước
+      const formData = new FormData();
+      formData.append('file', {
+        uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
+        type: file.type || 'application/octet-stream',
+        name: file.name || `file-${Date.now()}`
+      });
+      
+      // Quan trọng: Sử dụng serverType đã ánh xạ thay vì type gốc
+      formData.append('type', serverType);
+      formData.append('conversationId', conversationId);
+      
+      // URL cũng sử dụng serverType đã ánh xạ
+      const url = `${BASE_URL}/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(serverType)}`;
+      
+      console.log('Uploading to URL:', url);
+      
+      // Cấu hình request với progress tracking
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`Upload progress: ${percentCompleted}%`);
+          if (onProgress) {
+            onProgress(percentCompleted);
+          }
+        }
+      };
+
+      // Gọi API với URL đã bao gồm query params
+      const response = await api.post(url, formData, config);
+      console.log('File upload success:', response.data);
+      return response;
+    } catch (error) {
+      console.error('Error in sendFileMessage:', error);
+      // Log thêm chi tiết
+      if (error.response) {
+        console.error('Server response:', error.response.status, error.response.data);
+      }
+      throw error;
+    }
+  },
+
   forwardMessage: async (messageId, targetConversationId, originalContent, messageType = 'TEXT') => {
     try {
       console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`);
@@ -172,5 +238,8 @@ export const messageApi = {
   },
 };
 
-// Export default để duy trì khả năng tương thích với code hiện tại
+// Sử dụng export kép để hỗ trợ cả 2 cách import để tương thích ngược
+// Cách 1: import { messageApi } from './messageApi'
+// Cách 2: import messageApi from './messageApi'
+export { messageApi };
 export default messageApi;

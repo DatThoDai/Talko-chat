@@ -118,23 +118,17 @@ const MessageInput = ({
 
   const handleFileSelected = (file) => {
     if (!file) return;
-
-    // Đóng menu file upload
-    setShowFileUpload(false);
     
-    // Lưu file được chọn để hiển thị trong UI
-    setSelectedFile(file);
+    // Giữ thông tin fileType chi tiết trong file object
+    // Nhưng đảm bảo UI hiển thị icon đúng
     
-    // Log thông tin file được chọn
-    console.log('File được chọn:', {
+    console.log('File được chọn từ FileUpload:', {
       name: file.name,
-      size: file.size,
       type: file.type,
-      uri: file.uri,
-      isImage: file.isImage
+      fileType: file.fileType // Thông tin chi tiết về loại file
     });
     
-    // Gọi hàm xử lý file ở component cha
+    // Gửi file và fileType chi tiết lên MessageScreen
     onSendFile(file);
   };
 

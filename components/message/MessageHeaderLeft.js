@@ -10,7 +10,13 @@ import CustomAvatar from '../CustomAvatar';
 import PropTypes from 'prop-types';
 
 // Very simple header component with back button, avatar and text
-const MessageHeaderLeft = ({ conversationName, avatar, avatarColor, onBack, onPress }) => {
+const MessageHeaderLeft = ({ 
+  conversationName = 'Cuộc trò chuyện', 
+  avatar = null, 
+  avatarColor = '#1982FC', 
+  onBack = () => {}, 
+  onPress = () => {} 
+}) => {
   console.log('[MessageHeaderLeft] Rendering with:', conversationName);
   
   return (
@@ -37,7 +43,7 @@ const MessageHeaderLeft = ({ conversationName, avatar, avatarColor, onBack, onPr
         
         {/* Text information */}
         <View style={styles.textSection}>
-          <Text style={styles.nameText}>{conversationName || 'Cuộc trò chuyện'}</Text>
+          <Text style={styles.nameText}>{conversationName}</Text>
           <Text style={styles.statusText}>Đang hoạt động</Text>
         </View>
       </TouchableOpacity>
@@ -51,14 +57,6 @@ MessageHeaderLeft.propTypes = {
   avatarColor: PropTypes.string,
   onBack: PropTypes.func,
   onPress: PropTypes.func,
-};
-
-MessageHeaderLeft.defaultProps = {
-  conversationName: 'Cuộc trò chuyện',
-  avatar: null,
-  avatarColor: '#1982FC',
-  onBack: () => {},
-  onPress: () => {},
 };
 
 const styles = StyleSheet.create({

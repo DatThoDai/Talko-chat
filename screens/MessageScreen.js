@@ -764,20 +764,20 @@ const handleSendFileMessage = async (file) => {
   }
 };
 
-  // Handle delete message
+  // Xóa tin nhắn (chỉ xóa ở phiên bản của mình)
   const handleDeleteMessage = async (messageId) => {
     try {
-      console.log('Permanently deleting message:', messageId);
+      console.log('Deleting message client side:', messageId);
       
-      // Immediately remove the message from UI
+      // Cập nhật giao diện ngay lập tức - chỉ xóa khỏi UI của người dùng hiện tại
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== messageId)
       );
       
-      // Use messageApi instead of conversationService.redoMessage
+      // Sử dụng messageApi.deleteMessage đã được sửa để gọi endpoint /only
       await messageApi.deleteMessage(messageId);
       
-      // Close modal
+      // Đóng modal
       setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -785,26 +785,27 @@ const handleSendFileMessage = async (file) => {
     }
   };
   
-  // Handle recall message (distinct from delete)
+  // Thu hồi tin nhắn cho tất cả người dùng (tương đương với redoMessage)
   const handleRecallMessage = async (messageId) => {
     try {
-      console.log('Recalling message:', messageId);
+      console.log('Recalling message for everyone:', messageId);
       
-      // Find the message in state
+      // Tìm tin nhắn cần thu hồi
       const messageToRecall = messages.find(m => m._id === messageId);
       if (!messageToRecall) {
         console.error('Message not found for recall:', messageId);
         return;
       }
       
-      // Update the UI immediately to show "Tin nhắn đã được thu hồi"
+      // Cập nhật giao diện ngay lập tức để hiển thị "Tin nhắn đã được thu hồi"
       const updatedMessages = messages.map(msg => {
         if (msg._id === messageId) {
           return {
             ...msg,
             content: 'Tin nhắn đã được thu hồi',
             status: 'recalled',
-            isRecalled: true
+            isRecalled: true,
+            isDeleted: true // Thêm trường này để phù hợp với phiên bản web
           };
         }
         return msg;
@@ -812,10 +813,12 @@ const handleSendFileMessage = async (file) => {
       
       setMessages(updatedMessages);
       
-      // Call the API to recall the message
+      // Gọi API để thu hồi tin nhắn cho tất cả người dùng
       await messageApi.recallMessage(messageId);
       console.log('Message recalled successfully:', messageId);
       
+      // Đóng modal nếu đang mở
+      setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error recalling message:', error);
       Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn. Vui lòng thử lại sau.');

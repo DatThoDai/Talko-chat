@@ -72,20 +72,17 @@ const messageApi = {
       throw error;
     }
   },
+  // Xóa tin nhắn (chỉ ở phiên bản của mình) - tương đương với deleteMessageClientSide trong web
   deleteMessage: messageId => {
-    const url = `${BASE_URL}/${messageId}`;
-    console.log('Permanently deleting message:', messageId);
-    // Add permanent=true parameter to ensure message is fully deleted
-    return api.delete(url, {
-      params: {
-        permanent: true,
-        force: true
-      }
-    });
-  },
-  deleteMessageOnlyMe: messageId => {
+    console.log('Deleting message client side:', messageId);
     const url = `${BASE_URL}/${messageId}/only`;
     return api.delete(url);
+  },
+  
+  // Giữ lại để tương thích ngược
+  deleteMessageOnlyMe: messageId => {
+    console.log('Using deleteMessage for deleteMessageOnlyMe - client side only');
+    return messageApi.deleteMessage(messageId);
   },
   addReaction: (messageId, type) => {
     const url = `${BASE_URL}/${messageId}/reacts/${type}`;
@@ -224,13 +221,13 @@ const messageApi = {
     }
   },
   
-  // Recall message (undo send - only for sender)
-  // Cập nhật để sử dụng endpoint xoá tin nhắn thay vì endpoint thu hồi tin nhắn
+  // Thu hồi tin nhắn (Redo Message) - tương đương với redoMessage trong web
   recallMessage: (messageId) => {
     try {
-      console.log('Recalling message (using delete endpoint):', messageId);
-      // Sử dụng phương thức deleteMessage thay vì tạo endpoint mới
-      return messageApi.deleteMessage(messageId);
+      console.log('Recalling message for everyone:', messageId);
+      // Sử dụng endpoint giống phiên bản web - DELETE trực tiếp
+      const url = `${BASE_URL}/${messageId}`;
+      return api.delete(url);
     } catch (error) {
       console.error('Error recalling message:', error.message);
       throw error;

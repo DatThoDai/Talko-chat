@@ -16,19 +16,19 @@ const MESSAGE_STATUS = {
 };
 
 const ChatMessage = ({
-  message,
-  userId,
-  onPressEmoji,
-  handleShowReactDetails,
-  onPressDelete,
-  onPressEdit,
-  onReply,
-  onPressRecall,
-  //onRetry, // Thêm prop onRetry
-  loading,
-  previewImage,
-  isMyMessage, // Thêm prop isMyMessage để đảm bảo chắc chắn
-  navigation, // QUAN TRỌNG: Thêm prop navigation để chuyển tiếp tin nhắn
+  message = {},
+  userId = '',
+  isMyMessage = undefined, // Default là undefined để không ảnh hưởng đến logic cũ
+  onPressEmoji = null,
+  handleShowReactDetails = null,
+  onPressDelete = null,
+  onPressEdit = null,
+  onReply = null,
+  onPressRecall = null,
+  //onRetry = null, // Default là null
+  loading = false,
+  previewImage = null,
+  navigation,  // QUAN TRỌNG: Thêm prop navigation để chuyển tiếp tin nhắn
   conversationId, // Thêm conversationId hiện tại
 }) => {
   // Skip rendering completely if the message is deleted (but NOT if it's recalled)
@@ -127,21 +127,10 @@ ChatMessage.propTypes = {
   //onRetry: PropTypes.func, // Thêm propType cho onRetry
   loading: PropTypes.bool,
   previewImage: PropTypes.func,
+  navigation: PropTypes.object,
+  conversationId: PropTypes.string,
 };
 
-ChatMessage.defaultProps = {
-  message: {},
-  userId: '',
-  isMyMessage: undefined, // Default là undefined để không ảnh hưởng đến logic cũ
-  onPressEmoji: null,
-  handleShowReactDetails: null,
-  onPressDelete: null,
-  onPressEdit: null,
-  onReply: null,
-  onPressRecall: null,
-  //onRetry: null, // Default là null
-  loading: false,
-  previewImage: null,
-};
+// Đã xóa ChatMessage.defaultProps
 
 export default ChatMessage;

@@ -20,30 +20,34 @@ import MessageActions from './MessageActions';
 import { downloadFile, openFile } from '../../utils/downloadUtils';
 import * as Sharing from 'expo-sharing';
 
-function SenderMessage(props) {
-  const {
-    message,
-    isMessageRecalled,
-    onPressEmoji,
-    handleShowReactDetails,
-    onPressDelete,
-    onPressEdit,
-    onReply,
-    onPressRecall,
-    loading,
-    previewImage,
-    navigation, // Thêm navigation vào danh sách các props
-    conversationId // Thêm conversationId vào danh sách các props
-  } = props;
-  
+function SenderMessage({
+  message = {},
+  isMessageRecalled = false,
+  onPressEmoji = null,
+  handleShowReactDetails = null,
+  onPressDelete = null,
+  onPressEdit = null,
+  onReply = () => {},
+  onPressRecall = null,
+  loading = false,
+  previewImage = null,
+  navigation = {},
+  conversationId = '',
+  content = '',
+  time = '',
+  reactVisibleInfo = '',
+  reactLength = 0,
+  handleViewImage = null,
+  currentUserId = '',
+}) {
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
-  const content = message?.content || '';
-  const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-  const reactLength = message?.reactions?.length || 0;
-  const reactVisibleInfo = reactLength > 0 ? `${reactLength}` : '';
+  content = message?.content || content;
+  time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : time;
+  reactLength = message?.reactions?.length || reactLength;
+  reactVisibleInfo = reactLength > 0 ? `${reactLength}` : reactVisibleInfo;
   // Ưu tiên sử dụng conversationId từ props, nếu không có thì lấy từ message
   const msgConversationId = conversationId || message?.conversationId;
-  const currentUserId = message?.sender?._id;
+  currentUserId = currentUserId || message?.sender?._id;
   const messageStatus = message?.status || 'sent';
 
   // Make sure we have message and sender
@@ -78,7 +82,7 @@ function SenderMessage(props) {
 
   // Thêm function này vào khu vực các phương thức xử lý sự kiện
 
-  const handleViewImage = (url, senderName) => {
+  const handleViewImageLocal = (url, senderName) => {
     if (previewImage && typeof previewImage === 'function') {
       previewImage(url);
     } else {
@@ -236,6 +240,8 @@ function SenderMessage(props) {
               previewImage(imageUrl);
             } else if (handleViewImage) {
               handleViewImage(imageUrl, sender?.name);
+            } else {
+              handleViewImageLocal(imageUrl, sender?.name);
             }
           } else {
             console.warn('No valid image URL found');
@@ -253,9 +259,11 @@ function SenderMessage(props) {
   };
 
   const renderVideo = () => {
+    const viewImageFunc = handleViewImage || handleViewImageLocal;
+    
     return (
       <TouchableWithoutFeedback
-        onPress={() => handleViewImage(fileUrl, sender?.name, false)}>
+        onPress={() => viewImageFunc(fileUrl, sender?.name, false)}>
         <View style={styles.videoContainer}>
           <Image
             source={{ uri: message.thumbnail || fileUrl }}
@@ -632,18 +640,6 @@ SenderMessage.propTypes = {
   currentUserId: PropTypes.string,
 };
 
-SenderMessage.defaultProps = {
-  message: {},
-  handleShowReactDetails: null,
-  content: '',
-  time: '',
-  reactVisibleInfo: '',
-  reactLength: 0,
-  handleViewImage: null,
-  navigation: {},
-  conversationId: '',
-  currentUserId: '',
-  onReply: () => {},
-};
+// Đã xóa SenderMessage.defaultProps
 
 export default SenderMessage;

@@ -19,17 +19,16 @@ import { messageApi } from '../../api/messageApi';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MessageActions = ({
-  visible,
-  onClose,
-  message,
-  currentUserId,
-  onReply,
-  onSelect,
-  onPressRecall,
-  // Additional props for navigation to forward screen
-  navigation,
-  conversationId,
-  position, // New prop: {x, y} coordinates where to show the menu
+  visible = false,
+  onClose = () => {},
+  message = {},
+  currentUserId = '',
+  onReply = () => {},
+  onSelect = () => {},
+  onPressRecall = null,
+  navigation = {},
+  conversationId = '',
+  position = null,
 }) => {
   const [loading, setLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
@@ -382,18 +381,5 @@ const styles = StyleSheet.create({
     color: '#757575',
   }
 });
-
-MessageActions.defaultProps = {
-  visible: false,
-  onClose: () => {},
-  message: {},
-  currentUserId: '',
-  onReply: () => {},
-  onSelect: () => {},
-  onPressRecall: null,
-  navigation: {},
-  conversationId: '',
-  position: null,
-};
 
 export default MessageActions;

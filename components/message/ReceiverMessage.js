@@ -21,17 +21,15 @@ import { downloadFile, openFile } from '../../utils/downloadUtils';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 
-function ReceiverMessage(props) {
-  const {
-    message,
-    isMessageRecalled,
-    onPressEmoji,
-    handleShowReactDetails,
-    onReply,
-    previewImage,
-    onPressRecall
-  } = props;
-  
+function ReceiverMessage({
+  message = {},
+  isMessageRecalled = false,
+  onPressEmoji = null,
+  handleShowReactDetails = null,
+  onReply = () => {},
+  previewImage = null,
+  onPressRecall = () => {}
+}) {
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const content = message?.content || '';
   const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
@@ -557,6 +555,8 @@ const styles = StyleSheet.create({
   },
 });
 
+// Keep PropTypes for documentation purposes, but actual default values
+// are now defined in the function parameters above
 ReceiverMessage.propTypes = {
   message: PropTypes.object,
   handleShowReactDetails: PropTypes.func,
@@ -572,23 +572,6 @@ ReceiverMessage.propTypes = {
   currentUserId: PropTypes.string,
   onReply: PropTypes.func,
   onPressRecall: PropTypes.func,
-};
-
-ReceiverMessage.defaultProps = {
-  message: {},
-  handleShowReactDetails: null,
-  content: '',
-  time: '',
-  reactVisibleInfo: '',
-  reactLength: 0,
-  handleViewImage: null,
-  isLastMessage: false,
-  onLastView: null,
-  navigation: {},
-  conversationId: '',
-  currentUserId: '',
-  onReply: () => {},
-  onPressRecall: () => {},
 };
 
 export default ReceiverMessage;

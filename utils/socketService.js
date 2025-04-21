@@ -6,6 +6,7 @@ import {
   removeMessage,
   setTypingUsers,
   updateUserOnlineStatus,
+  updateMessages,
 } from '../redux/chatSlice';
 
 // Khai báo biến để lưu store sau này
@@ -220,7 +221,16 @@ const setupSocketEventHandlers = () => {
       const messageId = data.messageId || data.id;
       if (messageId) {
         console.log('Removing message:', messageId);
+        // Force immediate UI update
         storeInstance.dispatch(removeMessage(messageId));
+        
+        // If we're in the conversation where the message was deleted, force a re-render
+        const currentState = storeInstance.getState();
+        if (currentState.chat.currentConversation === data.conversationId) {
+          // Trigger a re-render by updating the messages array
+          const updatedMessages = currentState.chat.messages.filter(msg => msg._id !== messageId);
+          storeInstance.dispatch(updateMessages(updatedMessages));
+        }
       }
     }
   });
@@ -230,7 +240,16 @@ const setupSocketEventHandlers = () => {
     console.log('Legacy message-deleted event received:', data);
     if (storeInstance && data && data.messageId) {
       console.log('Removing message from legacy event:', data.messageId);
+      // Force immediate UI update
       storeInstance.dispatch(removeMessage(data.messageId));
+      
+      // If we're in the conversation where the message was deleted, force a re-render
+      const currentState = storeInstance.getState();
+      if (currentState.chat.currentConversation === data.conversationId) {
+        // Trigger a re-render by updating the messages array
+        const updatedMessages = currentState.chat.messages.filter(msg => msg._id !== data.messageId);
+        storeInstance.dispatch(updateMessages(updatedMessages));
+      }
     }
   });
 

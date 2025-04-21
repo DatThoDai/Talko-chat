@@ -60,7 +60,7 @@ export const API_ENDPOINTS = {
   UPDATE_CONVERSATION: '/conversations/update',
   
   // Messages endpoints cũng cần phù hợp với web
-  MESSAGES: '/messages',
+  MESSAGES: '/messages',  // API chuẩn cho tin nhắn
   CREATE_MESSAGE: '/messages/text',  // Đổi sang endpoint chính xác theo API của web
   PIN_MESSAGE: '/messages/pin',
   DELETE_MESSAGE: '/messages',  // API xóa message cần phương thức DELETE với ID

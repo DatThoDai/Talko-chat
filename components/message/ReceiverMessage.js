@@ -201,8 +201,6 @@ function ReceiverMessage({
     );
   };
 
-  // Thêm các hàm này sau renderFile() và trước renderContent()
-
   // Hiển thị tin nhắn hình ảnh
   const renderImage = () => {
     // Lấy URL hình ảnh từ message
@@ -350,6 +348,9 @@ function ReceiverMessage({
   const isRecalled = message.manipulatedUserIds?.includes(message.userId);
   const isDeleted = message.isDeleted;
   
+  // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
+  const isForwarded = message.metadata?.isForwarded === true;
+  
   // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
     ? {...styles.messageContent, backgroundColor: '#a0a0a0'} 
@@ -376,7 +377,12 @@ function ReceiverMessage({
             ) : isDeleted ? (
               <Text style={styles.recalledText}>{MESSAGE_DELETE_TEXT}</Text>
             ) : (
-              renderContent()
+              <>
+                {isForwarded && (
+                  <Text style={styles.forwardedLabel}>Đã chuyển tiếp tin nhắn</Text>
+                )}
+                {renderContent()}
+              </>
             )}
             <View style={styles.timeContainer}>
               <Text style={styles.time}>{time}</Text>
@@ -408,7 +414,7 @@ function ReceiverMessage({
         currentUserId={currentUserId}
         onReply={onReply}
         onSelect={handleCopyText}
-        onPressRecall={onPressRecall}
+        onPressRecall={null}
         navigation={navigation}
         conversationId={conversationId}
         position={menuPosition}
@@ -552,6 +558,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     fontStyle: 'italic',
+  },
+  forwardedLabel: {
+    fontSize: 12,
+    color: '#2196F3',
+    fontStyle: 'italic',
+    marginBottom: 4,
   },
 });
 

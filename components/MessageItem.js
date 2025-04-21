@@ -49,14 +49,17 @@ const MessageItem = ({
   // Get formatted date
   const formattedDate = formatMessageDate(createdAt);
   
+  // Check if message is pinned
+  const isPinned = message.isPinned || false;
+  
   // Custom styling based on message owner
   const containerStyle = isOwnMessage 
     ? styles.ownMessageContainer 
     : styles.otherMessageContainer;
   
   const bubbleStyle = isOwnMessage 
-    ? styles.ownMessageBubble 
-    : styles.otherMessageBubble;
+    ? [styles.ownMessageBubble, message.isPinned && styles.pinnedMessageBubble]
+    : [styles.otherMessageBubble, message.isPinned && styles.pinnedMessageBubble];
   
   const textStyle = isOwnMessage 
     ? styles.ownMessageText 
@@ -562,6 +565,23 @@ const styles = StyleSheet.create({
   fileDownloadProgress: {
     flex: 1,
     alignItems: 'center',
+  },
+  pinnedMessageBubble: {
+    borderWidth: 1,
+    borderColor: '#9C27B0',
+    borderStyle: 'solid',
+  },
+  pinIndicator: {
+    position: 'absolute',
+    top: -10,
+    right: 10,
+    backgroundColor: '#9C27B0',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   errorContainer: {
     width: 200,

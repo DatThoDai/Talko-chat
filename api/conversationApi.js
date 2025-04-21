@@ -29,7 +29,7 @@ const conversationApi = {
       };
       
       // Gọi API upload đúng endpoint theo backend CNM_Chat
-      const response = await axiosClient.post(`${BASE_URL.replace('/conversations', '')}/messages/files`, formData, {
+      const response = await axiosClient.post(`/messages/files`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

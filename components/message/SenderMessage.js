@@ -321,6 +321,9 @@ function SenderMessage({
   const isRecalled = message.manipulatedUserIds?.includes(message.userId);
   const isDeleted = message.isDeleted;
   
+  // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
+  const isForwarded = message.metadata?.isForwarded === true;
+  
   // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
     ? {...styles.messageContent, backgroundColor: '#f0f0f0'} 
@@ -393,7 +396,12 @@ function SenderMessage({
             ) : isDeleted ? (
               <Text style={styles.recalledText}>Tin nhắn đã bị xóa</Text>
             ) : (
-              renderContent()
+              <>
+                {isForwarded && (
+                  <Text style={styles.forwardedLabel}>Đã chuyển tiếp tin nhắn</Text>
+                )}
+                {renderContent()}
+              </>
             )}
             <View style={styles.timeContainer}>
               {renderMessageStatus()}
@@ -560,6 +568,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     fontStyle: 'italic',
+  },
+  forwardedLabel: {
+    fontSize: 12,
+    color: '#2196F3',
+    fontStyle: 'italic',
+    marginBottom: 4,
   },
   timeContainer: {
     flexDirection: 'row',

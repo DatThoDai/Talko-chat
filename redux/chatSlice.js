@@ -342,7 +342,8 @@ const chatSlice = createSlice({
                 ...msg, 
                 content: MESSAGE_RECALL_TEXT, 
                 status: MESSAGE_STATUS.RECALLED,
-                isRecalled: true 
+                isRecalled: true,
+                isDeleted: false
               } 
             : msg
         );

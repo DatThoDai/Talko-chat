@@ -80,6 +80,9 @@ const DEFAULT_STICKER_BOARD = {
 const DEFAULT_PAGE = 0;
 const DEFAULT_PAGE_SIZE = 30;
 
+// Add message recall text constant
+const MESSAGE_RECALL_TEXT = 'Tin nhắn đã được thu hồi';
+
 const MessageScreen = ({navigation, route}) => {
   // Props and Redux state
   const {conversationId, conversationName, participants, avatar, avatarColor, isGroupChat} = route.params || {};
@@ -769,16 +772,19 @@ const handleSendFileMessage = async (file) => {
     try {
       console.log('Deleting message client side:', messageId);
       
-      // Cập nhật giao diện ngay lập tức - chỉ xóa khỏi UI của người dùng hiện tại
+      // Gọi API trước
+      await messageApi.deleteMessage(messageId);
+      
+      // Sau khi API thành công, cập nhật UI
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== messageId)
       );
       
-      // Sử dụng messageApi.deleteMessage đã được sửa để gọi endpoint /only
-      await messageApi.deleteMessage(messageId);
-      
       // Đóng modal
       setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
+      
+      // Hiển thị thông báo thành công
+      Alert.alert('Thành công', 'Tin nhắn đã được xóa');
     } catch (error) {
       console.error('Error deleting message:', error);
       Alert.alert('Lỗi', 'Không thể xóa tin nhắn. Vui lòng thử lại sau.');
@@ -788,10 +794,7 @@ const handleSendFileMessage = async (file) => {
   // Thu hồi tin nhắn cho tất cả người dùng (tương đương với redoMessage)
   const handleRecallMessage = async (messageId) => {
     try {
-      console.log('Recalling message for everyone:', messageId);
-      
-      // Tìm tin nhắn cần thu hồi
-      const messageToRecall = messages.find(m => m._id === messageId);
+      const messageToRecall = messages.find(msg => msg._id === messageId);
       if (!messageToRecall) {
         console.error('Message not found for recall:', messageId);
         return;
@@ -802,10 +805,10 @@ const handleSendFileMessage = async (file) => {
         if (msg._id === messageId) {
           return {
             ...msg,
-            content: 'Tin nhắn đã được thu hồi',
+            content: MESSAGE_RECALL_TEXT,
             status: 'recalled',
             isRecalled: true,
-            isDeleted: true // Thêm trường này để phù hợp với phiên bản web
+            isDeleted: false // Ensure message is not deleted
           };
         }
         return msg;
@@ -998,7 +1001,7 @@ const handleSendFileMessage = async (file) => {
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
             }
             extraData={messages.length}
-            keyExtractor={item => String(item._id)}
+            keyExtractor={item => `${item._id}-${item.createdAt}`}
             renderItem={({item, index}) => renderMessage(item, index)}
             initialNumToRender={20}
             maxToRenderPerBatch={10}

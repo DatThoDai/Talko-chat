@@ -48,11 +48,19 @@ const messageApi = {
       if (message.replyMessageId) {
         requestBody.replyMessageId = message.replyMessageId;
       }
+
+      // Bước 4: Thêm trường forwardedMessage nếu có
+      if (message.forwardedMessage) {
+        requestBody.metadata = {
+          isForwarded: true,
+          forwardedAt: new Date()
+        };
+      }
       
-      // Bước 4: Log chi tiết truyền gửi để debug
+      // Bước 5: Log chi tiết truyền gửi để debug
       console.log(`Sending message to ${endpoint} with data:`, JSON.stringify(requestBody, null, 2));
 
-      // Bước 5: Gọi API với các header và config chuẩn
+      // Bước 6: Gọi API với các header và config chuẩn
       return api.post(endpoint, requestBody, {
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +125,7 @@ const messageApi = {
       };
 
       // Đổi từ /files/base64 sang /file cho phù hợp với web
-      return api.post(`${BASE_URL}/file`, file, config);
+      return api.post(`${BASE_URL}/files/base64`, file, config);
     } catch (error) {
       console.error('Error uploading file:', error.message);
       throw error; // Rethrow để component có thể hiển thị lỗi upload
@@ -157,8 +165,8 @@ const messageApi = {
       formData.append('type', serverType);
       formData.append('conversationId', conversationId);
       
-      // URL cũng sử dụng serverType đã ánh xạ
-      const url = `${BASE_URL}/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(serverType)}`;
+      // URL cũng sử dụng serverType đã ánh xạ - sửa URL để phù hợp với cấu trúc backend
+      const url = `/messages/files?conversationId=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(serverType)}`;
       
       console.log('Uploading to URL:', url);
       
@@ -193,28 +201,120 @@ const messageApi = {
   forwardMessage: async (messageId, targetConversationId, originalContent, messageType = 'TEXT') => {
     try {
       console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`);
+      
+      // Trước hết, thử sử dụng API chia sẻ tin nhắn có sẵn nếu có messageId
+      if (messageId && messageId !== 'undefined' && messageId !== 'null') {
+        try {
+          console.log('Trying to use share message API with messageId:', messageId);
+          const shareUrl = `${BASE_URL}/${messageId}/share/${targetConversationId}`;
+          const shareResponse = await api.post(shareUrl);
+          console.log('Successfully shared message using API:', shareResponse);
+          return shareResponse;
+        } catch (shareError) {
+          console.error('Error using share API, falling back to manual forward:', shareError.message);
+          // Nếu không thành công, tiếp tục với phương thức thông thường
+        }
+      }
+      
+      // Thiết lập prefix cho tin nhắn được chuyển tiếp
+      let prefix = '📤 Tin nhắn được chuyển tiếp: \n';
+      let actualContent = originalContent || '';
+      
       // Không có API /messages/{id}/forward, nên chúng ta sẽ:
       // 1. Sử dụng nội dung message gốc được truyền từ UI
       // 2. Tạo message mới với nội dung đó ở conversation đích
       
-      // Nếu không có nội dung được truyền vào, sử dụng nội dung mặc định
-      if (!originalContent) {
-        originalContent = 'Tin nhắn được chuyển tiếp';
-        console.log('Không có nội dung gốc, sử dụng nội dung mặc định');
-      } else {
-        console.log('Sử dụng nội dung gốc được truyền vào:', originalContent);
+      // Xử lý khác nhau tùy theo loại tin nhắn
+      if (messageType === 'IMAGE') {
+        console.log('Đang chuyển tiếp ảnh:', originalContent);
+        const formData = new FormData();
+        formData.append('file', {
+          uri: originalContent,
+          type: 'image/jpeg',
+          name: `forwarded-image-${Date.now()}.jpg`
+        });
+        formData.append('type', 'IMAGE');
+        formData.append('conversationId', targetConversationId);
+        formData.append('forwardedMessage', 'true'); // Đánh dấu là tin nhắn được chuyển tiếp
+        
+        // Sửa URL để khớp với format API của backend
+        const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=IMAGE&forwardedMessage=true`;
+        const config = {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        };
+        
+        console.log('Sending forwarded image message with URL:', url);
+        return api.post(url, formData, config);
       }
-      
-      // Tạo message mới với dữ liệu từ message gốc
-      const newMessage = {
-        conversationId: targetConversationId,
-        content: originalContent, // Sử dụng nội dung đã lấy được hoặc được truyền vào
-        type: messageType || 'TEXT' // Sử dụng messageType nếu được truyền vào, nếu không dùng TEXT
-      };
-      
-      // Forward nội dung qua sendMessage API
-      console.log('Sending forwarded message:', newMessage);
-      return messageApi.sendMessage(newMessage);
+      else if (messageType === 'VIDEO') {
+        console.log('Đang chuyển tiếp video:', originalContent);
+        const formData = new FormData();
+        formData.append('file', {
+          uri: originalContent,
+          type: 'video/mp4',
+          name: `forwarded-video-${Date.now()}.mp4`
+        });
+        formData.append('type', 'VIDEO');
+        formData.append('conversationId', targetConversationId);
+        formData.append('forwardedMessage', 'true');
+        
+        // Sửa URL để khớp với format API của backend
+        const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=VIDEO&forwardedMessage=true`;
+        const config = {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        };
+        
+        console.log('Sending forwarded video message with URL:', url);
+        return api.post(url, formData, config);
+      } 
+      else if (messageType === 'FILE') {
+        console.log('Đang chuyển tiếp tệp:', originalContent);
+        const formData = new FormData();
+        formData.append('file', {
+          uri: originalContent,
+          type: 'application/octet-stream',
+          name: `forwarded-file-${Date.now()}`
+        });
+        formData.append('type', 'FILE');
+        formData.append('conversationId', targetConversationId);
+        formData.append('forwardedMessage', 'true');
+        
+        // Sửa URL để khớp với format API của backend
+        const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=FILE&forwardedMessage=true`;
+        const config = {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        };
+        
+        console.log('Sending forwarded file message with URL:', url);
+        return api.post(url, formData, config);
+      } 
+      else {
+        // Đối với tin nhắn TEXT thông thường
+        if (!originalContent) {
+          actualContent = 'Nội dung tin nhắn không có sẵn';
+          console.log('Không có nội dung gốc, sử dụng nội dung mặc định');
+        } else {
+          console.log('Sử dụng nội dung gốc được truyền vào:', originalContent);
+        }
+        
+        // Tạo message mới với dữ liệu từ message gốc và thêm prefix
+        const newMessage = {
+          conversationId: targetConversationId,
+          content: prefix + actualContent, // Thêm prefix để biết đây là tin nhắn được chuyển tiếp
+          type: 'TEXT', // Luôn sử dụng TEXT cho loại tin nhắn thông thường
+          forwardedMessage: true // Thêm thuộc tính đánh dấu là tin nhắn được chuyển tiếp
+        };
+        
+        // Forward nội dung qua sendMessage API
+        console.log('Sending forwarded text message:', newMessage);
+        return messageApi.sendMessage(newMessage);
+      }
     } catch (error) {
       console.error('Error forwarding message:', error.message);
       throw error;

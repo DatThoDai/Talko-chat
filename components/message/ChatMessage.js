@@ -40,13 +40,14 @@ const ChatMessage = ({
   const isSender = () => {
     // Thêm log chi tiết hơn về ID để so sánh
     console.log(
-      "DETAILED MESSAGE CHECK:", {
+      "DETAILED MESSAGE CHECK for " + message?._id + ":", {
+        currentUserId: userId || 'undefined',
+        isMyMessage: message?.sender?._id === userId,
+        isSenderCurrentUser: message?.sender?._id === userId,
+        isUserIdCurrentUser: message?.userId === userId,
         messageId: message?._id || 'undefined',
-        senderId: message?.sender?._id || 'undefined', 
-        userId: userId || 'undefined',
-        senderId_equals_userId: message?.sender?._id === userId,
-        isMyMessage: isMyMessage,
-        isTemp: message?.isTemp,
+        messageUserId: message?.userId,
+        senderId: message?.sender?._id || 'undefined'
       }
     );
     
@@ -55,15 +56,22 @@ const ChatMessage = ({
       return isMyMessage;
     }
     
-    // Các kiểm tra khác giữ nguyên...
+    // Kiểm tra nếu tin nhắn có trường isTemp - tin nhắn đang gửi
+    if (message?.isTemp === true) {
+      return true;
+    }
     
-    // Thêm log điều kiện cuối cùng
+    // Kiểm tra nếu tin nhắn có thuộc tính isMine 
+    if (message?.isMine === true) {
+      return true;
+    }
+    
+    // Kiểm tra dựa trên ID người gửi và ID người dùng hiện tại
     const senderIdMatches = 
       (message?.sender?._id === userId) || 
       (message?.sender === userId) ||
-      (message?.senderId === userId);
-    
-    console.log(`Final check: ${senderIdMatches} (senderId: ${message?.sender?._id}, userId: ${userId})`);
+      (message?.senderId === userId) ||
+      (message?.userId === userId);
     
     return senderIdMatches;
   };
@@ -104,7 +112,7 @@ const ChatMessage = ({
         onPressEmoji={onPressEmoji}
         handleShowReactDetails={handleShowReactDetails}
         onReply={onReply}
-        onPressRecall={onPressRecall}
+        onPressRecall={null}
         previewImage={previewImage}
         navigation={navigation}
         conversationId={conversationId}

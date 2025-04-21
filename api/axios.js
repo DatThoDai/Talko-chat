@@ -9,6 +9,7 @@ console.log('Constants module:', constants);
 console.log('REACT_APP_API_URL trong axios.js:', constants.REACT_APP_API_URL);
 
 // Sử dụng địa chỉ IP đúng theo yêu cầu của người dùng
+// Đảm bảo trỏ đến đúng địa chỉ IP và cổng của máy chủ backend
 const baseURL = 'http://192.168.1.4:3001';
 console.log('Updated baseURL:', baseURL);
 

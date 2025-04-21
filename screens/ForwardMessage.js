@@ -235,9 +235,8 @@ const ForwardMessage = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['right', 'left', 'bottom']}>
       <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
-      
       <View style={styles.searchWrapper}>
         <View style={styles.searchContainer}>
           <Icon name="search" size={20} color={colors.lightGrey} />
@@ -319,9 +318,8 @@ const styles = StyleSheet.create({
   },
   searchWrapper: {
     backgroundColor: colors.primary,
-    paddingBottom: 12,
+    paddingVertical: 8,
     paddingHorizontal: 16,
-    paddingTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -501,7 +501,7 @@ const MessageScreen = ({navigation, route}) => {
 
     try {
       // Create unique temporary ID for the message
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
       
       // Format display name from email if needed
       let displayName = user?.name;
@@ -546,7 +546,7 @@ const MessageScreen = ({navigation, route}) => {
       }
       
       // Add temporary message to the messages list for immediate display
-      setMessages((prevMessages) => [tempMessage, ...prevMessages]);
+      setMessages((prevMessages) => [...prevMessages, tempMessage]);
       
       // Reset reply state if needed
       if (replyMessage.isReply) {
@@ -692,7 +692,7 @@ const handleSendFileMessage = async (file) => {
   if (!file) return;
   
   // Tạo ID tạm thời cho tin nhắn file
-  const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
   
   try {
     // Start tracking upload progress
@@ -1017,7 +1017,7 @@ const handleSendFileMessage = async (file) => {
     
     return (
       <ChatMessage
-        key={message._id || index}
+        key={message._id}
         message={message}
         userId={currentUserId} // Sử dụng userId đã fetch từ API
         isMyMessage={isMyMessage} // Truyền giá trị đã xác định
@@ -1090,7 +1090,7 @@ const handleSendFileMessage = async (file) => {
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
             }
             extraData={messages.length}
-            keyExtractor={item => `${item._id}-${item.createdAt}`}
+            keyExtractor={item => `${item._id}`}
             renderItem={({item, index}) => renderMessage(item, index)}
             initialNumToRender={20}
             maxToRenderPerBatch={10}

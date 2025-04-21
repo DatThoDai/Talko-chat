@@ -47,6 +47,15 @@ const messageApi = {
       // Bước 3: Thêm trường replyMessageId nếu có
       if (message.replyMessageId) {
         requestBody.replyMessageId = message.replyMessageId;
+      } 
+      // Sử dụng replyToId nếu không có replyMessageId
+      else if (message.replyToId) {
+        requestBody.replyMessageId = message.replyToId;
+      }
+      // Sử dụng replyToMessage._id nếu có replyToMessage object
+      else if (message.replyToMessage && message.replyToMessage._id) {
+        requestBody.replyMessageId = message.replyToMessage._id;
+        console.log('Using replyToMessage._id as replyMessageId:', message.replyToMessage._id);
       }
 
       // Bước 4: Thêm trường forwardedMessage nếu có

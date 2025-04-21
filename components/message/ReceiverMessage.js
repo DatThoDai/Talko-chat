@@ -28,7 +28,8 @@ function ReceiverMessage({
   handleShowReactDetails = null,
   onReply = () => {},
   previewImage = null,
-  onPressRecall = () => {}
+  onPressRecall = () => {},
+  scrollToMessage = null,
 }) {
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const content = message?.content || '';
@@ -356,6 +357,82 @@ function ReceiverMessage({
     ? {...styles.messageContent, backgroundColor: '#a0a0a0'} 
     : styles.messageContent;
 
+  // Add new function to render reply preview
+  const renderReplyPreview = () => {
+    // Kiểm tra chặt chẽ hơn về dữ liệu tin nhắn trả lời
+    // - replyToMessage phải tồn tại và có _id
+    // - hoặc replyTo phải tồn tại và có _id
+    // - hoặc replyMessage phải tồn tại và có _id
+    
+    const hasValidReplyToMessage = 
+      message.replyToMessage && 
+      message.replyToMessage._id && 
+      typeof message.replyToMessage._id === 'string';
+      
+    const hasValidReplyTo = 
+      message.replyTo && 
+      message.replyTo._id && 
+      typeof message.replyTo._id === 'string';
+      
+    const hasValidReplyMessage = 
+      message.replyMessage && 
+      message.replyMessage._id && 
+      typeof message.replyMessage._id === 'string';
+    
+    // Nếu không có dữ liệu tin nhắn trả lời hợp lệ, không hiển thị gì cả
+    if (!hasValidReplyToMessage && !hasValidReplyTo && !hasValidReplyMessage) {
+      return null;
+    }
+    
+    // Lấy dữ liệu tin nhắn trả lời từ nguồn hợp lệ đầu tiên
+    const replyData = 
+      (hasValidReplyToMessage ? message.replyToMessage : null) || 
+      (hasValidReplyTo ? message.replyTo : null) || 
+      (hasValidReplyMessage ? message.replyMessage : null);
+    
+    // Đảm bảo content và sender tồn tại
+    if (!replyData || (!replyData.content && !replyData.type)) {
+      return null;
+    }
+    
+    // Format the sender name - support different formats (sender vs user)
+    const replySenderName = 
+      (replyData.sender?.name) || 
+      (replyData.user?.name) || 
+      'Người dùng';
+    
+    // Format the content based on message type
+    let replyContent = replyData.content || '';
+    if (replyData.type === 'IMAGE') {
+      replyContent = '[Hình ảnh]';
+    } else if (replyData.type === 'FILE') {
+      replyContent = `[Tệp: ${replyData.fileName || 'Tệp đính kèm'}]`;
+    } else if (replyData.type === 'VIDEO') {
+      replyContent = '[Video]';
+    }
+    
+    // Handle tap on reply preview to scroll to original message
+    const handleReplyPreviewPress = () => {
+      if (scrollToMessage && replyData._id) {
+        scrollToMessage(replyData._id);
+      }
+    };
+    
+    return (
+      <TouchableOpacity 
+        style={styles.replyPreviewContainer}
+        onPress={handleReplyPreviewPress}
+        activeOpacity={0.7}
+      >
+        <View style={styles.replyPreviewBar} />
+        <View style={styles.replyPreviewContent}>
+          <Text style={styles.replyPreviewSender}>{replySenderName}</Text>
+          <Text style={styles.replyPreviewText} numberOfLines={1}>{replyContent}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.avatarContainer}>
@@ -381,6 +458,7 @@ function ReceiverMessage({
                 {isForwarded && (
                   <Text style={styles.forwardedLabel}>Đã chuyển tiếp tin nhắn</Text>
                 )}
+                {renderReplyPreview()}
                 {renderContent()}
               </>
             )}
@@ -412,7 +490,14 @@ function ReceiverMessage({
         onClose={handleCloseActions}
         message={message}
         currentUserId={currentUserId}
-        onReply={onReply}
+        onReply={(msg) => {
+          console.log('ReceiverMessage - onReply được gọi với message:', msg?._id);
+          if (typeof onReply === 'function') {
+            onReply(msg);
+          } else {
+            console.error('ReceiverMessage - onReply không phải là hàm');
+          }
+        }}
         onSelect={handleCopyText}
         onPressRecall={null}
         navigation={navigation}
@@ -565,6 +650,39 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 4,
   },
+  replyPreviewContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 8,
+    marginBottom: 6,
+    padding: 8,
+    paddingLeft: 6,
+    minWidth: '90%',
+    maxWidth: '95%',
+  },
+  replyPreviewBar: {
+    width: 3,
+    backgroundColor: '#2196F3',
+    borderRadius: 3,
+    marginRight: 6,
+    flexShrink: 0,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    marginRight: 4,
+  },
+  replyPreviewSender: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 12,
+    color: '#666',
+    flexWrap: 'wrap',
+    flexShrink: 1,
+  },
 });
 
 // Keep PropTypes for documentation purposes, but actual default values
@@ -584,6 +702,7 @@ ReceiverMessage.propTypes = {
   currentUserId: PropTypes.string,
   onReply: PropTypes.func,
   onPressRecall: PropTypes.func,
+  scrollToMessage: PropTypes.func,
 };
 
 export default ReceiverMessage;

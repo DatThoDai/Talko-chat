@@ -40,6 +40,13 @@ const MessageInput = ({
   const replyAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Thêm console log để debug replyTo
+    console.log('MessageInput - replyTo changed:', replyTo ? {
+      id: replyTo._id,
+      content: replyTo.content?.substring(0, 20),
+      sender: replyTo.sender?.name
+    } : 'null');
+    
     // Animate reply container when replyTo changes
     if (replyTo) {
       Animated.timing(replyAnimation, {

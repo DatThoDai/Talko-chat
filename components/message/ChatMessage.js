@@ -30,7 +30,11 @@ const ChatMessage = ({
   previewImage = null,
   navigation,  // QUAN TRỌNG: Thêm prop navigation để chuyển tiếp tin nhắn
   conversationId, // Thêm conversationId hiện tại
+  scrollToMessage = null, // Thêm scrollToMessage prop
 }) => {
+  // Thêm log để kiểm tra onReply đã được truyền đúng chưa
+  console.log('ChatMessage received onReply:', typeof onReply);
+  
   // Skip rendering completely if the message is deleted (but NOT if it's recalled)
   if (message?.isDeleted && !message?.isRecalled) {
     return null;
@@ -102,6 +106,7 @@ const ChatMessage = ({
         previewImage={previewImage}
         navigation={navigation}
         conversationId={conversationId}
+        scrollToMessage={scrollToMessage}
       />
     );
   } else {
@@ -116,6 +121,7 @@ const ChatMessage = ({
         previewImage={previewImage}
         navigation={navigation}
         conversationId={conversationId}
+        scrollToMessage={scrollToMessage}
       />
     );
   }
@@ -137,6 +143,7 @@ ChatMessage.propTypes = {
   previewImage: PropTypes.func,
   navigation: PropTypes.object,
   conversationId: PropTypes.string,
+  scrollToMessage: PropTypes.func, // Thêm propType cho scrollToMessage
 };
 
 // Đã xóa ChatMessage.defaultProps

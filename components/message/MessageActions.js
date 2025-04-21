@@ -94,7 +94,19 @@ const MessageActions = ({
 
   // Handle message reply
   const handleReply = () => {
-    onReply(message);
+    console.log('MessageActions - Reply button pressed for message:', message._id);
+    console.log('MessageActions - Message content:', message.content?.substring(0, 20));
+    console.log('MessageActions - onReply function exists:', typeof onReply === 'function');
+    
+    if (typeof onReply === 'function') {
+      console.log('MessageActions - Calling onReply with full message object');
+      // Đảm bảo truyền toàn bộ đối tượng tin nhắn, không chỉ ID
+      onReply(message);
+    } else {
+      console.error('MessageActions - onReply is not a function');
+    }
+    
+    // Đóng menu sau khi đã xử lý
     handleClose();
   };
 

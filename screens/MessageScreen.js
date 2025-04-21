@@ -341,106 +341,131 @@ const MessageScreen = ({navigation, route}) => {
 
   // Handle reply to message
   const handleOnReplyMessagePress = messageId => {
+    console.log('handleOnReplyMessagePress called with messageId:', messageId);
     const messageToReply = messages.find(msg => msg._id === messageId);
+    console.log('Message to reply found:', !!messageToReply);
+    
     if (messageToReply) {
+      console.log('Setting reply message with content:', messageToReply.content?.substring(0, 20));
       setReplyMessage({
         isReply: true,
         message: messageToReply,
       });
+      // Thêm log để xác nhận replyMessage đã được cập nhật
+      console.log('Reply message set, isReply:', true);
+    } else {
+      console.error('Could not find message with ID:', messageId);
     }
   };
 
   // Load messages with improved scrolling
   const loadMessages = async (refresh = false) => {
-    console.log('LOADING MESSAGES, refresh=', refresh);
-    setLoading(true);
-    const newPage = refresh ? 0 : page;
+    if (loading && !refresh) return;
+    
     try {
-      // Truyền thêm ID người dùng hiện tại để phân biệt tin nhắn của mình
-      const myUserId = user?._id || route.params?.currentUserId || route.params?.userId;
-      const response = await conversationService.getMessages(conversationId, newPage, DEFAULT_PAGE_SIZE, myUserId);
+      // Show loading indicator
+      setLoading(true);
       
-      // Đảm bảo response.data là một mảng
-      let messageData = Array.isArray(response.data) ? response.data : [];
-      
-      console.log(`Received ${messageData.length} messages from API`);
-      
-      // Chuẩn hóa định dạng tin nhắn theo cấu trúc của ChatMessage component
-      messageData = messageData.map(message => {
-        // Nếu message đã đúng định dạng, sử dụng nguyên
-        if (message && typeof message === 'object') {
-          // Kết hợp dữ liệu thô với cấu trúc mặc định để tránh lỗi undefined
-          return {
-            // Đảm bảo các trường bắt buộc luôn tồn tại
-            _id: message._id || message.id || `temp-${Date.now()}-${Math.random()}`,
-            content: message.content || '',
-            type: message.type || 'TEXT',
-            createdAt: message.createdAt || new Date().toISOString(),
-            sender: message.sender || { _id: 'unknown', name: 'Unknown User' },
-            isDeleted: message.isDeleted || false,
-            reactions: message.reactions || [],
-            // Thêm trường để xác định tin nhắn của mình
-            isMyMessage: userUtils.isMatchingUser(user, message.sender) || 
-                       userUtils.isMatchingUser(user, message.userId) ||
-                       (message.isMyMessage === true),
-            // Giữ nguyên các trường khác nếu có
-            ...message
-          };
-        }
-        // Trường hợp message không phải object, tạo một object chuẩn
-        return {
-          _id: `temp-${Date.now()}-${Math.random()}`,
-          content: 'Tin nhắn không hợp lệ',
-          type: 'TEXT',
-          createdAt: new Date().toISOString(),
-          sender: { _id: 'unknown', name: 'Unknown User' },
-          isDeleted: false,
-          reactions: []
-        };
-      });
-      
-      // Log thông tin về tin nhắn đã chuẩn hóa
-      console.log(`Standardized ${messageData.length} messages`);
-      
-      // Sắp xếp tin nhắn theo thời gian tăng dần (cũ đến mới) - đảm bảo tin nhắn cũ ở trên, tin nhắn mới ở dưới
-      messageData = messageData.sort((a, b) => {
-        return new Date(a.createdAt) - new Date(b.createdAt);
-      });
-      
-      console.log('Messages after sorting by time:', 
-        messageData.slice(0, 3).map(m => ({ 
-          id: m._id?.substring(0, 8) || 'unknown', 
-          time: new Date(m.createdAt).toLocaleTimeString(),
-          content: m.content?.substring(0, 10) || 'empty'
-        }))
-      );
-      
+      // Reset messages if refreshing
       if (refresh) {
-        // Xóa tin nhắn cũ và tải mới
-        setMessages(messageData);
-      } else if (Array.isArray(messages)) {
-        // Thêm tin nhắn mới vào cuối danh sách hiện tại
-        setMessages(prevMessages => [...prevMessages, ...messageData]);
-      } else {
-        // Nếu messages hiện tại không phải là một mảng
-        console.warn('Current messages is not an array, resetting to new data');
-        setMessages(messageData);
+        setPage(0);
+        setMessages([]);
       }
       
-      // Chỉ cho tải thêm nếu có đủ tin nhắn theo kích thước trang
-      const hasMore = Array.isArray(messageData) && messageData.length === DEFAULT_PAGE_SIZE;
-      setHasMoreMessages(hasMore);
-      setPage(newPage + 1); // Tăng page lên 1 để lần sau load tin nhắn tiếp theo
+      // Set user ID for message API request
+      const currentUserId = user?._id;
       
-      // Force scroll to bottom on initial load only
-      if (newPage === 0) {
-        // Use a slightly longer delay to ensure rendering is complete
-        setTimeout(() => {
-          // Reset user scroll state since this is a fresh load
-          setUserScrolled(false);
-          setShouldAutoScroll(true);
-          scrollToBottom(true, true);
-        }, 500);
+      // Fetch messages from API
+      console.log(`Loading messages for conversation ${conversationId}, page ${page}, size ${DEFAULT_PAGE_SIZE}`);
+      const response = await conversationService.getMessages(
+        conversationId,
+        page,
+        DEFAULT_PAGE_SIZE,
+        currentUserId
+      );
+      
+      if (response && response.data) {
+        // Process message data after fetching
+        let messageData = response.data.map(msg => {
+          // Convert replyMessage from backend to replyToMessage for frontend if needed
+          if (msg.replyMessage && 
+              msg.replyMessage._id && 
+              typeof msg.replyMessage._id === 'string' && 
+              !msg.replyToMessage) {
+            console.log('Converting replyMessage to replyToMessage for message:', msg._id);
+            msg.replyToMessage = {
+              ...msg.replyMessage,
+              // Ensure sender data is mapped correctly
+              sender: msg.replyMessage.user || { 
+                _id: msg.replyMessage.userId,
+                name: 'Người dùng',
+              }
+            };
+          }
+          return msg;
+        });
+        
+        // Log thông tin về tin nhắn đã chuẩn hóa
+        console.log(`Standardized ${messageData.length} messages`);
+        
+        // Sắp xếp tin nhắn theo thời gian tăng dần (cũ đến mới) - đảm bảo tin nhắn cũ ở trên, tin nhắn mới ở dưới
+        messageData = messageData.sort((a, b) => {
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+
+        // Process reply information for messages
+        const messagesMap = new Map();
+        
+        // First, create a map of all messages by ID
+        messageData.forEach(msg => {
+          messagesMap.set(msg._id, msg);
+        });
+        
+        // Then, for each message with a replyToId, find the original message and associate it
+        messageData.forEach(msg => {
+          if (msg.replyToId) {
+            const originalMessage = messagesMap.get(msg.replyToId);
+            if (originalMessage) {
+              msg.replyToMessage = originalMessage;
+            }
+          }
+        });
+        
+        console.log('Messages after sorting by time:', 
+          messageData.slice(0, 3).map(m => ({ 
+            id: m._id?.substring(0, 8) || 'unknown', 
+            time: new Date(m.createdAt).toLocaleTimeString(),
+            content: m.content?.substring(0, 10) || 'empty'
+          }))
+        );
+        
+        if (refresh) {
+          // Xóa tin nhắn cũ và tải mới
+          setMessages(messageData);
+        } else if (Array.isArray(messages)) {
+          // Thêm tin nhắn mới vào cuối danh sách hiện tại
+          setMessages(prevMessages => [...prevMessages, ...messageData]);
+        } else {
+          // Nếu messages hiện tại không phải là một mảng
+          console.warn('Current messages is not an array, resetting to new data');
+          setMessages(messageData);
+        }
+        
+        // Chỉ cho tải thêm nếu có đủ tin nhắn theo kích thước trang
+        const hasMore = Array.isArray(messageData) && messageData.length === DEFAULT_PAGE_SIZE;
+        setHasMoreMessages(hasMore);
+        setPage(page + 1); // Tăng page lên 1 để lần sau load tin nhắn tiếp theo
+        
+        // Force scroll to bottom on initial load only
+        if (page === 0) {
+          // Use a slightly longer delay to ensure rendering is complete
+          setTimeout(() => {
+            // Reset user scroll state since this is a fresh load
+            setUserScrolled(false);
+            setShouldAutoScroll(true);
+            scrollToBottom(true, true);
+          }, 500);
+        }
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -513,6 +538,12 @@ const MessageScreen = ({navigation, route}) => {
         forceMyMessage: true, // Always set this flag for messages from current user
         status: 'sending', // Keep existing status property
       };
+
+      // Add reply information if this is a reply message
+      if (replyMessage.isReply && replyMessage.message) {
+        tempMessage.replyToMessage = replyMessage.message;
+        tempMessage.replyToId = replyMessage.message._id;
+      }
       
       // Add temporary message to the messages list for immediate display
       setMessages((prevMessages) => [tempMessage, ...prevMessages]);
@@ -556,6 +587,28 @@ const MessageScreen = ({navigation, route}) => {
         // Always mark as our message for proper display
         responseData.isMyMessage = true;
         responseData.forceMyMessage = true;
+        
+        // Convert replyMessage from backend to replyToMessage for frontend if needed
+        if (responseData.replyMessage && 
+            responseData.replyMessage._id && 
+            typeof responseData.replyMessage._id === 'string' && 
+            !responseData.replyToMessage) {
+          console.log('Converting server replyMessage to replyToMessage:', responseData.replyMessage);
+          responseData.replyToMessage = {
+            ...responseData.replyMessage,
+            // Ensure sender data is mapped correctly
+            sender: responseData.replyMessage.user || { 
+              _id: responseData.replyMessage.userId,
+              name: 'Người dùng',
+            }
+          };
+        }
+        // Preserve the replyToMessage data if this was a reply
+        else if (tempMessage.replyToMessage && 
+                tempMessage.replyToMessage._id && 
+                typeof tempMessage.replyToMessage._id === 'string') {
+          responseData.replyToMessage = tempMessage.replyToMessage;
+        }
         
         setMessages((prevMessages) => 
           prevMessages.map((msg) => 
@@ -891,6 +944,30 @@ const handleSendFileMessage = async (file) => {
     console.log('Previewing image:', imageUrl);
   };
 
+  // Function to scroll to a specific message by ID
+  const scrollToMessage = (messageId) => {
+    // Find the message in the list
+    const messageIndex = messages.findIndex(msg => msg._id === messageId);
+    
+    if (messageIndex !== -1) {
+      // The message exists, scroll to it
+      console.log(`Scrolling to message at index ${messageIndex}`);
+      
+      // Use flatListRef to scroll to the specific index
+      // Note: We need to calculate the position because the list is sorted from old to new (bottom to top)
+      flatListRef.current?.scrollToIndex({
+        index: messageIndex,
+        animated: true,
+        viewPosition: 0.5, // Center the item in the view
+      });
+      
+      // Highlight the message temporarily
+      // We could add a temporary highlight effect here if desired
+    } else {
+      console.log(`Message with ID ${messageId} not found for scrolling`);
+    }
+  };
+
   // Render message item
   const renderMessage = (message, index) => {
     // Đảm bảo tin nhắn hợp lệ
@@ -956,8 +1033,20 @@ const handleSendFileMessage = async (file) => {
         previewImage={handlePreviewImage}
         
         // Thống nhất các hàm callback với cách đặt tên thống nhất
-        onReply={(messageId) => handleOnReplyMessagePress(messageId)}
+        onReply={(msg) => {
+          console.log('MessageScreen - onReply được gọi với:', typeof msg, msg?._id || msg);
+          if (msg && typeof msg === 'object') {
+            // Nếu nhận được toàn bộ đối tượng tin nhắn
+            handleOnReplyMessagePress(msg._id);
+          } else {
+            // Nếu chỉ nhận được ID
+            handleOnReplyMessagePress(msg);
+          }
+        }}
         onPressRecall={(messageId) => handleRecallMessage(messageId)}
+        
+        // Add new prop for scrolling to original message
+        scrollToMessage={scrollToMessage}
       />
     );
   };

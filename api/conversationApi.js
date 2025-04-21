@@ -87,9 +87,25 @@ const conversationApi = {
         conversationId: messageData.conversationId,
         content: messageData.content,
         type: "TEXT", // Đảm bảo type là TEXT viết hoa
-        replyToId: messageData.replyToId || null,
         tempId: messageData.tempId || `temp-${Date.now()}` // Thêm tempId để tracking
       };
+      
+      // Xử lý trường hợp tin nhắn trả lời
+      // Ưu tiên replyMessageId nếu có
+      if (messageData.replyMessageId) {
+        requestBody.replyMessageId = messageData.replyMessageId;
+        console.log('Using existing replyMessageId:', requestBody.replyMessageId);
+      } 
+      // Sử dụng replyToId nếu không có replyMessageId
+      else if (messageData.replyToId) {
+        requestBody.replyMessageId = messageData.replyToId;
+        console.log('Using replyToId as replyMessageId:', requestBody.replyMessageId);
+      }
+      // Sử dụng replyToMessage._id nếu có replyToMessage object
+      else if (messageData.replyToMessage && messageData.replyToMessage._id) {
+        requestBody.replyMessageId = messageData.replyToMessage._id;
+        console.log('Using replyToMessage._id as replyMessageId:', requestBody.replyMessageId);
+      }
 
       // Sử dụng endpoint đúng từ backend CNM_Chat
       const response = await axiosClient.post(`${BASE_URL.replace('/conversations', '')}/messages/text`, requestBody, {
@@ -546,12 +562,11 @@ const conversationApi = {
         const senderId = typeof sender === 'object' ? (sender._id || sender.id || 'unknown-sender') : sender;
         
         // Xác định có phải là tin nhắn của tôi hay không
-        // Mặc định, tạo tin nhắn xen kẸ giữa tin nhắn của tôi và của người khác
-        const isMyMessage = message.index % 2 === 0;
-        console.log(`Message ${message._id || 'unknown'} is mine: ${isMyMessage}, sender: ${senderId}`);
+        // Mặc định, tin nhắn của tôi có isMyMessage=true nếu sender._id = currentUserId
+        const isMyMessage = typeof sender === 'object' && sender._id === myUserId;
         
-        // Chuẩn hóa tin nhắn
-        return {
+        // Tạo message object mới mà không thêm các trường không cần thiết
+        const normalizedMessage = {
           _id: message._id || message.id || `temp-${Date.now()}-${Math.random()}`,
           conversationId: message.conversationId || message.conversation_id || conversationId,
           content: message.content || message.text || '',
@@ -560,13 +575,35 @@ const conversationApi = {
           sender: sender,
           isDeleted: message.isDeleted || message.is_deleted || false,
           reactions: message.reactions || [],
-          fileUrl: message.fileUrl || message.file_url || message.url,
-          fileName: message.fileName || message.file_name,
-          // Gán trực tiếp isMyMessage cho tin nhắn - thuộc tính quan trọng
           isMyMessage: isMyMessage,
-          // Giữ nguyên các trường khác nếu có
-          ...message
         };
+        
+        // Chỉ thêm các trường liên quan đến file nếu có
+        if (message.fileUrl) normalizedMessage.fileUrl = message.fileUrl;
+        if (message.fileName) normalizedMessage.fileName = message.fileName;
+        if (message.fileType) normalizedMessage.fileType = message.fileType;
+        if (message.fileSize) normalizedMessage.fileSize = message.fileSize;
+        
+        // Chỉ thêm trường replyMessage, replyTo, hoặc replyToMessage nếu có trong dữ liệu gốc
+        // và có _id hợp lệ
+        if (message.replyMessage && message.replyMessage._id) {
+          normalizedMessage.replyMessage = message.replyMessage;
+        }
+        
+        if (message.replyTo && message.replyTo._id) {
+          normalizedMessage.replyTo = message.replyTo;
+        }
+        
+        if (message.replyToMessage && message.replyToMessage._id) {
+          normalizedMessage.replyToMessage = message.replyToMessage;
+        }
+        
+        if (message.replyMessageId) {
+          normalizedMessage.replyMessageId = message.replyMessageId;
+        }
+        
+        console.log(`Normalized message ${normalizedMessage._id}, isMyMessage: ${normalizedMessage.isMyMessage}`);
+        return normalizedMessage;
       }).filter(Boolean); // Loại bỏ các tin nhắn không hợp lệ (null)
       
       console.log(`Processed ${messagesData.length} messages after normalization`);

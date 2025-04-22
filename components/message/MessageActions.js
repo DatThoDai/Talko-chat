@@ -10,6 +10,8 @@ import {
   Animated,
   Dimensions,
   Vibration,
+  Platform,
+  ToastAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -30,6 +32,8 @@ const MessageActions = ({
   navigation = {},
   conversationId = '',
   position = null,
+  showCopyOption = true,
+  showRecallOption = true,
 }) => {
   const [loading, setLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
@@ -112,7 +116,44 @@ const MessageActions = ({
 
   // Handle message copy
   const handleCopy = () => {
-    onSelect(message.content);
+    // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
+    let textToCopy = '';
+    
+    // Thử lấy nội dung từ nhiều nguồn khác nhau
+    if (typeof message === 'string') {
+      // Nếu message là string, dùng trực tiếp
+      textToCopy = message;
+    } else if (message) {
+      // Thử các trường khác nhau có thể chứa nội dung
+      textToCopy = message.content || 
+                  message.text || 
+                  message.message || 
+                  (typeof message === 'object' ? JSON.stringify(message) : '') || 
+                  '';
+    }
+    
+    // Ghi log để debug
+    console.log('[MessageActions] Sao chép nội dung:', { 
+      messageType: typeof message,
+      messageContent: message?.content,
+      textToCopy: textToCopy
+    });
+    
+    if (textToCopy) {
+      onSelect(textToCopy);
+      
+      // Thông báo thành công dựa trên nền tảng
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      }
+    } else {
+      // Thông báo lỗi nếu không có nội dung để sao chép
+      console.warn('[MessageActions] Không có nội dung để sao chép');
+      Alert.alert('Thông báo', 'Không có nội dung để sao chép');
+    }
+    
     handleClose();
   };
 
@@ -316,7 +357,7 @@ const MessageActions = ({
             ]}
           >
             <View style={styles.bubbleArrow} />
-            {/* Top row - 3 buttons */}
+            {/* Top row - exact 3 buttons */}
             <View style={styles.actionsRow}>
               {/* Reply button */}
               <TouchableOpacity onPress={handleReply} style={styles.actionButton}>
@@ -326,24 +367,28 @@ const MessageActions = ({
                 <Text style={styles.actionText}>Trả lời</Text>
               </TouchableOpacity>
 
-              {/* Copy button - only for text messages */}
-              {message.type === 'TEXT' ? (
+              {/* Copy button */}
+              {showCopyOption && (
                 <TouchableOpacity onPress={handleCopy} style={styles.actionButton}>
                   <View style={[styles.iconContainer, styles.copyIcon]}>
                     <FontAwesome name="copy" size={16} color="#ffffff" />
                   </View>
                   <Text style={styles.actionText}>Sao chép</Text>
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
-                  <View style={[styles.iconContainer, styles.forwardIcon]}>
-                    <FontAwesome name="share" size={16} color="#ffffff" />
-                  </View>
-                  <Text style={styles.actionText}>Chuyển</Text>
-                </TouchableOpacity>
               )}
-
-              {/* Pin/Unpin Button */}
+              
+              {/* Forward button - always show for all message types */}
+              <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
+                <View style={[styles.iconContainer, styles.forwardIcon]}>
+                  <FontAwesome name="share" size={16} color="#ffffff" />
+                </View>
+                <Text style={styles.actionText}>Chuyển</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Bottom row - exact 3 buttons */}
+            <View style={styles.actionsRow}>
+              {/* Pin/Unpin Button - moved to second row */}
               {!isDeleted && !isRecalled && (
                 message.isPinned ? (
                   <TouchableOpacity onPress={handleUnpin} style={styles.actionButton} disabled={loading}>
@@ -361,22 +406,9 @@ const MessageActions = ({
                   </TouchableOpacity>
                 )
               )}
-            </View>
-            
-            {/* Bottom row - 3 buttons */}
-            <View style={styles.actionsRow}>
-              {/* If it's a text message, show Forward here (to balance the rows) */}
-              {message.type === 'TEXT' && (
-                <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
-                  <View style={[styles.iconContainer, styles.forwardIcon]}>
-                    <FontAwesome name="share" size={16} color="#ffffff" />
-                  </View>
-                  <Text style={styles.actionText}>Chuyển</Text>
-                </TouchableOpacity>
-              )}
               
               {/* Recall button - only for my messages */}
-              {isMyMessage && !isDeleted && !isRecalled && onPressRecall !== null ? (
+              {isMyMessage && !isDeleted && !isRecalled && onPressRecall !== null && showRecallOption ? (
                 <TouchableOpacity onPress={handleRecall} style={styles.actionButton} disabled={loading}>
                   <View style={[styles.iconContainer, styles.recallIcon]}>
                     <FontAwesome name="history" size={16} color="#ffffff" />

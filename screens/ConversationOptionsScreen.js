@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,13 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, typography, borderRadius } from '../styles';
+import { conversationApi, userService } from '../api'; // Thêm userService
+import { useSelector } from 'react-redux'; // Import để lấy user ID
 
 const OptionItem = ({ icon, title, onPress, color = colors.dark }) => {
   return (
@@ -22,14 +25,92 @@ const OptionItem = ({ icon, title, onPress, color = colors.dark }) => {
 
 const ConversationOptionsScreen = ({ route, navigation }) => {
   const { conversationId, name, type = 'private' } = route.params || {};
+  const [isLoading, setIsLoading] = useState({
+    notifications: false,
+    leave: false,
+    delete: false,
+  });
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const { user } = useSelector(state => state.auth);
+  const userId = user?._id;
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false); // Thêm state này
+
+  useEffect(() => {
+    // Giả định trạng thái mặc định là "đã bật thông báo"
+    setNotificationEnabled(true);
+    
+    // Debug thông tin để xác nhận params
+    console.log('ConversationOptions loaded with params:', {
+      conversationId,
+      name,
+      type,
+      isGroupParam: route.params?.isGroupChat
+    });
+    
+    // Thêm kiểm tra vai trò nếu là nhóm
+    if (type === 'group' || route.params?.isGroupChat) {
+      checkUserRole();
+    }
+    
+  }, [conversationId]);
+
+  // Thêm hàm mới để kiểm tra vai trò
+  const checkUserRole = async () => {
+    try {
+      const response = await conversationApi.fetchConversation(conversationId);
+      
+      if (response?.data) {
+        // Lấy leaderId từ response
+        const leaderId = response.data.leaderId;
+        let leaderIdString = '';
+        
+        // Xử lý cả trường hợp leaderId là string hoặc object MongoDB
+        if (typeof leaderId === 'object' && leaderId.$oid) {
+          leaderIdString = leaderId.$oid;
+        } else {
+          leaderIdString = String(leaderId);
+        }
+        
+        let userIdToCompare = userId;
+        
+        // Nếu userId là email, cần lấy ID thực từ API
+        if (userId && userId.includes('@')) {
+          try {
+            const userResponse = await userService.searchByUsername(userId);
+            if (userResponse && userResponse.data && userResponse.data._id) {
+              userIdToCompare = String(userResponse.data._id);
+            }
+          } catch (error) {
+            console.error('Error getting real user ID:', error);
+          }
+        }
+        
+        // So sánh ID để xác định người dùng có phải là trưởng nhóm không
+        const isAdmin = String(userIdToCompare) === leaderIdString;
+        setIsGroupAdmin(isAdmin);
+        
+        console.log('User role check:', {
+          userIdToCompare,
+          leaderId: leaderIdString,
+          isAdmin
+        });
+      }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+    }
+  };
 
   const handleClose = () => {
     navigation.goBack();
   };
 
   const handleViewMembers = () => {
-    navigation.navigate('Member', { conversationId, name });
-    navigation.goBack();
+    navigation.navigate('Member', { 
+      conversationId, 
+      name,
+      isGroup: type === 'group' || Boolean(route.params?.isGroupChat)
+    });
+    // Xóa dòng navigation.goBack() ở đây vì nó sẽ làm người dùng quay lại trước khi thấy màn hình Member
   };
 
   const handleViewMedia = () => {
@@ -38,16 +119,47 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     navigation.goBack();
   };
 
-  const handleNotifications = () => {
-    // In a real app, toggle or configure notifications
-    Alert.alert('Tính năng đang phát triển', 'Tính năng này sẽ sớm được cập nhật');
-    navigation.goBack();
+  const handleNotifications = async () => {
+    try {
+      setIsLoading(prev => ({ ...prev, notifications: true }));
+      
+      // Toggle trạng thái thông báo và gọi API
+      const newNotificationState = !notificationEnabled;
+      
+      // Gọi API để cập nhật trạng thái thông báo
+      await conversationApi.updateNotify(conversationId, newNotificationState);
+      
+      // Cập nhật state local
+      setNotificationEnabled(newNotificationState);
+      
+      // Hiển thị thông báo thành công bằng Alert thay vì Toast
+      Alert.alert(
+        'Thông báo', 
+        'Thông báo đã được ' + (newNotificationState ? 'bật' : 'tắt')
+      );
+    } catch (error) {
+      console.error('Error updating notifications:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái thông báo');
+    } finally {
+      setIsLoading(prev => ({ ...prev, notifications: false }));
+    }
   };
 
   const LEAVE_GROUP_MESSAGE = 'Bạn có chắc chắn muốn rời khỏi nhóm không?';
   const DELETE_GROUP_MESSAGE = 'Bạn có chắc chắn muốn xóa cuộc trò chuyện này không? Hành động này không thể hoàn tác.';
 
   const handleLeaveGroup = () => {
+    // Kiểm tra nếu người dùng là trưởng nhóm
+    if (isGroupAdmin) {
+      Alert.alert(
+        'Không thể rời nhóm',
+        'Bạn đang là nhóm trưởng không thể rời nhóm. Vui lòng chuyển quyền trưởng nhóm cho người khác trước khi rời nhóm.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
+    
+    // Tiếp tục với code hiện tại nếu không phải trưởng nhóm
     Alert.alert(
       'Rời nhóm',
       LEAVE_GROUP_MESSAGE,
@@ -59,10 +171,32 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
         {
           text: 'Rời nhóm',
           style: 'destructive',
-          onPress: () => {
-            // In a real app, make API call to leave group
-            navigation.goBack();
-            // Không navigate to Home ở đây, chỉ cần goBack
+          onPress: async () => {
+            try {
+              setIsLoading(prev => ({ ...prev, leave: true }));
+              
+              // Gọi API để rời nhóm
+              await conversationApi.leaveGroup(conversationId);
+              
+              // Hiển thị thông báo thành công bằng Alert thay vì Toast
+              Alert.alert('Thông báo', 'Đã rời nhóm thành công');
+              
+              // Quay lại và điều hướng đến màn hình cuộc trò chuyện
+              navigation.pop(2); // Pop cả màn hình options và message
+              navigation.navigate('Tin nhắn'); // Quay về tab tin nhắn
+            } catch (error) {
+              console.error('Error leaving group:', error);
+              
+              // Kiểm tra lỗi cụ thể
+              let errorMessage = 'Không thể rời nhóm. Vui lòng thử lại sau.';
+              if (error.response?.data?.message === "Cant't leave group") {
+                errorMessage = 'Bạn đang là nhóm trưởng không thể rời nhóm.';
+              }
+              
+              Alert.alert('Lỗi', errorMessage);
+            } finally {
+              setIsLoading(prev => ({ ...prev, leave: false }));
+            }
           }
         },
       ]
@@ -71,7 +205,7 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
 
   const handleDelete = () => {
     Alert.alert(
-      'Xóa cuộc trò chuyện',
+      'Giải tán nhóm',
       DELETE_GROUP_MESSAGE,
       [
         {
@@ -81,14 +215,39 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
         {
           text: 'Xóa',
           style: 'destructive',
-          onPress: () => {
-            // In a real app, make API call to delete conversation
-            navigation.goBack();
-            // Không navigate to Home ở đây, chỉ cần goBack
+          onPress: async () => {
+            try {
+              setIsLoading(prev => ({ ...prev, delete: true }));
+              
+              // Gọi API khác nhau tùy thuộc vào loại cuộc trò chuyện
+              if (type === 'group') {
+                // Xóa nhóm (chỉ admin mới có thể xóa nhóm)
+                await conversationApi.deleteGroup(conversationId);
+              } else {
+                // Xóa tất cả tin nhắn trong cuộc trò chuyện cá nhân
+                await conversationApi.deleteAllMessage(conversationId);
+              }
+              
+              // Hiển thị thông báo thành công bằng Alert thay vì Toast
+              Alert.alert('Thông báo', 'Đã giải tán nhóm thành công');
+              
+              // Quay lại và điều hướng đến màn hình cuộc trò chuyện
+              navigation.pop(2); // Pop cả màn hình options và message
+              navigation.navigate('Tin nhắn'); // Quay về tab tin nhắn
+            } catch (error) {
+              console.error('Error deleting conversation:', error);
+              Alert.alert('Lỗi', 'Không thể giải tán nhóm. Vui lòng thử lại sau.');
+            } finally {
+              setIsLoading(prev => ({ ...prev, delete: false }));
+            }
           }
         },
       ]
     );
+  };
+
+  const handleCreateVote = () => {
+    navigation.navigate('CreateVote', { conversationId });
   };
 
   return (
@@ -114,6 +273,14 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           />
         )}
         
+        {(type === 'group' || route.params?.isGroupChat) && (
+          <OptionItem
+            icon="poll"
+            title="Tạo bình chọn"
+            onPress={handleCreateVote}
+          />
+        )}
+        
         <OptionItem
           icon="photo-library"
           title="Xem ảnh, video và files"
@@ -126,7 +293,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           onPress={handleNotifications}
         />
         
-        {type === 'group' && (
+        {/* Chỉ hiển thị nút "Rời nhóm" nếu không phải trưởng nhóm */}
+        {type === 'group' && !isGroupAdmin && (
           <OptionItem
             icon="exit-to-app"
             title="Rời nhóm"
@@ -135,12 +303,25 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           />
         )}
         
-        <OptionItem
-          icon="delete"
-          title="Xóa cuộc trò chuyện"
-          onPress={handleDelete}
-          color={colors.danger}
-        />
+        {/* Nếu là trưởng nhóm, chỉ hiển thị "Giải tán nhóm" */}
+        {type === 'group' && isGroupAdmin && (
+          <OptionItem
+            icon="delete"
+            title="Giải tán nhóm"
+            onPress={handleDelete}
+            color={colors.danger}
+          />
+        )}
+        
+        {/* Nếu là chat 1-1, hiển thị "Xóa cuộc trò chuyện" */}
+        {type !== 'group' && (
+          <OptionItem
+            icon="delete"
+            title="Xóa cuộc trò chuyện"
+            onPress={handleDelete}
+            color={colors.danger}
+          />
+        )}
       </View>
     </SafeAreaView>
   );

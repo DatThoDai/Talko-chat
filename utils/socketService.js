@@ -9,6 +9,9 @@ import {
   updateMessages,
 } from '../redux/chatSlice';
 
+// Thêm vào đầu file socketService.js:
+let flag = true; // Thêm biến flag
+
 // Khai báo biến để lưu store sau này
 let storeInstance = null;
 
@@ -182,10 +185,22 @@ const setupSocketEventHandlers = () => {
   });
 
   // Handle message events
-  socket.on('new-message', (newMessage) => {
-    console.log('New message received:', newMessage._id);
+  socket.on('new-message', (conversationId, message) => {
+    console.log('new-message received');
     if (storeInstance) {
-      storeInstance.dispatch(addNewMessage(newMessage));
+      // Sử dụng storeInstance thay vì dispatch trực tiếp
+      storeInstance.dispatch(addNewMessage({conversationId, message}));
+      
+      // Lấy currentUserId từ store
+      const state = storeInstance.getState();
+      const currentUserId = state.auth?.user?._id;
+      if (currentUserId) {
+        storeInstance.dispatch(setNotification({
+          conversationId, 
+          message, 
+          userId: currentUserId
+        }));
+      }
     }
   });
 
@@ -194,6 +209,11 @@ const setupSocketEventHandlers = () => {
     if (storeInstance) {
       storeInstance.dispatch(updateMessage(updatedMessage));
     }
+  });
+
+  socket.on('update-vote-message', (conversationId, message) => {
+    console.log('update-vote-message');
+    dispatch(updateVoteMessage({conversationId, message}));
   });
 
   // Handle message recall events
@@ -338,7 +358,7 @@ export const joinConversation = (conversationId) => {
   }
   
   console.log(`Joining conversation: ${conversationId}`);
-  socket.emit('join-conversation', { conversationId });
+  socket.emit('join-conversation', conversationId);
   return true;
 };
 
@@ -360,7 +380,7 @@ export const joinConversations = (conversationIds) => {
   }
   
   console.log(`Joining ${conversationIds.length} conversations`);
-  socket.emit('join-conversations', { conversationIds });
+  socket.emit('join-conversations', conversationIds);
   return true;
 };
 
@@ -372,7 +392,7 @@ export const leaveConversation = (conversationId) => {
   }
   
   console.log(`Leaving conversation: ${conversationId}`);
-  socket.emit('leave-conversation', { conversationId });
+  socket.emit('leave-conversation', conversationId);
   return true;
 };
 
@@ -383,7 +403,8 @@ export const emitTyping = (isTyping, conversationId) => {
     return false;
   }
   
-  socket.emit('typing', { conversationId, isTyping });
+  const user = storeInstance ? storeInstance.getState().auth.user : null;
+  socket.emit('typing', conversationId, user);
   return true;
 };
 
@@ -419,6 +440,18 @@ const handleTypingEvent = (conversationId, user, isTyping) => {
     conversationId,
     typingUsers: conversationTypingUsers,
   }));
+};
+
+// Emit not typing event
+export const emitNotTyping = (conversationId) => {
+  if (!socket || !socket.connected || !conversationId) {
+    console.log(`Cannot emit not typing for conversation ${conversationId}: socket not connected`);
+    return false;
+  }
+  
+  const user = storeInstance ? storeInstance.getState().auth.user : null;
+  socket.emit('not-typing', conversationId, user);
+  return true;
 };
 
 // Disconnect socket
@@ -458,6 +491,33 @@ export const isSocketConnected = () => {
   }
 };
 
+// Thêm vào cuối file trước export default
+export const getSocket = () => {
+  return socket;
+};
+
+// Thêm phương thức on và off
+export const on = (event, callback) => {
+  if (!socket) {
+    console.log(`Cannot register event ${event}: socket is null`);
+    return false;
+  }
+  
+  socket.on(event, callback);
+  return true;
+};
+
+export const off = (event, callback) => {
+  if (!socket) {
+    console.log(`Cannot unregister event ${event}: socket is null`);
+    return false;
+  }
+  
+  socket.off(event, callback);
+  return true;
+};
+
+// Cập nhật export default để bao gồm các phương thức mới
 export default {
   initiateSocket,
   joinConversation,
@@ -466,4 +526,8 @@ export default {
   emitTyping,
   disconnectSocket,
   isSocketConnected,
+  getSocket, // Thêm phương thức này
+  on,        // Thêm phương thức này
+  off,       // Thêm phương thức này
+  emitNotTyping // Thêm phương thức này
 };

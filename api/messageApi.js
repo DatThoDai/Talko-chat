@@ -58,12 +58,24 @@ const messageApi = {
         console.log('Using replyToMessage._id as replyMessageId:', message.replyToMessage._id);
       }
 
-      // Bước 4: Thêm trường forwardedMessage nếu có
-      if (message.forwardedMessage) {
-        requestBody.metadata = {
-          isForwarded: true,
-          forwardedAt: new Date()
-        };
+      // Bước 4: Xử lý tin nhắn chuyển tiếp - đảm bảo đầy đủ các trường metadata
+      if (message.forwardedMessage === true || 
+          message.metadata?.isForwarded === true || 
+          (typeof message.forwardedMessage === 'string' && message.forwardedMessage === 'true') ||
+          message.content?.startsWith('📤 Tin nhắn được chuyển tiếp:')) {
+        
+        // Luôn gán metadata.isForwarded = true cho tin nhắn chuyển tiếp
+        if (!requestBody.metadata) {
+          requestBody.metadata = {};
+        }
+        
+        requestBody.metadata.isForwarded = true;
+        requestBody.metadata.forwardedAt = new Date().toISOString();
+        
+        // Đánh dấu gộp forwardedMessage nếu chưa có
+        requestBody.forwardedMessage = true;
+        
+        console.log('Set metadata for forwarded message:', requestBody.metadata);
       }
       
       // Bước 5: Log chi tiết truyền gửi để debug
@@ -209,15 +221,32 @@ const messageApi = {
 
   forwardMessage: async (messageId, targetConversationId, originalContent, messageType = 'TEXT') => {
     try {
-      console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`);
+      console.log(`Forwarding message ${messageId} to conversation ${targetConversationId}`, {
+        messageType,
+        originalContent: typeof originalContent === 'string' ? 
+          (originalContent.length > 30 ? originalContent.substring(0, 30) + '...' : originalContent) : 
+          'non-string content'
+      });
+      
+      // Xuất ra các giá trị truyền vào để debug
+      if (!targetConversationId) {
+        console.error('Missing targetConversationId! Cannot forward message.');
+      }
       
       // Trước hết, thử sử dụng API chia sẻ tin nhắn có sẵn nếu có messageId
       if (messageId && messageId !== 'undefined' && messageId !== 'null') {
         try {
           console.log('Trying to use share message API with messageId:', messageId);
           const shareUrl = `${BASE_URL}/${messageId}/share/${targetConversationId}`;
-          const shareResponse = await api.post(shareUrl);
-          console.log('Successfully shared message using API:', shareResponse);
+          
+          // Thêm metadata vào request
+          const requestBody = {
+            metadata: { isForwarded: true },
+            forwardedMessage: true
+          };
+          
+          const shareResponse = await api.post(shareUrl, requestBody);
+          console.log('Successfully shared message using API:', shareResponse?.data);
           return shareResponse;
         } catch (shareError) {
           console.error('Error using share API, falling back to manual forward:', shareError.message);
@@ -228,6 +257,8 @@ const messageApi = {
       // Thiết lập prefix cho tin nhắn được chuyển tiếp
       let prefix = '📤 Tin nhắn được chuyển tiếp: \n';
       let actualContent = originalContent || '';
+      
+      console.log('Setting up forwarded message with prefix:', prefix);
       
       // Không có API /messages/{id}/forward, nên chúng ta sẽ:
       // 1. Sử dụng nội dung message gốc được truyền từ UI
@@ -245,6 +276,26 @@ const messageApi = {
         formData.append('type', 'IMAGE');
         formData.append('conversationId', targetConversationId);
         formData.append('forwardedMessage', 'true'); // Đánh dấu là tin nhắn được chuyển tiếp
+        
+        // Đảm bảo metadata được truyền đầy đủ và rõ ràng 
+        const metadataObj = {isForwarded: true, forwardedAt: new Date().toISOString()};
+        formData.append('metadata', JSON.stringify(metadataObj));
+        
+        // Truyền thêm metadata vào URL params để đảm bảo
+        try {
+          // Gắn metadata vào cả Header để tăng khả năng thành công
+          formData.append('metadataHeader', JSON.stringify(metadataObj));
+          // Không gắn trực tiếp vào URL vì gây lỗi URL dài với JSON lớn
+        } catch (metaErr) {
+          console.warn('Could not append metadata to URL:', metaErr.message);
+        }
+        
+        // Xác nhận đã bổ sung đầy đủ thông tin chuyển tiếp 
+        console.log('Image forward data:', {
+          forwardedMessage: 'true',
+          metadata: JSON.stringify({isForwarded: true}),
+          url: `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=IMAGE&forwardedMessage=true`
+        });
         
         // Sửa URL để khớp với format API của backend
         const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=IMAGE&forwardedMessage=true`;
@@ -269,6 +320,25 @@ const messageApi = {
         formData.append('conversationId', targetConversationId);
         formData.append('forwardedMessage', 'true');
         
+        // Đảm bảo metadata được truyền đầy đủ và rõ ràng 
+        const metadataObj = {isForwarded: true, forwardedAt: new Date().toISOString()};
+        formData.append('metadata', JSON.stringify(metadataObj));
+        
+        // Truyền thêm metadata vào URL params để đảm bảo
+        try {
+          // Gắn metadata vào cả Header để tăng khả năng thành công
+          formData.append('metadataHeader', JSON.stringify(metadataObj));
+        } catch (metaErr) {
+          console.warn('Could not append metadata to URL:', metaErr.message);
+        }
+        
+        // Xác nhận đã bổ sung đầy đủ thông tin chuyển tiếp 
+        console.log('Video forward data:', {
+          forwardedMessage: 'true',
+          metadata: JSON.stringify(metadataObj),
+          url: `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=VIDEO&forwardedMessage=true`
+        });
+        
         // Sửa URL để khớp với format API của backend
         const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=VIDEO&forwardedMessage=true`;
         const config = {
@@ -291,6 +361,25 @@ const messageApi = {
         formData.append('type', 'FILE');
         formData.append('conversationId', targetConversationId);
         formData.append('forwardedMessage', 'true');
+        
+        // Đảm bảo metadata được truyền đầy đủ và rõ ràng 
+        const metadataObj = {isForwarded: true, forwardedAt: new Date().toISOString()};
+        formData.append('metadata', JSON.stringify(metadataObj));
+        
+        // Truyền thêm metadata vào URL params để đảm bảo
+        try {
+          // Gắn metadata vào cả Header để tăng khả năng thành công
+          formData.append('metadataHeader', JSON.stringify(metadataObj));
+        } catch (metaErr) {
+          console.warn('Could not append metadata to URL:', metaErr.message);
+        }
+        
+        // Xác nhận đã bổ sung đầy đủ thông tin chuyển tiếp 
+        console.log('File forward data:', {
+          forwardedMessage: 'true',
+          metadata: JSON.stringify(metadataObj),
+          url: `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=FILE&forwardedMessage=true`
+        });
         
         // Sửa URL để khớp với format API của backend
         const url = `/messages/files?conversationId=${encodeURIComponent(targetConversationId)}&type=FILE&forwardedMessage=true`;
@@ -317,7 +406,10 @@ const messageApi = {
           conversationId: targetConversationId,
           content: prefix + actualContent, // Thêm prefix để biết đây là tin nhắn được chuyển tiếp
           type: 'TEXT', // Luôn sử dụng TEXT cho loại tin nhắn thông thường
-          forwardedMessage: true // Thêm thuộc tính đánh dấu là tin nhắn được chuyển tiếp
+          forwardedMessage: true, // Đánh dấu là tin nhắn được chuyển tiếp (cho tương thích ngược)
+          metadata: {
+            isForwarded: true, // Đánh dấu chính xác trong metadata để component hiển thị đúng
+          }
         };
         
         // Forward nội dung qua sendMessage API

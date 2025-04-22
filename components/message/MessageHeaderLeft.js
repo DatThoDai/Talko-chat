@@ -14,10 +14,12 @@ const MessageHeaderLeft = ({
   conversationName = 'Cuộc trò chuyện', 
   avatar = null, 
   avatarColor = '#1982FC', 
+  isGroup = false, 
   onBack = () => {}, 
   onPress = () => {} 
 }) => {
   console.log('[MessageHeaderLeft] Rendering with:', conversationName);
+  console.log('[MessageHeaderLeft] Rendering with name:', conversationName, 'isGroup:', isGroup);
   
   return (
     <View style={styles.container}>
@@ -33,18 +35,32 @@ const MessageHeaderLeft = ({
         style={styles.profileSection}
         onPress={onPress}>
         
-        {/* Avatar */}
-        <CustomAvatar
-          size={36}
-          name={conversationName}
-          avatarColor={avatarColor}
-          imageUrl={avatar}
-        />
+        {/* Avatar - hiển thị khác nhau dựa trên isGroup */}
+        {isGroup ? (
+          <View style={styles.groupAvatarContainer}>
+            <CustomAvatar
+              size={36}
+              name={conversationName}
+              avatarColor={avatarColor}
+              imageUrl={avatar}
+            />
+            <Icon name="people" size={16} color="#fff" style={styles.groupIcon} />
+          </View>
+        ) : (
+          <CustomAvatar
+            size={36}
+            name={conversationName}
+            avatarColor={avatarColor}
+            imageUrl={avatar}
+          />
+        )}
         
         {/* Text information */}
         <View style={styles.textSection}>
-          <Text style={styles.nameText}>{conversationName}</Text>
-          <Text style={styles.statusText}>Đang hoạt động</Text>
+          <Text style={styles.nameText}>{conversationName || 'Cuộc trò chuyện'}</Text>
+          <Text style={styles.statusText}>
+            {isGroup ? 'Nhóm chat' : 'Đang hoạt động'}
+          </Text>
         </View>
       </TouchableOpacity>
     </View>
@@ -55,9 +71,11 @@ MessageHeaderLeft.propTypes = {
   conversationName: PropTypes.string,
   avatar: PropTypes.string,
   avatarColor: PropTypes.string,
+  isGroup: PropTypes.bool,
   onBack: PropTypes.func,
   onPress: PropTypes.func,
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -95,6 +113,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.8,
     marginTop: 2,
+  },
+  groupAvatarContainer: {
+    position: 'relative',
+  },
+  groupIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#1982FC',
+    borderRadius: 8,
+    padding: 2,
   },
 });
 

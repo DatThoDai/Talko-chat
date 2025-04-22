@@ -10,88 +10,86 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, typography } from '../styles';
-//import UserItem from '../components/UserItem';
+import CustomAvatar from '../components/CustomAvatar';
 import { useSelector } from 'react-redux';
-import { userService, conversationService, friendService } from '../api';
+import friendApi from '../api/friendApi';
+import conversationApi from '../api/conversationApi';
 
 const NewConversationScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
-  const [users, setUsers] = useState([]);
+  const [allFriends, setAllFriends] = useState([]); // Danh sách tất cả bạn bè
+  const [users, setUsers] = useState([]); // Danh sách bạn bè đã lọc theo tìm kiếm
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [isGroup, setIsGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Bắt đầu với loading
   
   const { user: currentUser } = useSelector(state => state.auth);
   
-  // Load users when search text changes (with debounce)
+  // Load danh sách bạn bè khi màn hình được khởi tạo
   useEffect(() => {
-    if (searchText.trim().length < 2) {
-      setUsers([]);
-      setIsSearching(false);
+    const fetchFriends = async () => {
+      setIsLoading(true);
+      try {
+        const response = await friendApi.fetchFriends();
+        if (response && response.data) {
+          console.log('Loaded friends:', response.data.length);
+          setAllFriends(response.data);
+          setUsers(response.data); // Hiển thị tất cả bạn bè ban đầu
+        } else {
+          console.log('No friends data received');
+          setAllFriends([]);
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error('Error fetching friends:', error);
+        Alert.alert('Lỗi', 'Không thể tải danh sách bạn bè. Vui lòng thử lại sau.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchFriends();
+  }, []);
+  
+  // Tìm kiếm bạn bè từ danh sách local
+  useEffect(() => {
+    // Lọc danh sách bạn bè theo từ khóa tìm kiếm
+    if (searchText.trim() === '') {
+      // Hiển thị tất cả bạn bè trừ những người đã được chọn
+      const unselectedFriends = allFriends.filter(friend => 
+        !selectedUsers.some(selected => selected._id === friend._id)
+      );
+      setUsers(unselectedFriends);
       return;
     }
     
-    const timer = setTimeout(() => {
-      searchUsers();
-    }, 500);
+    const lowerCaseSearch = searchText.toLowerCase();
+    const filteredUsers = allFriends.filter(friend => 
+      // Chỉ hiển thị bạn bè chưa được chọn và tên/username khớp với từ khóa
+      !selectedUsers.some(selected => selected._id === friend._id) &&
+      ((friend.name && friend.name.toLowerCase().includes(lowerCaseSearch)) || 
+      (friend.username && friend.username.toLowerCase().includes(lowerCaseSearch)) ||
+      (friend.email && friend.email.toLowerCase().includes(lowerCaseSearch)))
+    );
     
-    return () => clearTimeout(timer);
-  }, [searchText]);
+    setUsers(filteredUsers);
+  }, [searchText, allFriends, selectedUsers]);
   
-  // Search for users with mock data
-  const searchUsers = async () => {
-    if (searchText.trim().length < 2) return;
-    
-    setIsSearching(true);
-    
-    try {
-      console.log('Searching users with query:', searchText);
-      
-      // Dữ liệu mẫu thay thế cho API call
-      const mockUsers = [
-        { _id: '1', username: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@example.com', avatar: null },
-        { _id: '2', username: 'user_2', name: 'Trần Thị B', email: 'tranthib@example.com', avatar: null },
-        { _id: '3', username: 'user_3', name: 'Lê Văn C', email: 'levanc@example.com', avatar: null },
-        { _id: '4', username: 'user_4', name: 'Phạm Thị D', email: 'phamthid@example.com', avatar: null },
-        { _id: '5', username: 'user_5', name: 'Hoàng Văn E', email: 'hoangvane@example.com', avatar: null },
-      ];
-      
-      // Lọc kết quả theo các ký tự được nhập
-      const filteredMockUsers = mockUsers.filter(user => 
-        user.name.toLowerCase().includes(searchText.toLowerCase()) || 
-        user.username.toLowerCase().includes(searchText.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchText.toLowerCase())
-      );
-      
-      // Đợi 1s để giả lập API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Filter out current user and already selected users
-      const filteredUsers = filteredMockUsers.filter(user => 
-        user._id !== (currentUser?._id || '0') && 
-        !selectedUsers.some(selected => selected._id === user._id)
-      );
-      
-      console.log(`Found ${filteredUsers.length} users matching search criteria`);
-      setUsers(filteredUsers);
-    } catch (error) {
-      console.error('Error searching users:', error);
-      setUsers([]); 
-    } finally {
-      setIsSearching(false);
+  // Thêm useEffect để tự động bật chức năng nhóm khi có từ 2 người được chọn
+  useEffect(() => {
+    // Nếu người dùng chọn từ 2 người trở lên, tự động bật chế độ nhóm
+    if (selectedUsers.length >= 2 && !isGroup) {
+      setIsGroup(true);
     }
-  };
-  
+  }, [selectedUsers]);
+
   // Handle user selection
   const handleSelectUser = (user) => {
     setSelectedUsers([...selectedUsers, user]);
-    setUsers(users.filter(u => u._id !== user._id));
-    setSearchText('');
+    setSearchText(''); // Xóa ô tìm kiếm sau khi chọn
   };
   
   // Handle removing a selected user
@@ -99,7 +97,7 @@ const NewConversationScreen = ({ navigation }) => {
     setSelectedUsers(selectedUsers.filter(u => u._id !== user._id));
   };
   
-  // Handle creating a conversation with mock data
+  // Xử lý tạo cuộc trò chuyện mới
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) {
       Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một người dùng.');
@@ -114,36 +112,33 @@ const NewConversationScreen = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Tạo ObjectId hợp lệ cho MongoDB (24 ký tự hex)
-      const objectIdHex = [
-        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
-        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
-        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0'),
-        Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0')
-      ].join('');
-      const mockConversationId = objectIdHex;
-      const conversationName = isGroup ? groupName.trim() : selectedUsers[0].name;
+      const participantIds = selectedUsers.map(user => user._id);
       
-      console.log('Creating mock conversation with ID:', mockConversationId);
-      console.log('Conversation details:', {
-        name: conversationName,
-        isGroup: isGroup,
-        selectedUsers: selectedUsers.map(u => u.name || u.username)
-      });
+      let response;
+      if (isGroup) {
+        response = await conversationApi.createGroup(groupName.trim(), participantIds);
+      } else {
+        const userId = participantIds[0];
+        response = await conversationApi.addConversation(userId);
+      }
       
-      // Giả lập thời gian API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Chuyển đến màn hình MessageScreen với dữ liệu mẫu
-      navigation.replace('MessageScreen', {
-        conversationId: mockConversationId,
-        name: conversationName,
-        conversationName: conversationName,
-        isGroup: isGroup,
-        avatar: null,
-        avatarColor: '#' + Math.floor(Math.random()*16777215).toString(16),
-        participants: selectedUsers
-      });
+      if (response && response.data) {
+        const conversation = response.data;
+        console.log('Conversation created:', conversation);
+        
+        navigation.replace('MessageScreen', {
+          conversationId: conversation._id,
+          name: groupName,
+          conversationName: groupName || conversation.name,
+          isGroup: true, // Bắt buộc set true khi là nhóm
+          isGroupChat: true, // Thêm prop này
+          avatar: conversation.avatar || '',
+          avatarColor: conversation.avatarColor || '#' + Math.floor(Math.random()*16777215).toString(16),
+          participants: selectedUsers
+        });
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
       console.error('Error creating conversation:', error);
       Alert.alert(
@@ -156,37 +151,40 @@ const NewConversationScreen = ({ navigation }) => {
     }
   };
   
-  // Render selected user chip
+  // Render người dùng đã được chọn
   const renderSelectedUserChip = ({ item }) => (
     <View style={styles.selectedUserChip}>
+      <CustomAvatar 
+        size={24}
+        name={item.name || item.username}
+        color={item.avatarColor}
+        imageUrl={item.avatar}
+        style={styles.selectedUserAvatar}
+      />
       <Text style={styles.selectedUserText} numberOfLines={1}>
         {item.name || item.username || 'User'}
       </Text>
-      <TouchableOpacity onPress={() => handleRemoveUser(item)}>
+      <TouchableOpacity 
+        style={styles.removeButton}
+        onPress={() => handleRemoveUser(item)}
+      >
         <Icon name="close" size={18} color={colors.white} />
       </TouchableOpacity>
     </View>
   );
   
-  // Render user item in search results
+  // Render người dùng trong danh sách
   const renderUserItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.userItem} 
       onPress={() => handleSelectUser(item)}
     >
-      <View style={{
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: item.avatarColor || '#' + Math.floor(Math.random()*16777215).toString(16),
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10
-      }}>
-        <Text style={{color: 'white', fontWeight: 'bold'}}>
-          {(item.name || item.username || 'U').charAt(0).toUpperCase()}
-        </Text>
-      </View>
+      <CustomAvatar 
+        size={40}
+        name={item.name || item.username}
+        color={item.avatarColor}
+        imageUrl={item.avatar}
+      />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>
           {item.name || item.username || 'User'}
@@ -198,8 +196,10 @@ const NewConversationScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
   
+  // Rest of your component remains the same...
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header section */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
@@ -259,16 +259,26 @@ const NewConversationScreen = ({ navigation }) => {
         {/* Selected users */}
         {selectedUsers.length > 0 && (
           <View style={styles.selectedUsersContainer}>
-            <Text style={styles.sectionTitle}>
-              Đã chọn ({selectedUsers.length})
-            </Text>
+            <View style={styles.selectedHeaderRow}>
+              <Text style={styles.sectionTitle}>
+                Đã chọn ({selectedUsers.length})
+              </Text>
+              {selectedUsers.length > 3 && (
+                <Text style={styles.scrollIndicator}>
+                  ← Lướt để xem thêm →
+                </Text>
+              )}
+            </View>
+            
             <FlatList
               data={selectedUsers}
               renderItem={renderSelectedUserChip}
               keyExtractor={(item) => item._id}
               horizontal
-              showsHorizontalScrollIndicator={false}
+              showsHorizontalScrollIndicator={true}
               contentContainerStyle={styles.selectedUsersList}
+              indicatorStyle="white" // iOS only
+              style={styles.selectedUsersScroll}
             />
           </View>
         )}
@@ -278,7 +288,7 @@ const NewConversationScreen = ({ navigation }) => {
           <Icon name="search" size={20} color={colors.gray} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm người dùng"
+            placeholder="Tìm kiếm bạn bè"
             placeholderTextColor={colors.gray}
             value={searchText}
             onChangeText={setSearchText}
@@ -294,11 +304,11 @@ const NewConversationScreen = ({ navigation }) => {
           )}
         </View>
         
-        {/* Search results */}
-        {isSearching ? (
+        {/* Friend list and search results */}
+        {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Đang tìm kiếm...</Text>
+            <Text style={styles.loadingText}>Đang tải danh sách bạn bè...</Text>
           </View>
         ) : (
           <FlatList
@@ -306,18 +316,23 @@ const NewConversationScreen = ({ navigation }) => {
             renderItem={renderUserItem}
             keyExtractor={(item) => item._id}
             ListEmptyComponent={
-              searchText.length >= 2 ? (
-                <View style={styles.emptyContainer}>
-                  <Icon name="search-off" size={48} color={colors.gray} />
-                  <Text style={styles.emptyText}>
-                    Không tìm thấy người dùng
-                  </Text>
-                </View>
-              ) : searchText.length > 0 ? (
-                <Text style={styles.searchTip}>
-                  Nhập ít nhất 2 ký tự để tìm kiếm
-                </Text>
-              ) : null
+              <View style={styles.emptyContainer}>
+                {searchText.length > 0 ? (
+                  <>
+                    <Icon name="search-off" size={48} color={colors.gray} />
+                    <Text style={styles.emptyText}>
+                      Không tìm thấy bạn bè phù hợp
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="people-outline" size={48} color={colors.gray} />
+                    <Text style={styles.emptyText}>
+                      Bạn chưa có bạn bè nào
+                    </Text>
+                  </>
+                )}
+              </View>
             }
           />
         )}
@@ -417,20 +432,28 @@ const styles = StyleSheet.create({
   },
   selectedUsersList: {
     paddingVertical: spacing.xs,
+    paddingRight: 20, // Đảm bảo chip cuối cùng có không gian bên phải
   },
   selectedUserChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
     borderRadius: 20,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     marginRight: spacing.sm,
+    marginBottom: 5,
+    // Thêm shadow nhẹ để tăng hiệu ứng nổi
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
   },
   selectedUserText: {
     color: colors.white,
-    marginRight: spacing.xs,
-    maxWidth: 100,
+    marginHorizontal: spacing.xs, // Tăng khoảng cách giữa các phần tử
+    maxWidth: 120, // Cho phép tên dài hơn
   },
   searchContainer: {
     flexDirection: 'row',
@@ -497,6 +520,24 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     textAlign: 'center',
     color: colors.gray,
+  },
+  selectedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  scrollIndicator: {
+    fontSize: 12,
+    color: colors.gray,
+    fontStyle: 'italic',
+  },
+  selectedUsersScroll: {
+    maxHeight: 50, // Đảm bảo chiều cao phù hợp
+    paddingBottom: 5, // Thêm padding để hiển thị scrollbar
+  },
+  removeButton: {
+    padding: 2,
   },
 });
 

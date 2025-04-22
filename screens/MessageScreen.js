@@ -31,6 +31,8 @@ import {
   joinConversation,
   emitTyping,
   disconnectSocket,
+  getSocket,
+  leaveConversation,
 } from '../utils/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useDispatch} from 'react-redux';
@@ -40,7 +42,11 @@ import { conversationApi, conversationService } from '../api';
 import userUtils from '../utils/userUtils';
 import { userService } from '../api/userService';
 import { messageApi } from '../api/messageApi';
-
+// Thêm import VoteMessage vào đầu file
+import VoteMessage from '../components/message/VoteMessage';
+// Thêm import này vào đầu file
+import voteApi from '../api/voteApi';
+import socketService from '../utils/socketService';
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
@@ -89,6 +95,16 @@ const MessageScreen = ({navigation, route}) => {
   const {user} = useSelector((state) => state.auth);
   const {keyboardHeight} = useSelector((state) => state.global || {keyboardHeight: 0});
 
+  // Thêm đoạn này để hiện debug log
+  useEffect(() => {
+    console.log('MessageScreen route params:', route.params);
+    console.log('isGroup from route:', route.params?.isGroup);
+    console.log('isGroupChat from route:', isGroupChat);
+  }, []);
+
+  // Tạo biến để xác định đúng loại cuộc trò chuyện
+  const actualIsGroupChat = isGroupChat || route.params?.isGroup || false;
+
   // State variables
   const [page, setPage] = useState(DEFAULT_PAGE);
   const [modalVisible, setModalVisible] = useState(DEFAULT_MESSAGE_MODAL_VISIBLE);
@@ -118,6 +134,9 @@ const MessageScreen = ({navigation, route}) => {
 
   // References
   const flatListRef = useRef(null);
+
+  // Tạo một Set để theo dõi ID tin nhắn đã xử lý
+  const [processedMessageIds] = useState(new Set());
 
   // Phương thức cuộn đến tin nhắn mới nhất ở dưới cùng - cải tiến để không tự động nhảy
   const scrollToBottom = (animated = false, force = false) => {
@@ -222,26 +241,92 @@ const MessageScreen = ({navigation, route}) => {
         }
       };
       
-      // Access the global socket instance
-      const socketInstance = global.socket || window.socket;
+      const handleNewMessage = (msgConversationId, message) => {
+        console.log('Socket new-message received:', message?._id, 'type:', message?.type);
+        
+        if (msgConversationId === conversationId) {
+          setMessages(prevMessages => {
+            // 1. Kiểm tra ID đã xử lý
+            if (processedMessageIds.has(message._id)) {
+              console.log('Message already in processedIds, skipping:', message._id);
+              return prevMessages;
+            }
+            
+            // 2. THÊM: Kiểm tra nếu tin nhắn này là của chính người dùng hiện tại
+            const isOwnMessage = message.sender?._id === user?._id || 
+                                message.sender?._id === realUserId;
+            
+            // 3. Kiểm tra tin nhắn tạm thời đã được gửi thành công
+            const matchingTempMessage = prevMessages.find(msg => 
+              msg.isTemp && msg.content === message.content && 
+              Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000
+            );
+            
+            if (matchingTempMessage) {
+              console.log('Found matching temp message, skipping socket message');
+              // Đánh dấu ID này để không xử lý nữa
+              processedMessageIds.add(message._id);
+              return prevMessages;
+            }
+            
+            // Kiểm tra tin nhắn trùng lặp như cũ
+            const exists = prevMessages.some(msg => {
+              // Logic hiện tại của bạn
+              if (msg._id === message._id) return true;
+              // ...
+            });
+            
+            if (exists) {
+              console.log('Duplicate message detected, skipping:', message._id);
+              return prevMessages;
+            }
+            
+            // Xử lý thông tin người gửi
+            let enhancedMessage = {...message};
+            
+            // 4. QUAN TRỌNG: Đảm bảo tin nhắn từ socket luôn có sender
+            if (!enhancedMessage.sender || !enhancedMessage.sender._id) {
+              enhancedMessage.sender = {
+                _id: isOwnMessage ? user._id : 'unknown',
+                name: isOwnMessage ? (user.name || user.username || 'Bạn') : 'Người dùng khác',
+                avatar: isOwnMessage ? user.avatar : '',
+              };
+            }
+            
+            // 5. QUAN TRỌNG: Đánh dấu đúng nếu là tin nhắn của mình
+            if (isOwnMessage) {
+              enhancedMessage.isMyMessage = true;
+              enhancedMessage.forceMyMessage = true;
+            }
+            
+            processedMessageIds.add(message._id);
+            return [...prevMessages, enhancedMessage];
+          });
+        }
+      };
+      
+      const socketInstance = getSocket();
       if (socketInstance) {
-        // Listen for both possible event names
         socketInstance.on('delete-message', handleMessageDeleted);
         socketInstance.on('message-deleted', handleMessageDeleted);
+        socketInstance.on('new-message', handleNewMessage);
       }
       
-      // Prepare header data
-      const actualName = route.params?.name || route.params?.conversationName || conversationName || 'Cuộc trò chuyện';
-      const actualAvatar = route.params?.avatar || avatar;
-      const actualAvatarColor = route.params?.avatarColor || avatarColor || '#1982FC';
+      // Ưu tiên lấy tên từ route.params trước
+      const actualName = route.params?.name || conversationName || 'Cuộc trò chuyện';
+      const actualAvatar = typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || '');
+      const actualAvatarColor = avatarColor || colors.primary;
+      
+      // Xác định đúng loại cuộc trò chuyện
+      const isGroupConversation = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
       
       console.log('Setting conversation header with:', {
         name: actualName,
+        isGroup: isGroupConversation,
         avatar: actualAvatar?.substring(0, 30) + '...',
-        avatarColor: actualAvatarColor
       });
       
-      // Set navigation options with custom header
+      // Thiết lập header với đầy đủ props
       navigation.setOptions({
         headerShown: true,
         headerLeft: () => (
@@ -249,14 +334,9 @@ const MessageScreen = ({navigation, route}) => {
             conversationName={actualName}
             avatar={actualAvatar}
             avatarColor={actualAvatarColor}
-            onBack={() => {
-              console.log("Back button pressed");
-              navigation.goBack();
-            }}
-            onPress={() => {
-              console.log("Header pressed, go to options");
-              handleGoToOptionScreen();
-            }}
+            isGroup={isGroupConversation} // Thêm prop này
+            onBack={() => navigation.goBack()}
+            onPress={() => handleGoToOptionScreen()}
           />
         ),
         headerTitle: () => null,
@@ -268,11 +348,16 @@ const MessageScreen = ({navigation, route}) => {
         if (socketInstance) {
           socketInstance.off('delete-message', handleMessageDeleted);
           socketInstance.off('message-deleted', handleMessageDeleted);
+          socketInstance.off('new-message', handleNewMessage);
         }
-        disconnectSocket();
+        
+        if (conversationId) {
+          console.log('Leaving conversation:', conversationId);
+          leaveConversation(conversationId);
+        }
       };
     }
-  }, [conversationId, user?._id, conversationName]);
+  }, [conversationId, user?._id, conversationName, route.params?.name, route.params?.isGroup]);
 
   // Thêm useEffect để fetch userId thực từ email khi component mount
   useEffect(() => {
@@ -330,31 +415,61 @@ const MessageScreen = ({navigation, route}) => {
 
   // Handle navigation to conversation details
   const handleGoToOptionScreen = () => {
-    navigation.navigate('ConversationDetails', {
+    // Kiểm tra xem có là nhóm không bằng nhiều nguồn
+    const isGroup = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
+    
+    console.log('Navigating to options, isGroupChat =', isGroup);
+    
+    navigation.navigate('ConversationOptionsScreen', {
       conversationId,
-      conversationName,
-      avatar,
+      name: conversationName,      // Fix lỗi avatar là array
+      avatar: typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || ''),
       avatarColor,
-      isGroupChat,
+      isGroupChat: isGroup, // Truyền biến isGroup đã kiểm tra
+      type: isGroup ? 'group' : 'private'
     });
   };
 
-  // Handle reply to message
-  const handleOnReplyMessagePress = messageId => {
-    console.log('handleOnReplyMessagePress called with messageId:', messageId);
-    const messageToReply = messages.find(msg => msg._id === messageId);
-    console.log('Message to reply found:', !!messageToReply);
+  // Handle reply to message - hỗ trợ cả ID và đối tượng tin nhắn đầy đủ
+  const handleOnReplyMessagePress = messageParam => {
+    console.log('handleOnReplyMessagePress called with param type:', typeof messageParam);
     
-    if (messageToReply) {
-      console.log('Setting reply message with content:', messageToReply.content?.substring(0, 20));
+    // Xử lý trường hợp messageParam là một đối tượng tin nhắn đầy đủ
+    if (typeof messageParam === 'object' && messageParam !== null && messageParam._id) {
+      console.log('Message object passed directly:', messageParam._id);
+      
+      // Kiểm tra xem tin nhắn này đã có trong state messages chưa
+      const existingMessage = messages.find(msg => msg._id === messageParam._id);
+      
+      // Nếu tin nhắn đã có trong state, sử dụng phiên bản từ state
+      // Nếu không, sử dụng đối tượng được truyền vào
+      const finalMessage = existingMessage || messageParam;
+      
+      console.log('Setting reply message with content:', finalMessage.content?.substring(0, 20));
       setReplyMessage({
         isReply: true,
-        message: messageToReply,
+        message: finalMessage,
       });
-      // Thêm log để xác nhận replyMessage đã được cập nhật
-      console.log('Reply message set, isReply:', true);
-    } else {
-      console.error('Could not find message with ID:', messageId);
+      console.log('Reply message set from object, isReply:', true);
+    } 
+    // Xử lý trường hợp messageParam là ID (chuỗi)
+    else {
+      const messageId = messageParam;
+      console.log('Looking for message with ID:', messageId);
+      const messageToReply = messages.find(msg => msg._id === messageId);
+      console.log('Message to reply found:', !!messageToReply);
+      
+      if (messageToReply) {
+        console.log('Setting reply message with content:', messageToReply.content?.substring(0, 20));
+        setReplyMessage({
+          isReply: true,
+          message: messageToReply,
+        });
+        // Thêm log để xác nhận replyMessage đã được cập nhật
+        console.log('Reply message set from ID, isReply:', true);
+      } else {
+        console.error('Could not find message with ID:', messageId);
+      }
     }
   };
 
@@ -571,22 +686,24 @@ const MessageScreen = ({navigation, route}) => {
       
       // Handle successful response
       if (response && response.data) {
-        // Replace the temporary message with the real one from the server
-        const responseData = response.data;
+        // Đánh dấu ID này là đã xử lý để tránh socket thêm lại lần nữa
+        processedMessageIds.add(response.data._id);
         
-        // Preserve our user display name for consistency
-        if (responseData.sender) {
-          responseData.sender = {
-            ...responseData.sender,
-            name: currentUserInfo.name, // Keep our display name from currentUserInfo
-          };
-        } else {
-          responseData.sender = currentUserInfo;
-        }
+        // ĐẶC BIỆT QUAN TRỌNG: Đánh dấu cả nội dung tin nhắn để tránh socket trả lại trùng lặp
+        const messageKey = `${user._id}-${content.trim()}`;
+        processedMessageIds.add(messageKey);
         
-        // Always mark as our message for proper display
-        responseData.isMyMessage = true;
-        responseData.forceMyMessage = true;
+        // Đảm bảo thông tin người gửi đầy đủ
+        const responseData = {
+          ...response.data,
+          sender: {
+            _id: user._id,
+            name: user.name || user.username || 'Bạn',
+            avatar: user.avatar || '',
+          },
+          isMyMessage: true,
+          forceMyMessage: true
+        };
         
         // Convert replyMessage from backend to replyToMessage for frontend if needed
         if (responseData.replyMessage && 
@@ -610,13 +727,10 @@ const MessageScreen = ({navigation, route}) => {
           responseData.replyToMessage = tempMessage.replyToMessage;
         }
         
+        // Cập nhật tin nhắn trong state
         setMessages((prevMessages) => 
           prevMessages.map((msg) => 
-            msg._id === tempId ? { 
-              ...responseData,
-              status: 'sent',
-              forceMyMessage: true,
-            } : msg
+            msg._id === tempId ? responseData : msg
           )
         );
       }
@@ -769,6 +883,21 @@ const handleSendFileMessage = async (file) => {
     console.log('Response received:', response);
     
     if (response && response.data) {
+      // Đánh dấu ID này là đã xử lý để tránh socket thêm lại
+      processedMessageIds.add(response.data._id);
+      
+      // Đánh dấu cả fileUrl để tránh trùng lặp
+      const fileUrl = response.data.fileUrl || response.data.url || response.data.mediaUrl;
+      if (fileUrl) {
+        processedMessageIds.add(fileUrl); // Đánh dấu cả URL
+      }
+      
+      // Giải phóng ID này sau 30 giây
+      setTimeout(() => {
+        processedMessageIds.delete(response.data._id);
+        if (fileUrl) processedMessageIds.delete(fileUrl);
+      }, 30000);
+      
       // Log để debug
       console.log('File response from server:', response.data);
       
@@ -968,88 +1097,137 @@ const handleSendFileMessage = async (file) => {
     }
   };
 
-  // Render message item
-  const renderMessage = (message, index) => {
-    // Đảm bảo tin nhắn hợp lệ
-    if (!message) return null;
-    
-    // Lấy ID của người dùng hiện tại
-    const currentUser = user || {};
-    
-    // Kiểm tra xem ID người dùng là ObjectID hay email
-    const isCurrentUserIdEmail = currentUser._id && 
-        (currentUser._id.includes('@') || currentUser._id.length > 30);
-    
-    // Kiểm tra xem message.sender._id có phải là ObjectID không
-    const isSenderIdObjectId = message.sender && message.sender._id && 
-        !message.sender._id.includes('@') && message.sender._id.length < 30;
-    
-    // Xác định isMyMessage dựa trên ID hoặc email
-    let isMyMessage = false;
-    
-    if (message.isMyMessage || message.forceMyMessage || message.isTemp) {
-      isMyMessage = true;
-    }
-    // Nếu ID người dùng là email nhưng ID người gửi là ObjectID
-    else if (isCurrentUserIdEmail && isSenderIdObjectId) {
-      // So sánh username hoặc email thay vì ID
-      isMyMessage = message.sender.username === currentUser._id || 
-                    message.sender.email === currentUser._id;
-    } 
-    // Trường hợp bình thường, so sánh ID
-    else {
-      isMyMessage = message.sender && message.sender._id === currentUser._id;
+// Xử lý khi người dùng chọn một option trong vote
+const handleVoteOption = async (voteId, optionName, isChecked) => {
+  try {
+    if (isChecked) {
+      // Người dùng chọn option
+      await voteApi.selectOption(voteId, { options: [optionName] });
+    } else {
+      // Người dùng bỏ chọn option
+      await voteApi.deleteSelectOption(voteId, { options: [optionName] });
     }
     
-    // Lấy ID chính xác để so sánh
-    const currentUserId = realUserId || user?._id;
-    
-    // Xác định isMyMessage như trước đó
-    isMyMessage = false;
-    
-    if (message.isMyMessage || message.forceMyMessage || message.isTemp) {
-      isMyMessage = true;
-    } else if (message.sender && message.sender._id === currentUserId) {
-      isMyMessage = true;
-    } else if (realUserId && message.sender && message.sender._id === realUserId) {
-      isMyMessage = true;
+    // Cập nhật lại danh sách tin nhắn sau khi vote
+    loadMessages(true);
+  } catch (error) {
+    console.error('Error voting:', error);
+    Alert.alert('Lỗi', 'Không thể bình chọn. Vui lòng thử lại sau.');
+  }
+};
+
+// Render message item
+const renderMessage = (message, index) => {
+  // Đảm bảo tin nhắn hợp lệ
+  if (!message) return null;
+  
+  // Bổ sung thông tin người gửi nếu thiếu
+  if (message.sender && !message.sender.name) {
+    // Tìm thông tin người gửi từ danh sách participants
+    const sender = participants?.find(p => p._id === message.sender._id);
+    if (sender) {
+      // Cập nhật thông tin người gửi
+      message = {
+        ...message,
+        sender: {
+          ...message.sender,
+          name: sender.name || sender.username || 'Người dùng',
+          avatar: sender.avatar || message.sender.avatar,
+          avatarColor: sender.avatarColor || message.sender.avatarColor
+        }
+      };
+    } else if (message.sender._id) {
+      // Nếu không tìm thấy trong participants, sử dụng ID làm tên
+      message = {
+        ...message,
+        sender: {
+          ...message.sender,
+          name: message.sender._id.substring(0, 8) + '...',
+        }
+      };
     }
-    
+  }
+  
+  // Lấy ID của người dùng hiện tại
+  const currentUser = user || {};
+  
+  // Kiểm tra xem ID người dùng là ObjectID hay email
+  const isCurrentUserIdEmail = currentUser._id && 
+      (currentUser._id.includes('@') || currentUser._id.length > 30);
+  
+  // Kiểm tra xem message.sender._id có phải là ObjectID không
+  const isSenderIdObjectId = message.sender && message.sender._id && 
+      !message.sender._id.includes('@') && message.sender._id.length < 30;
+  
+  // Xác định isMyMessage dựa trên ID hoặc email
+  const currentUserId = realUserId || user?._id;
+  
+  // Xác định isMyMessage như trước đó
+  const isMyMessage = (
+    message.isMyMessage === true || 
+    message.forceMyMessage === true || 
+    message.isTemp === true || 
+    (message.sender && message.sender._id === currentUserId) ||
+    (realUserId && message.sender && message.sender._id === realUserId) ||
+    (isCurrentUserIdEmail && isSenderIdObjectId && 
+     (message.sender.username === currentUser._id || 
+      message.sender.email === currentUser._id))
+  );
+
+  // Log thêm thông tin để debug
+  console.log(`Message ${message._id?.substring(0, 8)} ownership check:`, {
+    isMyMessage,
+    senderId: message.sender?._id,
+    currentId: currentUserId,
+    realId: realUserId
+  });
+
+  // Kiểm tra nếu là tin nhắn vote
+  if (message.type === 'VOTE') {
     return (
-      <ChatMessage
-        key={message._id}
+      <VoteMessage
+        key={message._id || index}
         message={message}
-        userId={currentUserId} // Sử dụng userId đã fetch từ API
-        isMyMessage={isMyMessage} // Truyền giá trị đã xác định
-        // Kết hợp cả hai phiên bản props
-        navigation={navigation} // Truyền navigation cho chức năng chuyển tiếp
-        conversationId={conversationId} // Truyền conversationId hiện tại
-        
-        // Props từ origin/chat-emoji
+        navigation={navigation}
+        onViewVoteDetailModal={(options) => {
+          // Xử lý hiển thị chi tiết bình chọn
+          setMessageDetailProps({
+            isVisible: true,
+            message: message
+          });
+        }}
+        userId={currentUserId}
+        isMyMessage={isMyMessage}
+        conversationId={conversationId}
         onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
         handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
         onPressDelete={(messageId) => handleDeleteMessage(messageId)}
-        onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
         previewImage={handlePreviewImage}
-        
-        // Thống nhất các hàm callback với cách đặt tên thống nhất
-        onReply={(msg) => {
-          console.log('MessageScreen - onReply được gọi với:', typeof msg, msg?._id || msg);
-          if (msg && typeof msg === 'object') {
-            // Nếu nhận được toàn bộ đối tượng tin nhắn
-            handleOnReplyMessagePress(msg._id);
-          } else {
-            // Nếu chỉ nhận được ID
-            handleOnReplyMessagePress(msg);
-          }
-        }}
-        onPressRecall={(messageId) => handleRecallMessage(messageId)}
-        
-        // Add new prop for scrolling to original message
         scrollToMessage={scrollToMessage}
+        handleVoteOption={handleVoteOption}
       />
     );
-  };
+  }
+  
+  // Các loại tin nhắn khác sử dụng ChatMessage
+  return (
+    <ChatMessage
+      key={message._id || index}
+      message={message}
+      userId={currentUserId}
+      isMyMessage={isMyMessage}
+      navigation={navigation}
+      conversationId={conversationId}
+      onPressEmoji={(messageId, emoji) => handleAddReact/i/on(messageId, emoji)}
+      handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
+      onPressDelete={(messageId) => handle/D/eleteMessage(messageId)}
+      onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
+      previewImage={handlePreviewImage}
+      onReply={(messageId) => handleOnReplyMessagePress(messageId)}
+      onPressRecall={(messageId) => handleRecallMessage(messageId)}
+    />
+  );
+};
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -1084,13 +1262,13 @@ const handleSendFileMessage = async (file) => {
           <FlatList
             ref={flatListRef}
             onEndReached={goToNextPage}
-            // Sắp xếp tin nhắn theo thời gian (mới nhất ở dưới) và lọc bỏ tin nhắn đã xóa
             data={[...messages]
               .filter(msg => !msg.isDeleted) // Lọc bỏ các tin nhắn đã xóa
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
             }
             extraData={messages.length}
-            keyExtractor={item => `${item._id}`}
+            // Sửa keyExtractor để đảm bảo tính duy nhất
+            keyExtractor={(item, index) => `${item._id}-${index}`}
             renderItem={({item, index}) => renderMessage(item, index)}
             initialNumToRender={20}
             maxToRenderPerBatch={10}

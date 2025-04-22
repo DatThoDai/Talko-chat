@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -55,32 +55,54 @@ const FriendsScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
+  // Thêm refs để theo dõi trạng thái nhưng không gây render
+  const hasLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const loadingRef = useRef(false);
+  
   const { user } = useSelector((state) => state.auth);
   
+  // Hàm loadFriends mới, kiểm tra trạng thái loading
   const loadFriends = useCallback(async () => {
-    if (refreshing) return;
+    if (loadingRef.current) return; // Ngăn gọi API khi đang loading
     
-    setIsLoading(true);
-    setRefreshing(true);
-    
+    loadingRef.current = true;
     try {
       const response = await friendApi.fetchFriends();
-      setFriends(response.data || []);
-      setFilteredFriends(response.data || []);
+      if (isMountedRef.current) {
+        setFriends(response.data || []);
+        setFilteredFriends(response.data || []);
+        hasLoadedRef.current = true;
+      }
     } catch (error) {
       console.error('Failed to load friends:', error);
-      Alert.alert(
-        'Lỗi',
-        'Không thể tải danh sách bạn bè. Vui lòng thử lại sau.',
-        [{ text: 'OK' }]
-      );
+      if (isMountedRef.current) {
+        Alert.alert(
+          'Lỗi',
+          'Không thể tải danh sách bạn bè. Vui lòng thử lại sau.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        loadingRef.current = false;
+      }
+    }
+  }, []);
+  
+  // Hàm refresh
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadFriends();
+    if (isMountedRef.current) {
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [loadFriends]);
   
-  // Filter friends based on search text
+  // Không cần hàm này nữa, gộp với useFocusEffect
+  // const handleInitialLoad = useCallback...
+  
+  // Search filter không thay đổi
   useEffect(() => {
     if (searchText.trim() === '') {
       setFilteredFriends(friends);
@@ -94,40 +116,72 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, [searchText, friends]);
   
-  // Load friends when screen comes into focus
+  // Thiết lập cleanup khi component unmount 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Sửa useFocusEffect để tránh vòng lặp vô hạn
   useFocusEffect(
     useCallback(() => {
-      loadFriends();
-    }, [loadFriends])
+      // Chỉ load khi chưa từng load hoặc khi refresh thủ công
+      if (!hasLoadedRef.current && !loadingRef.current) {
+        setIsLoading(true);
+        loadFriends().finally(() => {
+          if (isMountedRef.current) {
+            setIsLoading(false);
+          }
+        });
+      }
+      
+      return () => {
+        // Cleanup nếu cần
+      };
+    }, [loadFriends]) // Giảm dependencies
   );
   
+  // Sửa hàm handleUnfriend để đảm bảo không gọi lại screen
   const handleUnfriend = useCallback((friend) => {
     Alert.alert(
       'Xóa bạn',
       `Bạn có chắc muốn xóa ${friend.name || 'người dùng này'} khỏi danh sách bạn bè không?`,
       [
-        {
-          text: 'Hủy',
-          style: 'cancel',
-        },
+        { text: 'Hủy', style: 'cancel' },
         {
           text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
             try {
               await friendApi.deleteFriend(friend._id);
-              // Refresh friend list
-              loadFriends();
-              Alert.alert('Thành công', 'Đã xóa bạn bè thành công');
+              
+              // Cập nhật state local thay vì gọi API lại
+              if (isMountedRef.current) {
+                const newFriends = friends.filter(f => f._id !== friend._id);
+                setFriends(newFriends);
+                setFilteredFriends(
+                  searchText ? 
+                    newFriends.filter(f => 
+                      f.name?.toLowerCase().includes(searchText.toLowerCase()) || 
+                      f.username?.toLowerCase().includes(searchText.toLowerCase())
+                    ) : 
+                    newFriends
+                );
+                
+                Alert.alert('Thành công', 'Đã xóa bạn bè thành công');
+              }
             } catch (error) {
               console.error('Error unfriending:', error);
-              Alert.alert('Lỗi', 'Không thể xóa bạn bè. Vui lòng thử lại sau.');
+              if (isMountedRef.current) {
+                Alert.alert('Lỗi', 'Không thể xóa bạn bè. Vui lòng thử lại sau.');
+              }
             }
           },
         },
       ]
     );
-  }, [loadFriends]);
+  }, [friends, searchText]); // Phụ thuộc vào friends và searchText
   
   const handleFriendPress = useCallback((friend) => {
     // Create or navigate to an existing conversation with this friend
@@ -201,7 +255,7 @@ const FriendsScreen = ({ navigation }) => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={loadFriends}
+              onRefresh={handleRefresh} // Sử dụng handleRefresh thay vì loadFriends trực tiếp
               colors={[colors.primary]}
             />
           }

@@ -57,22 +57,8 @@ const options = Array.isArray(message?.options)
   const totalOfVotes = voteUtils.getTotalOfVotes(options);
 
   const goToVoteScreen = () => {
-    // Đảm bảo cập nhật dữ liệu vote vào Redux trước khi chuyển màn hình
     dispatch(setCurrentVote(message));
-    
-    // Truyền đầy đủ thông tin qua params để tránh việc mất dữ liệu
-    navigation.navigate('VoteDetailScreen', { 
-      voteData: message,
-      messageId: message._id,
-      conversationId: message.conversationId,
-      forceRefresh: true, // Thêm flag để bắt buộc tải lại dữ liệu
-      timestamp: new Date().getTime() // Thêm timestamp để đảm bảo useEffect được gọi lại
-    });
-    
-    console.log('Navigating to vote screen with data:', {
-      messageId: message._id,
-      conversationId: message.conversationId
-    });
+    navigation.navigate('VoteDetailScreen', { voteData: message });
   };
 
   const handleVoteOptionChange = async (isChecked, optionName) => {

@@ -40,18 +40,11 @@ const VoteDetailScreen = ({ navigation, route }) => {
 
   // Sửa phần useEffect fetch dữ liệu ban đầu
   useEffect(() => {
-    // Fetch dữ liệu vote nếu: không có currentVote HOẶC có forceRefresh từ navigation
-    if ((!currentVote && route.params?.conversationId) || route.params?.forceRefresh) {
+    if (!currentVote && route.params?.conversationId) {
       const fetchVoteDetails = async () => {
         setLoading(true);
         try {
-          console.log('Fetching votes with conversationId:', route.params.conversationId, 
-                      '- MessageId:', route.params?.messageId,
-                      '- ForceRefresh:', route.params?.forceRefresh);
-          
-          // Reset selected options khi load lại dữ liệu
-          setSelectedOptions([]);
-          setInitialVoteState([]);
+          console.log('Fetching votes with conversationId:', route.params.conversationId);
           
           // Sửa từ getVoteById thành getVotesByConversationId
           const response = await voteApi.getVotesByConversationId(route.params.conversationId);
@@ -142,7 +135,7 @@ const VoteDetailScreen = ({ navigation, route }) => {
       });
       setUserMapping(mapping);
     }
-  }, [route.params?.conversationId, currentVote?.userOptions, route.params?.forceRefresh, route.params?.timestamp]);
+  }, [route.params?.conversationId, currentVote?.userOptions]);
 
   // Sửa phần xác định các lựa chọn của người dùng
   useEffect(() => {

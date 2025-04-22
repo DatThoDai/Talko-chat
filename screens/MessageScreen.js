@@ -260,10 +260,34 @@ const MessageScreen = ({navigation, route}) => {
                                 message.sender?._id === realUserId;
             
             // 3. Kiểm tra tin nhắn tạm thời đã được gửi thành công
-            const matchingTempMessage = prevMessages.find(msg => 
-              msg.isTemp && msg.content === message.content && 
-              Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000
-            );
+            const matchingTempMessage = prevMessages.find(msg => {
+              // Nếu là tin nhắn văn bản, so sánh content
+              if (message.type === 'TEXT' && msg.content === message.content) {
+                return Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000;
+              }
+              
+              // NẾU TIN NHẮN DẠNG FILE - so sánh URL hoặc mediaUrl
+              if ((message.type === 'IMAGE' || message.type === 'FILE' || message.type === 'VIDEO') && msg.type === message.type) {
+                // So sánh fileUrl/url/mediaUrl từ cả hai phía
+                const msgUrl = msg.fileUrl || msg.url || msg.mediaUrl || '';
+                const newMsgUrl = message.fileUrl || message.url || message.mediaUrl || '';
+                
+                // So sánh phần cuối của URL (vì đôi khi URL đầy đủ sẽ khác nhau)
+                const msgUrlEnd = msgUrl.split('/').pop();
+                const newMsgUrlEnd = newMsgUrl.split('/').pop();
+                
+                console.log('File matching check:', {
+                  msgUrl: msgUrlEnd,
+                  newUrl: newMsgUrlEnd,
+                  match: msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== ''
+                });
+                
+                return (msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== '') || 
+                       (Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 20000);
+              }
+              
+              return false;
+            });
             
             if (matchingTempMessage) {
               console.log('Found matching temp message, skipping socket message');
@@ -286,20 +310,41 @@ const MessageScreen = ({navigation, route}) => {
             
             // Xử lý thông tin người gửi
             let enhancedMessage = {...message};
-            
+
             // 4. QUAN TRỌNG: Đảm bảo tin nhắn từ socket luôn có sender
-            if (!enhancedMessage.sender || !enhancedMessage.sender._id) {
+            if (!enhancedMessage.sender || !enhancedMessage.sender._id || enhancedMessage.sender._id === 'unknown') {
               enhancedMessage.sender = {
-                _id: isOwnMessage ? user._id : 'unknown',
-                name: isOwnMessage ? (user.name || user.username || 'Bạn') : 'Người dùng khác',
-                avatar: isOwnMessage ? user.avatar : '',
+                _id: isOwnMessage ? user._id : (enhancedMessage.sender?._id || 'unknown'),
+                name: isOwnMessage ? (user.name || user.username || 'Bạn') : (enhancedMessage.sender?.name || 'Người dùng khác'),
+                avatar: isOwnMessage ? user.avatar : (enhancedMessage.sender?.avatar || ''),
               };
             }
-            
-            // 5. QUAN TRỌNG: Đánh dấu đúng nếu là tin nhắn của mình
-            if (isOwnMessage) {
-              enhancedMessage.isMyMessage = true;
-              enhancedMessage.forceMyMessage = true;
+
+            // 5. ĐẶC BIỆT QUAN TRỌNG CHO FILE: Kiểm tra file URL để xem có phải là tin nhắn của mình không
+            if (enhancedMessage.type === 'FILE' || enhancedMessage.type === 'IMAGE' || enhancedMessage.type === 'VIDEO') {
+              const fileUrl = enhancedMessage.fileUrl || enhancedMessage.url || enhancedMessage.mediaUrl || '';
+              if (fileUrl) {
+                const urlEnd = fileUrl.split('/').pop();
+                // Kiểm tra xem có tempMessage nào có URL tương tự không
+                const hasMatchingTemp = prevMessages.some(m => 
+                  m.isTemp === true && 
+                  m.sender?._id === user?._id &&
+                  ((m.fileUrl && m.fileUrl.split('/').pop() === urlEnd) || 
+                   (m.url && m.url.split('/').pop() === urlEnd) || 
+                   (m.mediaUrl && m.mediaUrl.split('/').pop() === urlEnd))
+                );
+                
+                if (hasMatchingTemp) {
+                  enhancedMessage.isMyMessage = true;
+                  enhancedMessage.forceMyMessage = true;
+                  enhancedMessage.sender = {
+                    _id: user._id,
+                    name: user.name || user.username || 'Bạn',
+                    avatar: user.avatar || '',
+                  };
+                  console.log('Matched file message as MINE by URL:', urlEnd);
+                }
+              }
             }
             
             processedMessageIds.add(message._id);
@@ -1244,7 +1289,18 @@ const renderMessage = (message, index) => {
     (realUserId && message.sender && message.sender._id === realUserId) ||
     (isCurrentUserIdEmail && isSenderIdObjectId && 
      (message.sender.username === currentUser._id || 
-      message.sender.email === currentUser._id))
+      message.sender.email === currentUser._id)) ||
+    // THÊM ĐOẠN NÀY: Đặc biệt xử lý cho tin nhắn loại file
+    (message.type === 'FILE' || message.type === 'IMAGE' || message.type === 'VIDEO') && (
+      // Kiểm tra fileUrl ban đầu xem có khớp với temp message nào không
+      messages.some(m => 
+        m.isTemp === true && 
+        m.sender?._id === user?._id && 
+        ((m.fileUrl && message.fileUrl && m.fileUrl.split('/').pop() === message.fileUrl.split('/').pop()) ||
+         (m.url && message.url && m.url.split('/').pop() === message.url.split('/').pop()) ||
+         (m.mediaUrl && message.mediaUrl && m.mediaUrl.split('/').pop() === message.mediaUrl.split('/').pop()))
+      )
+    )
   );
 
   // Log thêm thông tin để debug

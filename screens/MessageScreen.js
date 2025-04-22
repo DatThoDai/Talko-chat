@@ -48,6 +48,9 @@ import VoteMessage from '../components/message/VoteMessage';
 import voteApi from '../api/voteApi';
 import socketService from '../utils/socketService';
 import pinMessagesApi from '../api/pinMessagesApi';
+// Thêm vào đầu file
+import { useFocusEffect } from '@react-navigation/native';
+
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
@@ -614,6 +617,11 @@ const MessageScreen = ({navigation, route}) => {
             scrollToBottom(true, true);
           }, 500);
         }
+        
+        // Sau khi cập nhật messages
+        setTimeout(() => {
+          loadVoteDetails(); // Tải thông tin chi tiết của vote
+        }, 500);
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -622,6 +630,71 @@ const MessageScreen = ({navigation, route}) => {
       setLoading(false);
     }
   };
+
+  // Sửa hàm loadVoteDetails trong MessageScreen.js
+const loadVoteDetails = async () => {
+  try {
+    // Lọc ra các tin nhắn kiểu VOTE
+    const voteMessages = messages.filter(msg => msg.type === 'VOTE');
+    
+    if (voteMessages.length === 0) return;
+    
+    console.log(`Loading details for ${voteMessages.length} vote messages`);
+    
+    // Gọi API để lấy thông tin chi tiết của các vote
+    const response = await voteApi.getVotesByConversationId(conversationId);
+    
+    // In ra để debug cấu trúc dữ liệu
+    console.log('Vote API response structure:', 
+      response ? 
+      `data: ${typeof response.data}, isArray: ${Array.isArray(response.data)}` : 
+      'undefined');
+    
+    // Xử lý nhiều kiểu cấu trúc dữ liệu có thể có
+    let voteDetailsArray = [];
+    
+    if (response && response.data) {
+      // Kiểm tra xem response.data có phải là mảng không
+      if (Array.isArray(response.data)) {
+        voteDetailsArray = response.data;
+      }
+      // Kiểm tra xem response.data.data có phải là mảng không
+      else if (response.data.data && Array.isArray(response.data.data)) {
+        voteDetailsArray = response.data.data;
+      }
+      // Nếu response.data là object với thuộc tính _id, đó có thể là một vote duy nhất
+      else if (typeof response.data === 'object' && response.data._id) {
+        voteDetailsArray = [response.data];
+      }
+      
+      console.log('Vote details processed:', voteDetailsArray.length || 0);
+      
+      if (voteDetailsArray.length > 0) {
+        // Cập nhật tin nhắn vote trong state với thông tin chi tiết
+        setMessages(prevMessages => 
+          prevMessages.map(msg => {
+            if (msg.type === 'VOTE') {
+              // Tìm thông tin chi tiết cho vote này
+              const voteDetail = voteDetailsArray.find(v => v._id === msg._id);
+              
+              if (voteDetail) {
+                console.log(`Found details for vote ${msg._id.substring(0, 8)}`);
+                return {
+                  ...msg,
+                  options: voteDetail.options || msg.options,
+                  userOptions: voteDetail.userOptions || msg.userOptions
+                };
+              }
+            }
+            return msg;
+          })
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error loading vote details:', error);
+  }
+};
 
   // Load more messages khi kéo lên trên cùng (lịch sử tin nhắn cũ hơn)
   const goToNextPage = () => {
@@ -1217,10 +1290,16 @@ const renderMessage = (message, index) => {
 
   // Kiểm tra nếu là tin nhắn vote
   if (message.type === 'VOTE') {
+    // Đảm bảo message có cấu trúc hợp lệ trước khi render
+    const enhancedMessage = {
+      ...message,
+      options: Array.isArray(message.options) ? message.options : []
+    };
+    
     return (
       <VoteMessage
         key={message._id || index}
-        message={message}
+        message={enhancedMessage} // Sử dụng tin nhắn đã được kiểm tra
         navigation={navigation}
         onViewVoteDetailModal={(options) => {
           // Xử lý hiển thị chi tiết bình chọn
@@ -1307,6 +1386,15 @@ const renderMessage = (message, index) => {
       setPinnedMessages([]);
     }
   };
+  useFocusEffect(
+    React.useCallback(() => {
+      if (conversationId && messages.length > 0) {
+        console.log('Screen focused, refreshing vote data');
+        loadVoteDetails(); // Tải lại thông tin vote khi quay lại màn hình
+      }
+      return () => {};
+    }, [conversationId, messages.length])
+  );
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

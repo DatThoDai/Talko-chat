@@ -5,13 +5,34 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { messageType } from '../../constants';
 import commonFuc from '../../utils/commonFuc';
+import { pinMessagesApi } from '../../api/pinMessagesApi';
 
-const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage }) => {
+const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage, onUnpin }) => {
+  // Hàm xử lý bỏ ghim tin nhắn
+  const handleUnpin = async (messageId) => {
+    try {
+      // Gọi API để bỏ ghim tin nhắn
+      await pinMessagesApi.unpinMessage(messageId);
+      
+      // Hiển thị thông báo thành công
+      Alert.alert('Thành công', 'Đã bỏ ghim tin nhắn');
+      
+      // Gọi callback nếu được truyền vào
+      if (typeof onUnpin === 'function') {
+        onUnpin(messageId);
+      }
+    } catch (error) {
+      console.error('Error unpinning message:', error);
+      Alert.alert('Lỗi', 'Không thể bỏ ghim tin nhắn. Vui lòng thử lại sau.');
+    }
+  };
   if (!pinnedMessages || pinnedMessages.length === 0) {
     return null;
   }
@@ -70,23 +91,33 @@ const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage }) => {
   // Render a single pinned message item
   const renderPinnedItem = ({ item }) => {
     return (
-      <TouchableOpacity
-        style={styles.pinnedItem}
-        onPress={() => onViewDetail({
-          isVisible: true,
-          message: item
-        })}>
-        <View style={styles.pinnedIconContainer}>
-          <Icon name="bookmark" size={16} color="#FFFFFF" />
-        </View>
+      <View style={styles.pinnedItemContainer}>
+        <TouchableOpacity
+          style={styles.pinnedItem}
+          onPress={() => onViewDetail({
+            isVisible: true,
+            message: item
+          })}>
+          <View style={styles.pinnedIconContainer}>
+            <Icon name="bookmark" size={16} color="#FFFFFF" />
+          </View>
+          
+          <View style={styles.pinnedContent}>
+            <Text style={styles.pinnedBy}>
+              Ghim bởi {item.pinnedBy?.name || 'Người dùng'}
+            </Text>
+            {renderContentPreview(item)}
+          </View>
+        </TouchableOpacity>
         
-        <View style={styles.pinnedContent}>
-          <Text style={styles.pinnedBy}>
-            Ghim bởi {item.pinnedBy?.name || 'Người dùng'}
-          </Text>
-          {renderContentPreview(item)}
-        </View>
-      </TouchableOpacity>
+        {/* Nút bỏ ghim */}
+        <TouchableOpacity 
+          style={styles.unpinButton}
+          onPress={() => handleUnpin(item._id)}
+        >
+          <FontAwesome name="times" size={16} color="#888" />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -114,11 +145,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+  pinnedItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 4,
+    position: 'relative',
+  },
   pinnedItem: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginHorizontal: 4,
     padding: 8,
     alignItems: 'center',
     maxWidth: 250,
@@ -130,6 +166,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 1.0,
     elevation: 1,
+  },
+  unpinButton: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.0,
+    elevation: 2,
+    zIndex: 10,
   },
   pinnedIconContainer: {
     width: 24,

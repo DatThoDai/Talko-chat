@@ -5,16 +5,23 @@ import {WINDOW_WIDTH} from '../styles';
 import {useSelector} from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-const VoteProgress = props => {
-  const {
-    totalOfVotes, 
-    option, 
-    maxWidth, 
-    isCheckBoxType, 
-    onChange, 
-    checked: externalChecked,
-    voteUtils
-  } = props;
+// Default vote utils function
+const defaultVoteUtils = {
+  getPercentOfVotes: (total, count) => {
+    if (!total || total === 0) return 0;
+    return Math.round((count / total) * 100);
+  }
+};
+
+const VoteProgress = ({
+  totalOfVotes = 0,
+  option = { name: '', userIds: [] },
+  maxWidth = WINDOW_WIDTH * 0.8 - 20,
+  isCheckBoxType = false,
+  onChange = null,
+  checked: externalChecked,
+  voteUtils = defaultVoteUtils
+}) => {
   
   const auth = useSelector(state => state.auth);
   const user = auth?.user;
@@ -118,20 +125,8 @@ VoteProgress.propTypes = {
   maxWidth: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   isCheckBoxType: PropTypes.bool,
   onChange: PropTypes.func,
-};
-
-VoteProgress.defaultProps = {
-  totalOfVotes: 0,
-  option: { name: '', userIds: [] },
-  maxWidth: WINDOW_WIDTH * 0.8 - 20,
-  isCheckBoxType: false,
-  onChange: null,
-  voteUtils: {
-    getPercentOfVotes: (total, count) => {
-      if (!total || total === 0) return 0;
-      return Math.round((count / total) * 100);
-    }
-  }
+  checked: PropTypes.bool,
+  voteUtils: PropTypes.object
 };
 
 export default VoteProgress;

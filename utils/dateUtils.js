@@ -180,11 +180,36 @@ export const parseProfileDate = (dateStr) => {
   }
 };
 
+/**
+ * Format a date for message detail view with detailed time and day
+ * @param {string|Date} dateStr - The date to format (ISO string or Date object)
+ * @returns {string} Formatted date string for message details
+ */
+export const formatMessageDetailTime = (dateStr) => {
+  if (!dateStr) return '';
+  
+  try {
+    const date = new Date(dateStr);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    // Full detailed format with weekday, day, month, year, and time
+    return format(date, 'EEEE, d MMMM yyyy, HH:mm:ss', { locale: vi });
+  } catch (error) {
+    console.error('Error formatting message detail time:', error);
+    return '';
+  }
+};
+
 export default {
   formatMessageDate,
   formatConversationDate,
   formatMessageTime,
   formatTimeAgo,
   formatProfileDate,
-  parseProfileDate
+  parseProfileDate,
+  formatMessageDetailTime
 };

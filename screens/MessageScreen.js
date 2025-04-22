@@ -47,6 +47,7 @@ import VoteMessage from '../components/message/VoteMessage';
 // Thêm import này vào đầu file
 import voteApi from '../api/voteApi';
 import socketService from '../utils/socketService';
+import pinMessagesApi from '../api/pinMessagesApi';
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
@@ -107,6 +108,7 @@ const MessageScreen = ({navigation, route}) => {
 
   // State variables
   const [page, setPage] = useState(DEFAULT_PAGE);
+  const [pinnedMessages, setPinnedMessages] = useState([]);
   const [modalVisible, setModalVisible] = useState(DEFAULT_MESSAGE_MODAL_VISIBLE);
   const [reactProps, setReactProps] = useState(DEFAULT_REACTION_MODAL_VISIBLE);
   const [imageModalVisible, setImageModalVisible] = useState(false);
@@ -228,7 +230,18 @@ const MessageScreen = ({navigation, route}) => {
       // Load initial messages
       loadMessages();
       
-      // Set up socket event listener for real-time message deletion
+      // Chỉ tải tin nhắn ghim nếu là nhóm trò chuyện
+      // Xác định loại cuộc trò chuyện từ actualIsGroupChat đã được thiết lập ở trên
+      if (actualIsGroupChat) {
+        console.log('Loading pinned messages for group chat');
+        fetchPinnedMessages();
+      } else {
+        console.log('Skipping pinned messages for private chat');
+        // Đặt pinnedMessages thành mảng rỗng cho cuộc trò chuyện đơn
+        setPinnedMessages([]);
+      }
+      
+      // Setup socket event listener for real-time message deletion
       const handleMessageDeleted = (data) => {
         const messageId = data.messageId || data.id;
         
@@ -310,6 +323,20 @@ const MessageScreen = ({navigation, route}) => {
         socketInstance.on('delete-message', handleMessageDeleted);
         socketInstance.on('message-deleted', handleMessageDeleted);
         socketInstance.on('new-message', handleNewMessage);
+        
+        // Chỉ lắng nghe sự kiện ghim/bỏ ghim nếu đây là nhóm trò chuyện
+        if (actualIsGroupChat) {
+          // Listen for pin-message events
+          socketInstance.on('pin-message', (data) => {
+            console.log('Pin message event received:', data);
+            fetchPinnedMessages(); // Refresh pinned messages
+          });
+          
+          socketInstance.on('unpin-message', (data) => {
+            console.log('Unpin message event received:', data);
+            fetchPinnedMessages(); // Refresh pinned messages
+          });
+        }
       }
       
       // Ưu tiên lấy tên từ route.params trước
@@ -349,6 +376,12 @@ const MessageScreen = ({navigation, route}) => {
           socketInstance.off('delete-message', handleMessageDeleted);
           socketInstance.off('message-deleted', handleMessageDeleted);
           socketInstance.off('new-message', handleNewMessage);
+          
+          // Chỉ hủy lắng nghe các sự kiện ghim nếu đây là nhóm trò chuyện
+          if (actualIsGroupChat) {
+            socketInstance.off('pin-message');
+            socketInstance.off('unpin-message');
+          }
         }
         
         if (conversationId) {
@@ -689,7 +722,7 @@ const MessageScreen = ({navigation, route}) => {
         // Đánh dấu ID này là đã xử lý để tránh socket thêm lại lần nữa
         processedMessageIds.add(response.data._id);
         
-        // ĐẶC BIỆT QUAN TRỌNG: Đánh dấu cả nội dung tin nhắn để tránh socket trả lại trùng lặp
+        // Đánh dấu cả nội dung tin nhắn để tránh socket trả lại trùng lặp
         const messageKey = `${user._id}-${content.trim()}`;
         processedMessageIds.add(messageKey);
         
@@ -805,7 +838,7 @@ const MessageScreen = ({navigation, route}) => {
 const handleSendFileMessage = async (file) => {
   if (!file) return;
   
-  // Tạo ID tạm thời cho tin nhắn file
+  // Tạo ID tạm thởi cho tin nhắn file
   const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
   
   try {
@@ -830,7 +863,7 @@ const handleSendFileMessage = async (file) => {
       fileType: fileType
     });
     
-    // Tạo tin nhắn tạm thời
+    // Tạo tin nhắn tạm thởi
     const tempMessage = {
       _id: tempId,
       conversationId,
@@ -844,7 +877,7 @@ const handleSendFileMessage = async (file) => {
       type: fileType,
       fileName: file.name,
       fileSize: file.size,
-      fileUrl: file.uri, // URI tạm thời cho preview
+      fileUrl: file.uri, // URI tạm thởi cho preview
       isTemp: true,
       status: 'uploading',
       uploadProgress: 0,
@@ -852,7 +885,7 @@ const handleSendFileMessage = async (file) => {
       forceMyMessage: true,
     };
     
-    // Thêm tin nhắn tạm thời
+    // Thêm tin nhắn tạm thởi
     setMessages(prevMessages => [...prevMessages, tempMessage]);
     
     // Progress tracking
@@ -1218,9 +1251,9 @@ const renderMessage = (message, index) => {
       isMyMessage={isMyMessage}
       navigation={navigation}
       conversationId={conversationId}
-      onPressEmoji={(messageId, emoji) => handleAddReact/i/on(messageId, emoji)}
+      onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
       handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
-      onPressDelete={(messageId) => handle/D/eleteMessage(messageId)}
+      onPressDelete={(messageId) => handleDeleteMessage(messageId)}
       onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
       previewImage={handlePreviewImage}
       onReply={(messageId) => handleOnReplyMessagePress(messageId)}
@@ -1229,35 +1262,95 @@ const renderMessage = (message, index) => {
   );
 };
 
+  // Fetch pinned messages for this conversation
+  const fetchPinnedMessages = async () => {
+    try {
+      // Sử dụng biến actualIsGroupChat đã được xác định ở trên
+      if (!actualIsGroupChat) {
+        console.log('Skipping pinned messages for private chat');
+        setPinnedMessages([]);
+        return;
+      }
+      
+      console.log('Fetching pinned messages for group conversation:', conversationId);
+      const response = await pinMessagesApi.fetchPinMessages(conversationId);
+      
+      // Check if the response is valid and has data
+      if (response && response.data) {
+        // Get pinned messages from the response
+        const fetchedPinnedMessages = response.data;
+        
+        console.log('Pinned messages fetched:', fetchedPinnedMessages.length);
+        setPinnedMessages(fetchedPinnedMessages);
+        
+        // QUAN TRỌNG: Đánh dấu tin nhắn đã ghim trong danh sách tin nhắn chính
+        // để menu hiển thị đúng nút "Bỏ ghim"
+        if (fetchedPinnedMessages.length > 0) {
+          setMessages(prevMessages => {
+            return prevMessages.map(msg => {
+              // Kiểm tra xem tin nhắn này có trong danh sách ghim không
+              const isPinned = fetchedPinnedMessages.some(pinnedMsg => pinnedMsg._id === msg._id);
+              if (isPinned) {
+                // Đánh dấu tin nhắn đã ghim
+                return { ...msg, isPinned: true };
+              }
+              return msg;
+            });
+          });
+        }
+      } else {
+        console.log('No pinned messages found or invalid response');
+        setPinnedMessages([]);
+      }
+    } catch (error) {
+      console.error('Error fetching pinned messages:', error);
+      setPinnedMessages([]);
+    }
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : null}
           style={{flex: 1}}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-            
-          {/* Xử lý an toàn khi gọi getPinnedMessages */}
-          {(() => {
-            // Tạo biến để chỉ gọi API một lần
-            let pinnedMessages = [];
-            try {
-              // Sử dụng conversationApi thay vì conversationService
-              pinnedMessages = conversationApi.getPinnedMessages(conversationId) || [];
-            } catch (error) {
-              console.error('Error getting pinned messages:', error);
-              pinnedMessages = [];
-            }
-            
-            // Chỉ hiển thị PinnedMessage khi có tin nhắn ghim
-            return pinnedMessages.length > 0 ? (
-              <PinnedMessage
-                pinnedMessages={pinnedMessages}
-                onViewDetail={setMessageDetailProps}
-                onViewImage={setImageProps}
-              />
-            ) : null;
-          })()} 
+          
+          {/* Pinned Messages Section */}
+          {pinnedMessages.length > 0 && (
+            <PinnedMessage 
+              pinnedMessages={pinnedMessages}
+              onViewDetail={(options) => {
+                setMessageDetailProps({
+                  isVisible: true,
+                  message: options.message
+                });
+              }}
+              onViewImage={(options) => {
+                setImageProps({
+                  isVisible: options.isVisible,
+                  imageUrl: options.content?.[0]?.url,
+                  imageUrls: options.content?.map(item => item.url) || []
+                });
+              }}
+              onUnpin={(messageId) => {
+                // Cập nhật tin nhắn đã bỏ ghim trong danh sách
+                setMessages(prevMessages => {
+                  return prevMessages.map(msg => {
+                    if (msg._id === messageId) {
+                      return { ...msg, isPinned: false };
+                    }
+                    return msg;
+                  });
+                });
+                
+                // Cập nhật danh sách tin nhắn đã ghim
+                setPinnedMessages(prevPinned => {
+                  return prevPinned.filter(msg => msg._id !== messageId);
+                });
+              }}
+            />
+          )} 
           
           <FlatList
             ref={flatListRef}

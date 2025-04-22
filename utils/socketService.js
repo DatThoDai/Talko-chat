@@ -21,7 +21,7 @@ export const registerStore = (store) => {
 // import { REACT_APP_SOCKET_URL } from '../constants';
 
 // Sử dụng trực tiếp địa chỉ IP của người dùng
-let SOCKET_URL = 'http://192.168.1.4:3001';
+let SOCKET_URL = 'http://192.168.1.5:3001';
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds

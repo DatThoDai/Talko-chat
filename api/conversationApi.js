@@ -282,6 +282,7 @@ const conversationApi = {
     return axiosClient.patch(url, image, config);
   },
 
+  
   addManager: (conversationId, managerIds) => {
     return axiosClient.post(`${BASE_URL}/${conversationId}/managers`, {
       managerIds,
@@ -293,7 +294,6 @@ const conversationApi = {
       data: {managerIds},
     });
   },
-  
   // Thêm phương thức getPinnedMessages để khắc phục lỗi trong MessageScreen
   getPinnedMessages: (conversationId) => {
     // Cố gắng lấy tin nhắn được ghim từ server nếu có

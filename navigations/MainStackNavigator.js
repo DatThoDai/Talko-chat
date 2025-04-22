@@ -1,5 +1,5 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import MessageScreen from '../screens/MessageScreen';
@@ -12,6 +12,13 @@ import FriendDetailsScreen from '../screens/FriendDetailsScreen';
 import FriendRequestsScreen from '../screens/FriendRequestsScreen';
 import FriendSuggestionsScreen from '../screens/FriendSuggestionsScreen';
 import ForwardMessage from '../screens/ForwardMessage';
+import ConversationOptionsScreen from '../screens/ConversationOptionsScreen';
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import MemberScreen from '../screens/MemberScreen';
+import AddToGroupScreen from '../screens/AddToGroupScreen';
+import CreateVoteScreen from '../screens/CreateVoteScreen';
+import VoteDetailScreen from '../screens/VoteDetailScreen';
 
 // Tab Navigator chính (điều hướng giữa các tab)
 import TabNavigator from './TabNavigator';
@@ -75,6 +82,45 @@ const MainStackNavigator = () => {
             backgroundColor: '#2196F3',
           },
           headerTintColor: '#fff',
+        }}
+      />
+      <Stack.Screen 
+        name="ConversationOptionsScreen" 
+        component={ConversationOptionsScreen}
+        options={{
+          presentation: 'modal',
+          headerShown: false
+        }}
+      />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen 
+        name="Member" 
+        component={MemberScreen}
+        options={{
+          headerShown: false,
+          presentation: 'card'
+        }}
+      />
+      <Stack.Screen 
+        name="AddToGroupScreen" 
+        component={AddToGroupScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="CreateVote" 
+        component={CreateVoteScreen}
+        options={{
+          headerShown: false,
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen 
+        name="VoteDetailScreen" 
+        component={VoteDetailScreen} 
+        options={{
+          headerShown: false,
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
       />
     </Stack.Navigator>

@@ -58,9 +58,10 @@ function ReceiverMessage(props) {
   
   // Ensure we display a valid sender name
   const senderName = sender?.name || 
+                     sender?.username ||
                      (sender?.email && sender.email.includes('@') 
                       ? sender.email.split('@')[0] 
-                      : 'Unknown User');
+                      : sender?._id || 'Người dùng'); // Sử dụng ID nếu không có tên hoặc email
 
   // Thêm hàm formatFileSize
   const formatFileSize = (bytes) => {

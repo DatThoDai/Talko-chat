@@ -9,7 +9,7 @@ console.log('Constants module:', constants);
 console.log('REACT_APP_API_URL trong axios.js:', constants.REACT_APP_API_URL);
 
 // Sử dụng địa chỉ IP đúng theo yêu cầu của người dùng
-const baseURL = 'http://192.168.1.5:3001';
+const baseURL = 'http://172.29.48.101:3001';
 console.log('Updated baseURL:', baseURL);
 
 // Tạo instance axios với các tham số cấu hình mới

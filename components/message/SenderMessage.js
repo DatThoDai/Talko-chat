@@ -20,7 +20,7 @@ import MessageActions from './MessageActions';
 import { downloadFile, openFile } from '../../utils/downloadUtils';
 import * as Sharing from 'expo-sharing';
 
-function SenderMessage(props) {
+function SenderMessage({ someProp = 'defaultValue', ...rest }) {
   const {
     message,
     isMessageRecalled,
@@ -34,7 +34,7 @@ function SenderMessage(props) {
     previewImage,
     navigation, // Thêm navigation vào danh sách các props
     conversationId // Thêm conversationId vào danh sách các props
-  } = props;
+  } = rest;
   
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const content = message?.content || '';

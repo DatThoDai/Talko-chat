@@ -148,6 +148,7 @@ export const fetchListLastViewer = createAsyncThunk(
   }
 );
 
+// Thêm currentVote vào initialState
 const initialState = {
   conversations: [],
   messages: [],
@@ -157,6 +158,7 @@ const initialState = {
     totalItems: 0,
   },
   currentConversation: null,
+  currentVote: null, // Thêm dòng này
   typingUsers: {},
   lastViewers: {},
   loading: false,
@@ -264,6 +266,57 @@ const chatSlice = createSlice({
         state.currentConversation = {
           ...state.currentConversation,
           participants: updatedParticipants
+        };
+      }
+    },
+    // Thêm action setCurrentVote để lưu trữ thông tin vote hiện tại
+    setCurrentVote: (state, action) => {
+      state.currentVote = action.payload;
+    },
+    
+    // Cập nhật vote khi người dùng bình chọn
+    updateVoteInfo: (state, action) => {
+      const { messageId, optionName, userId, isAdd } = action.payload;
+      
+      // Cập nhật trong danh sách tin nhắn
+      state.messages = state.messages.map(message => {
+        if (message._id === messageId) {
+          // Tìm và cập nhật option được chọn
+          const updatedOptions = message.options.map(option => {
+            if (option.name === optionName) {
+              let userIds = [...(option.userIds || [])];
+              
+              if (isAdd) {
+                // Thêm userId nếu chưa có
+                if (!userIds.includes(userId)) {
+                  userIds.push(userId);
+                }
+              } else {
+                // Xóa userId
+                userIds = userIds.filter(id => id !== userId);
+              }
+              
+              return {
+                ...option,
+                userIds
+              };
+            }
+            return option;
+          });
+          
+          return {
+            ...message,
+            options: updatedOptions
+          };
+        }
+        return message;
+      });
+      
+      // Cập nhật currentVote nếu đang hiển thị chi tiết vote này
+      if (state.currentVote && state.currentVote._id === messageId) {
+        state.currentVote = {
+          ...state.currentVote,
+          options: state.messages.find(m => m._id === messageId)?.options || state.currentVote.options
         };
       }
     },
@@ -418,7 +471,9 @@ export const {
   setPreviousScreen,
   clearMessages,
   clearMessagePages,
-  updateUserOnlineStatus
+  updateUserOnlineStatus,
+  setCurrentVote,
+  updateVoteInfo
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

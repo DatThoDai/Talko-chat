@@ -47,7 +47,7 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Xử lý khi chọn ảnh từ thư viện
+  // Sửa hàm handlePickImage
   const handlePickImage = async () => {
     try {
       // Xin quyền truy cập thư viện ảnh
@@ -96,9 +96,12 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
           isVideo: isVideo,
         };
         
-        setSelectedFile(fileData);
+        // CHỈ gọi callback mà KHÔNG lưu vào state
         onFileSelected(fileData);
         showNotification(isVideo ? 'Đã chọn video thành công' : 'Đã chọn ảnh thành công');
+        
+        // KHÔNG đặt selectedFile
+        // setSelectedFile(fileData); <- Bỏ dòng này
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -106,7 +109,7 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Xử lý khi chọn file từ thiết bị
+  // Sửa lại hàm handlePickDocument
   const handlePickDocument = async () => {
     try {
       // Mở picker để chọn file
@@ -174,7 +177,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
         
         console.log('File được chọn (API mới):', fileInfo);
         
-        setSelectedFile(fileInfo);
         onFileSelected(fileInfo);
         showNotification('Đã chọn file thành công');
       } 
@@ -232,7 +234,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
         
         console.log('File được chọn:', fileInfo);
         
-        setSelectedFile(fileInfo);
         onFileSelected(fileInfo);
         showNotification('Đã chọn file thành công');
       }
@@ -259,7 +260,7 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
   };
 
-  // Xử lý khi chụp ảnh từ camera
+  // Sửa lại hàm handleTakePhoto
   const handleTakePhoto = async () => {
     try {
       // Xin quyền truy cập camera
@@ -296,7 +297,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
           isImage: true,
         };
         
-        setSelectedFile(fileData);
         onFileSelected(fileData);
         showNotification('Ảnh đã được chụp thành công');
       }
@@ -306,6 +306,7 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
+  // Cuối cùng, sửa lại phần return để luôn hiển thị optionsContainer
   return (
     <View style={styles.container}>
       {isUploading ? (
@@ -314,30 +315,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
           <Text style={styles.uploadingText}>
             Đang tải lên... {uploadProgress}%
           </Text>
-        </View>
-      ) : selectedFile ? (
-        <View style={styles.previewContainer}>
-          {selectedFile.isImage ? (
-            <Image source={{ uri: selectedFile.uri }} style={styles.previewImage} />
-          ) : (
-            <View style={styles.filePreview}>
-              <Icon 
-                name={selectedFile.isVideo ? "videocam" : "insert-drive-file"} 
-                size={32} 
-                color={colors.primary} 
-              />
-              <Text style={styles.fileName} numberOfLines={1}>
-                {selectedFile.name}
-              </Text>
-            </View>
-          )}
-          <TouchableOpacity style={styles.cancelButton} onPress={() => {
-            setSelectedFile(null);
-            // Gọi onFileSelected với null để hủy việc chọn file
-            onFileSelected(null);
-          }}>
-            <Icon name="close" size={24} color={colors.error} />
-          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.optionsContainer}>

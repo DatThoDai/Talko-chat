@@ -7,21 +7,22 @@ import VoteProgress from '../VoteProgress';
 import {useDispatch, useSelector} from 'react-redux';
 import {setCurrentVote} from '../../redux/chatSlice';
 
-const VoteMessage = ({
-  message = {},
-  navigation = {},
-  onViewVoteDetailModal = null
-}) => {
+const VoteMessage = props => {
+  const {message, navigation, onViewVoteDetailModal} = props;
 
   const dispatch = useDispatch();
   const auth = useSelector(state => state.auth);
   const user = auth?.user;
 
-  // Đảm bảo message.options tồn tại và là mảng trước khi thực hiện sort
-const options = Array.isArray(message?.options) 
-  ? [...message.options].sort((option1, option2) =>
-      (option1.userIds?.length || 0) > (option2.userIds?.length || 0) ? -1 : 1)
-  : [];
+  // Thêm kiểm tra để đảm bảo message.options tồn tại
+  const messageOptions = message?.options || [];
+  
+  // Sửa dòng gây lỗi, đảm bảo options là mảng hợp lệ
+  const options = Array.isArray(messageOptions) 
+    ? [...messageOptions].sort((option1, option2) =>
+        (option1.userIds?.length || 0) > (option2.userIds?.length || 0) ? -1 : 1
+      )
+    : [];
 
   const voteUtils = {
     getTotalOfVotes: (options) => {
@@ -82,7 +83,7 @@ const options = Array.isArray(message?.options)
     <TouchableOpacity onPress={goToVoteScreen}>
       <View style={styles.container}>
         <View style={styles.textContainer}>
-          <Text style={styles.text}>{message.content}</Text>
+          <Text style={styles.text}>{message?.content || 'Bình chọn'}</Text>
           {totalOfVotes > 0 && (
             <TouchableOpacity
               onPress={() => onViewVoteDetailModal({isVisible: true, options})}>
@@ -94,8 +95,11 @@ const options = Array.isArray(message?.options)
         </View>
 
         {options.map((option, index) => {
-          const isChecked = user && option.userIds && Array.isArray(option.userIds) && 
-                          option.userIds.includes(user._id);
+          // Thêm kiểm tra đầy đủ cho option và option.userIds
+          const userIds = option?.userIds || [];
+          const isChecked = user && 
+                           Array.isArray(userIds) && 
+                           userIds.includes(user._id);
           
           return (
             index < 3 && (
@@ -137,7 +141,11 @@ VoteMessage.propTypes = {
   onViewVoteDetailModal: PropTypes.func,
 };
 
-// Đã chuyển sang sử dụng ES6 default parameters thay vì defaultProps
+VoteMessage.defaultProps = {
+  message: {},
+  navigation: {},
+  onViewVoteDetailModal: null,
+};
 export default VoteMessage;
 
 const styles = StyleSheet.create({

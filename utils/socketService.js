@@ -24,7 +24,7 @@ export const registerStore = (store) => {
 // import { REACT_APP_SOCKET_URL } from '../constants';
 
 // Sử dụng trực tiếp địa chỉ IP của người dùng
-let SOCKET_URL = 'http://192.168.1.5:3001';
+let SOCKET_URL = 'http://192.168.101.14:3001';
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds
@@ -231,6 +231,19 @@ const setupSocketEventHandlers = () => {
         }));
       }
     }
+  });
+
+  // Handle rename conversation event
+  socket.on('rename-conversation', (conversationId, newName, message) => {
+    console.log('Rename conversation event received:', { conversationId, newName });
+    
+    // If we have a store instance, we can update redux state
+    if (storeInstance) {
+      // Dispatch an action to update the conversation name in the store if you have one
+      // Right now we're handling this in the MessageScreen component
+    }
+    
+    // The message processing will be handled in MessageScreen.js
   });
 
   // Handle both possible message deletion event formats from server

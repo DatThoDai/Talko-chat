@@ -224,6 +224,9 @@ const conversationApi = {
 
   updateName: (id, name) => {
     const url = `${BASE_URL}/${id}/name`;
+    console.log('Updating conversation name:', { id, name });
+    // Make sure to send a proper JSON object in the request body
+    // The backend expects a JSON with a name property: { "name": "New name" }
     return axiosClient.patch(url, name);
   },
 

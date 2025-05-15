@@ -49,7 +49,7 @@ import voteApi from '../api/voteApi';
 import socketService from '../utils/socketService';
 import pinMessagesApi from '../api/pinMessagesApi';
 // Thêm vào đầu file
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
@@ -95,7 +95,7 @@ const MESSAGE_RECALL_TEXT = 'Tin nhắn đã được thu hồi';
 
 const MessageScreen = ({navigation, route}) => {
   // Props and Redux state
-  const {conversationId, conversationName, participants, avatar, avatarColor, isGroupChat} = route.params || {};
+  const {conversationId, conversationName: initialConversationName, participants, avatar, avatarColor, isGroupChat} = route.params || {};
   const {user} = useSelector((state) => state.auth);
   const {keyboardHeight} = useSelector((state) => state.global || {keyboardHeight: 0});
 
@@ -142,6 +142,16 @@ const MessageScreen = ({navigation, route}) => {
 
   // Tạo một Set để theo dõi ID tin nhắn đã xử lý
   const [processedMessageIds] = useState(new Set());
+
+  // Add state for conversation name
+  const [conversationName, setConversationName] = useState(initialConversationName);
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused && route.params?.conversationName !== conversationName) {
+      setConversationName(route.params.conversationName);
+    }
+  }, [route.params?.conversationName, isFocused]);
 
   // Phương thức cuộn đến tin nhắn mới nhất ở dưới cùng - cải tiến để không tự động nhảy
   const scrollToBottom = (animated = false, force = false) => {
@@ -373,6 +383,41 @@ const MessageScreen = ({navigation, route}) => {
         headerRight: () => null,
       });
       
+      // Setup socket event listener for group rename
+      const handleRenameConversation = (conversationId, newName, message) => {
+        console.log(`Conversation ${conversationId} renamed to ${newName}`);
+        if (conversationId === route.params.conversationId) {
+          // Update the conversation name in state
+          setConversationName(newName);
+          
+          // Update the navigation parameters
+          navigation.setParams({ conversationName: newName });
+          
+          // Add the notification message to the messages list if provided
+          if (message) {
+            const newNotifyMessage = {
+              ...message,
+              isTemp: false,
+              status: 'sent'
+            };
+            
+            setMessages(prevMessages => {
+              // Check if the message already exists to avoid duplicates
+              if (!prevMessages.some(msg => msg._id === message._id)) {
+                return [newNotifyMessage, ...prevMessages];
+              }
+              return prevMessages;
+            });
+          }
+        }
+      };
+      
+      // Subscribe to rename-conversation event
+      const socket = getSocket();
+      if (socket) {
+        socket.on('rename-conversation', handleRenameConversation);
+      }
+      
       // Cleanup socket when unmounting
       return () => {
         if (socketInstance) {
@@ -391,9 +436,14 @@ const MessageScreen = ({navigation, route}) => {
           console.log('Leaving conversation:', conversationId);
           leaveConversation(conversationId);
         }
+        
+        // Remove the rename-conversation event listener
+        if (socket) {
+          socket.off('rename-conversation', handleRenameConversation);
+        }
       };
     }
-  }, [conversationId, user?._id, conversationName, route.params?.name, route.params?.isGroup]);
+  }, [conversationId, user?._id, route.params.conversationId]);
 
   // Thêm useEffect để fetch userId thực từ email khi component mount
   useEffect(() => {
@@ -1395,6 +1445,35 @@ const renderMessage = (message, index) => {
       return () => {};
     }, [conversationId, messages.length])
   );
+
+  // Add effect to update header when conversationName changes
+  useEffect(() => {
+    if (conversationId && conversationName) {
+      // Cập nhật lại header với tên mới
+      const actualName = conversationName || 'Cuộc trò chuyện';
+      const actualAvatar = typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || '');
+      const actualAvatarColor = avatarColor || colors.primary;
+      const isGroupConversation = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
+      
+      console.log('Updating header with new name:', actualName);
+      
+      navigation.setOptions({
+        headerShown: true,
+        headerLeft: () => (
+          <MessageHeaderLeft
+            conversationName={actualName}
+            avatar={actualAvatar}
+            avatarColor={actualAvatarColor}
+            isGroup={isGroupConversation}
+            onBack={() => navigation.goBack()}
+            onPress={() => handleGoToOptionScreen()}
+          />
+        ),
+        headerTitle: () => null,
+        headerRight: () => null,
+      });
+    }
+  }, [conversationName, conversationId]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

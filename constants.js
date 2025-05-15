@@ -4,9 +4,9 @@
 // Real device - use actual server IP
 
 // Sử dụng địa chỉ IP của máy chủ theo yêu cầu của người dùng
-export const API_BASE_URL = 'http://192.168.1.5:3001';
-export const REACT_APP_SOCKET_URL = 'http://192.168.1.5:3001';
-export const REACT_APP_API_URL = 'http://192.168.1.5:3001';
+export const API_BASE_URL = 'http://192.168.101.14:3001';
+export const REACT_APP_SOCKET_URL = 'http://192.168.101.14:3001';
+export const REACT_APP_API_URL = 'http://192.168.101.14:3001';
 
 // Các tùy chọn khác (không sử dụng):
 // export const API_BASE_URL = 'http://10.0.2.2:3001'; // Android emulator

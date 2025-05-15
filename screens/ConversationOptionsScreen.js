@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, typography, borderRadius } from '../styles';
 import { conversationApi, userService } from '../api'; // Thêm userService
 import { useSelector } from 'react-redux'; // Import để lấy user ID
+import RenameGroupModal from '../components/modal/RenameGroupModal';
 
 const OptionItem = ({ icon, title, onPress, color = colors.dark }) => {
   return (
@@ -34,6 +35,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const { user } = useSelector(state => state.auth);
   const userId = user?._id;
   const [isGroupAdmin, setIsGroupAdmin] = useState(false); // Thêm state này
+  const [groupName, setGroupName] = useState(name || 'Nhóm chat');
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
 
   useEffect(() => {
     // Giả định trạng thái mặc định là "đã bật thông báo"
@@ -101,6 +104,27 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   };
 
   const handleClose = () => {
+    // Nếu tên nhóm đã thay đổi, đảm bảo màn hình MessageScreen được cập nhật
+    if (name !== groupName) {
+      // Cập nhật tham số cho màn hình trước đó (MessageScreen)
+      const previousScreen = navigation.getState().routes.find(route => 
+        route.name === 'MessageScreen' || 
+        (route.params && route.params.conversationId === conversationId)
+      );
+      
+      if (previousScreen) {
+        // Sử dụng navigate để cập nhật params cho màn hình tin nhắn
+        navigation.navigate({
+          name: previousScreen.name,
+          params: { 
+            ...previousScreen.params,
+            conversationName: groupName 
+          },
+          merge: true,
+        });
+      }
+    }
+    
     navigation.goBack();
   };
 
@@ -250,6 +274,42 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     navigation.navigate('CreateVote', { conversationId });
   };
 
+  const handleRenameGroup = () => {
+    // Luôn cập nhật groupName từ tham số mới nhất
+    if (route.params && route.params.name) {
+      setGroupName(route.params.name);
+    }
+    
+    setRenameModalVisible(true);
+  };
+
+  const handleRenameSuccess = (newName) => {
+    setGroupName(newName);
+    // Cập nhật tên trong màn hình tin nhắn
+    if (navigation.canGoBack()) {
+      // Cập nhật tham số cho màn hình MessageScreen
+      navigation.setParams({ conversationName: newName });
+      
+      // Cập nhật tham số cho màn hình trước đó (MessageScreen)
+      const previousScreen = navigation.getState().routes.find(route => 
+        route.name === 'MessageScreen' || 
+        (route.params && route.params.conversationId === conversationId)
+      );
+      
+      if (previousScreen) {
+        // Sử dụng navigate để cập nhật params cho màn hình tin nhắn
+        navigation.navigate({
+          name: previousScreen.name,
+          params: { 
+            ...previousScreen.params,
+            conversationName: newName 
+          },
+          merge: true,
+        });
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={colors.lightGray} barStyle="dark-content" />
@@ -274,11 +334,20 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
         )}
         
         {(type === 'group' || route.params?.isGroupChat) && (
-          <OptionItem
-            icon="poll"
-            title="Tạo bình chọn"
-            onPress={handleCreateVote}
-          />
+          <>
+            <OptionItem
+              icon="poll"
+              title="Tạo bình chọn"
+              onPress={handleCreateVote}
+            />
+            
+            {/* Thêm option đổi tên nhóm */}
+            <OptionItem
+              icon="edit"
+              title="Đổi tên nhóm"
+              onPress={handleRenameGroup}
+            />
+          </>
         )}
         
         <OptionItem
@@ -323,6 +392,15 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
           />
         )}
       </View>
+
+      {/* Thêm modal đổi tên nhóm */}
+      <RenameGroupModal 
+        visible={renameModalVisible}
+        onClose={() => setRenameModalVisible(false)}
+        conversationId={conversationId}
+        currentName={groupName}
+        onRenameSuccess={handleRenameSuccess}
+      />
     </SafeAreaView>
   );
 };

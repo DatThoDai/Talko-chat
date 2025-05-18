@@ -27,11 +27,28 @@ const formatDateSafely = (dateString) => {
   try {
     if (!dateString) return 'Chưa cập nhật';
     
+    // Xử lý trường hợp dateString là một object với các trường day, month, year
+    if (typeof dateString === 'object' && dateString !== null) {
+      if (dateString.day && dateString.month && dateString.year) {
+        return `${String(dateString.day).padStart(2, '0')}/${String(dateString.month).padStart(2, '0')}/${dateString.year}`;
+      }
+      
+      // Nếu là Date object
+      if (dateString instanceof Date && !isNaN(dateString.getTime())) {
+        return dateString.toLocaleDateString('vi-VN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+    }
+    
     // Xử lý trường hợp dateString là một chuỗi ISO 8601
     const date = new Date(dateString);
     
     // Kiểm tra xem date có hợp lệ không
     if (isNaN(date.getTime())) {
+      console.warn('Invalid date format:', JSON.stringify(dateString));
       return 'Định dạng không hợp lệ';
     }
     
@@ -42,7 +59,7 @@ const formatDateSafely = (dateString) => {
       year: 'numeric'
     });
   } catch (error) {
-    console.error('Error formatting date:', error, dateString);
+    console.error('Error formatting date:', error, typeof dateString, dateString);
     return 'Định dạng không hợp lệ';
   }
 };
@@ -124,12 +141,15 @@ const ProfileScreen = ({ navigation }) => {
       let response;
       
       try {
+        setIsLoading(true);
         const responsePromise = meApi.fetchProfile();
         response = await Promise.race([responsePromise, timeoutPromise]);
         console.log('Me profile response:', response);
       } catch (error) {
         console.error('Error fetching from me/profile:', error);
         response = null;
+      } finally {
+        setIsLoading(false);
       }
       
       // Nếu không có dữ liệu đầy đủ từ me/profile, thử với user service
@@ -172,7 +192,7 @@ const ProfileScreen = ({ navigation }) => {
         name: userData.name || authUser?.name || '',
         
         // Các trường bổ sung - Nếu API không trả về, giữ giá trị cũ hoặc dùng giá trị mặc định
-        dateOfBirth: userData.dateOfBirth || user?.dateOfBirth || '2003-06-14T17:00:00.000+00:00',
+        dateOfBirth: userData.dateOfBirth || user?.dateOfBirth || null,
         gender: userData.gender !== undefined ? userData.gender : (user?.gender !== undefined ? user.gender : true),
         createdAt: userData.createdAt || user?.createdAt || new Date().toISOString(),
         coverImage: userData.coverImage || user?.coverImage,
@@ -194,6 +214,13 @@ const ProfileScreen = ({ navigation }) => {
       
       // Kiểm tra xem có thể log trực tiếp dữ liệu gốc không bị biến đổi
       console.log('Raw user data from API:', JSON.stringify(response, null, 2));
+      
+      // Log thông tin ngày sinh để debug
+      console.log('Date of birth from API:', {
+        rawDateOfBirth: userData.dateOfBirth,
+        type: typeof userData.dateOfBirth,
+        formatted: formatDateSafely(userData.dateOfBirth)
+      });
 
     } catch (err) {
       // Chỉ log lỗi vào console để debug, không hiển thị trực tiếp lỗi lên UI
@@ -226,8 +253,6 @@ const ProfileScreen = ({ navigation }) => {
           fetchUserProfile();
         }, 3000);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -515,8 +540,11 @@ const ProfileScreen = ({ navigation }) => {
 
   // Xử lý cập nhật thông tin cá nhân
   const handleEditProfile = () => {
-    // Chuyển đến màn hình chỉnh sửa thông tin cá nhân
-    navigation.navigate('EditProfile', { user });
+    // Log the user data being passed to the edit screen
+    console.log('Passing user data to EditProfile:', user);
+    
+    // Ensure we pass the complete user object to the edit screen
+    navigation.navigate('EditProfile', { userData: user });
   };
 
   // Xử lý thay đổi mật khẩu

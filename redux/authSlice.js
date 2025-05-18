@@ -139,10 +139,24 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (profileData, { getState, rejectWithValue }) => {
     try {
-      console.log('authSlice: updating profile with data:', profileData);
+      console.log('authSlice: updating profile with data:', JSON.stringify(profileData, null, 2));
       
-      // Gọi API cập nhật thông tin profile sử dụng authApi mới
-      const updatedUser = await meApi.updateUserProfile(profileData);
+      // Ensure data types match exactly what the backend expects
+      const apiData = {
+        ...profileData,
+        // Ensure gender is EXACTLY 0 or 1 (number type, not boolean, not string)
+        gender: profileData.gender === 1 ? 1 : 0,
+        // Don't modify dateOfBirth format, keep as is
+        dateOfBirth: profileData.dateOfBirth
+      };
+      
+      console.log('Data for API call:', JSON.stringify(apiData, null, 2));
+      
+      // Gọi API cập nhật thông tin profile sử dụng meApi.updateProfile
+      const response = await meApi.updateProfile(apiData);
+      console.log('Profile update API response:', response);
+      
+      const updatedUser = response.data || response;
       
       // Nếu cập nhật thành công, lấy dữ liệu user hiện tại từ state và merge
       const { auth } = getState();
@@ -151,7 +165,11 @@ export const updateProfile = createAsyncThunk(
         ...updatedUser
       };
       
-      console.log('authSlice: updated user data:', mergedUser);
+      console.log('authSlice: updated user data:', JSON.stringify(mergedUser, null, 2));
+      console.log('authSlice: checking dateOfBirth format:', {
+        original: updatedUser.dateOfBirth,
+        type: typeof updatedUser.dateOfBirth
+      });
       
       // Lưu vào AsyncStorage để duy trì đăng nhập
       await AsyncStorage.setItem('user', JSON.stringify(mergedUser));
@@ -159,16 +177,39 @@ export const updateProfile = createAsyncThunk(
       return mergedUser;
     } catch (error) {
       console.error('authSlice updateProfile error:', error);
-      // // Xử lý các trường hợp lỗi khác nhau
-      // if (error.status === 408) {
-      //   return rejectWithValue('Yêu cầu hết thời gian, vui lòng thử lại');
-      // } else if (error.status === 401) {
-      //   return rejectWithValue('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
-      // } else if (error.status === 0) {
-      //   return rejectWithValue('Không có kết nối internet, vui lòng kiểm tra mạng');
-      // } else {
-      //   return rejectWithValue(error.message || 'Cập nhật thông tin thất bại');
-      // }
+      
+      // Format error message to show validation errors clearly
+      let errorMessage = 'Cập nhật thông tin thất bại';
+      
+      if (error.response) {
+        console.error('API error status:', error.response.status);
+        
+        if (error.response.data) {
+          const responseData = error.response.data;
+          console.error('API error data:', responseData);
+          
+          // Handle case where response data has a message property that's an object with validation errors
+          if (responseData.message && typeof responseData.message === 'object') {
+            const validationErrors = Object.entries(responseData.message)
+              .map(([field, error]) => `${field}: ${error}`)
+              .join('\n');
+            
+            errorMessage = `Lỗi dữ liệu:\n${validationErrors}`;
+          } else if (typeof responseData === 'string') {
+            errorMessage = responseData;
+          } else if (responseData.message) {
+            errorMessage = responseData.message;
+          } else if (responseData.error) {
+            errorMessage = responseData.error;
+          } else {
+            errorMessage = JSON.stringify(responseData);
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return rejectWithValue(errorMessage);
     }
   }
 );

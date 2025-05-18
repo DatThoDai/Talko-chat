@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import trực tiếp từ file service thay vì qua index.js
 import { authService } from '../api/authService';
 import meApi from '../api/meApi';
-
+import { userService } from '../api/userService';
 const initialState = {
   user: null,
   token: null,
@@ -19,6 +19,8 @@ const initialState = {
   passwordChangeSuccess: false,
   profileUpdateSuccess: false
 };
+
+// Sửa lại hàm loginUser trong authSlice.js để lấy ID thực từ API
 
 export const loginUser = createAsyncThunk(
   'auth/login',
@@ -47,7 +49,6 @@ export const loginUser = createAsyncThunk(
       if (!user) {
         console.log('No user data in response, creating minimal user object');
         user = {
-          _id: credentials._id, // Sử dụng email như là ID trong trường hợp không có ID thực
           username: credentials.email,
           name: credentials.email.split('@')[0],
           email: credentials.email
@@ -58,16 +59,43 @@ export const loginUser = createAsyncThunk(
       if (!user._id && user.id) {
         user._id = user.id; // Dùng id nếu có
       } else if (!user._id) {
-        if (user.username && user.username.includes('@')) {
-          // Nếu username là email, dùng làm ID
-          user._id = user.username;
-          user.email = user.username;
-        } else if (user.email) {
-          user._id = user.email; // Dùng email như là ID dự phòng
-        } else {
-          // Trường hợp cuối cùng, dùng email từ credentials
-          user._id = credentials.email;
-          user.email = credentials.email;
+        // Nếu không có _id, sử dụng API để lấy ID thực từ email
+        try {
+          console.log('Fetching real user ID from email:', user.email || credentials.email);
+          const email = user.email || credentials.email;
+          const realUserId = await userService.getUserIdByEmail(email);
+          
+          if (realUserId) {
+            console.log('Found real user ID:', realUserId);
+            user._id = realUserId;
+          } else {
+            // Nếu không lấy được ID thực, tạm thời sử dụng email
+            console.log('Could not get real user ID, using email as fallback');
+            
+            if (user.username && user.username.includes('@')) {
+              user._id = user.username;
+              user.email = user.username;
+            } else if (user.email) {
+              user._id = user.email;
+            } else {
+              user._id = credentials.email;
+              user.email = credentials.email;
+            }
+            
+            // Lưu email vào một trường riêng để sử dụng sau này
+            user.emailIdentifier = user.email;
+          }
+        } catch (idError) {
+          console.error('Error getting real user ID:', idError);
+          // Fallback: sử dụng email làm ID tạm thời
+          if (user.email) {
+            user._id = user.email;
+          } else {
+            user._id = credentials.email;
+            user.email = credentials.email;
+          }
+          // Lưu email vào một trường riêng để sử dụng sau này
+          user.emailIdentifier = user.email;
         }
       }
       

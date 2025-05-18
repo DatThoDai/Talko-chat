@@ -10,7 +10,7 @@ console.log('REACT_APP_API_URL trong axios.js:', constants.REACT_APP_API_URL);
 
 // Sử dụng địa chỉ IP đúng theo yêu cầu của người dùng
 // Đảm bảo trỏ đến đúng địa chỉ IP và cổng của máy chủ backend
-const baseURL = 'http://192.168.137.126:3001';
+const baseURL = 'http://172.29.135.43:3001';
 console.log('Updated baseURL:', baseURL);
 
 // Tạo instance axios với các tham số cấu hình mới

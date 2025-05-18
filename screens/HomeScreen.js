@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   FlatList, 
   TouchableOpacity, 
-  StatusBar 
+  StatusBar,
+  Platform,
+  Vibration 
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,40 +15,123 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomAvatar from '../components/CustomAvatar';
 import { fetchConversations } from '../redux/chatSlice';
 import { colors, spacing, typography } from '../styles';
+import { format, isToday, isYesterday } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { Audio } from 'expo-av'; // Sử dụng expo-av thay thế
 
-const ConversationItem = ({ item, onPress }) => {
+import { registerStore, getSocket, initiateSocket } from '../utils/socketService';
+import store from '../redux/store';
+import notificationService from '../utils/notificationService';
+
+// Format message time helper
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  
+  if (isToday(date)) {
+    return format(date, 'HH:mm', { locale: vi });
+  } else if (isYesterday(date)) {
+    return 'Hôm qua';
+  } else {
+    return format(date, 'dd/MM/yyyy', { locale: vi });
+  }
+};
+
+// Format last message content
+const formatLastMessage = (message) => {
+  if (!message) return '';
+  
+  switch (message.type) {
+    case 'TEXT':
+      return message.content;
+    case 'IMAGE':
+      return '[Hình ảnh]';
+    case 'VIDEO':
+      return '[Video]';
+    case 'FILE':
+      return '[Tệp đính kèm]';
+    case 'VOTE':
+      return '[Bình chọn]';
+    case 'NOTIFICATION':
+      return message.content || '[Thông báo]';
+    default:
+      return message.content || '';
+  }
+};
+
+const ConversationItem = ({ item, onPress, currentUserId }) => {
+  // Thêm log
+  React.useEffect(() => {
+    if (item.lastMessage) {
+      console.log(`🔄 HOME: Rendering conversation item ${item.name || 'Unknown'}:`, {
+        lastMessage: formatLastMessage(item.lastMessage).substring(0, 20),
+        time: item.lastMessage.createdAt ? 
+          new Date(item.lastMessage.createdAt).toLocaleTimeString() : 'unknown',
+        unreadCount: item.unreadMessages?.length || 0
+      });
+    }
+  }, [item.lastMessage]);
+  
+  // Calculate unread count
+  const unreadCount = item.unreadMessages?.length || 0;
+  
+  // Get last message timestamp
+  const lastMessageTime = item.lastMessage?.createdAt 
+    ? formatTime(item.lastMessage.createdAt)
+    : '';
+  
+  // Get last message content
+  const lastMessageContent = formatLastMessage(item.lastMessage);
+  
+  // Check if this is a group conversation
+  const isGroup = item.isGroup || item.participants?.length > 2;
+  
+  // Get sender name if this is a group conversation
+  const senderPrefix = isGroup && item.lastMessage && item.lastMessage.sender?._id !== currentUserId
+    ? `${item.lastMessage.sender?.name || 'Ai đó'}: `
+    : '';
+  
   return (
     <TouchableOpacity 
-      style={styles.conversationItem} 
+      style={[
+        styles.conversationItem,
+        unreadCount > 0 && styles.unreadConversation
+      ]} 
       onPress={() => onPress(item)}
     >
       <CustomAvatar 
         size={50} 
-        name={item.name} 
-        source={item.avatar} 
-        online={false} 
+        name={item.name || ''} 
+        imageUrl={item.avatar} 
+        avatarColor={item.avatarColor || colors.primary}
+        online={item.isOnline} 
       />
       
       <View style={styles.conversationContent}>
         <View style={styles.conversationHeader}>
-          <Text style={styles.conversationName}>{item.name}</Text>
-          <Text style={styles.conversationTime}>{item.timestamp}</Text>
+          <Text style={styles.conversationName} numberOfLines={1}>
+            {item.name || 'Cuộc trò chuyện'}
+          </Text>
+          <Text style={styles.conversationTime}>{lastMessageTime}</Text>
         </View>
         
         <Text 
           style={[
             styles.conversationMessage,
-            item.unread > 0 && styles.unreadMessage
+            unreadCount > 0 && styles.unreadMessage
           ]}
           numberOfLines={1}
         >
-          {item.lastMessage}
+          {senderPrefix}{lastMessageContent || 'Bắt đầu cuộc trò chuyện mới'}
         </Text>
       </View>
       
-      {item.unread > 0 && (
+      {unreadCount > 0 && (
         <View style={styles.unreadBadge}>
-          <Text style={styles.unreadBadgeText}>{item.unread}</Text>
+          <Text style={styles.unreadBadgeText}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -55,19 +140,141 @@ const ConversationItem = ({ item, onPress }) => {
 
 const HomeScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { conversations, isLoading } = useSelector(state => state.chat);
+  const { conversations, loading } = useSelector(state => state.chat);
   const { user } = useSelector(state => state.auth);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
   
+  // Register Redux store with socketService
+  useEffect(() => {
+    registerStore(store);
+    notificationService.setupSound();
+    
+    // THÊM: Khởi tạo socket đúng cách với userId
+    if (user?._id) {
+      console.log('🔌 HOME: Initializing socket with userId:', user._id);
+      initiateSocket(user._id);
+      
+      // THÊM: Join vào tất cả các cuộc trò chuyện hiện có để nhận thông báo
+      const socket = getSocket();
+      if (socket && conversations?.length > 0) {
+        const conversationIds = conversations.map(conv => conv._id);
+        console.log(`🔌 HOME: Joining ${conversationIds.length} conversations`);
+        socket.emit('join-conversations', conversationIds);
+      }
+    }
+    
+    return () => {
+      notificationService.unloadSound();
+    };
+  }, [user?._id]); // Thêm user?._id vào dependencies
+  
+  // Thêm useEffect để join vào các conversation mỗi khi conversations thay đổi
+  useEffect(() => {
+    const socket = getSocket();
+    if (socket && socket.connected && conversations?.length > 0) {
+      const conversationIds = conversations.map(conv => conv._id);
+      console.log(`🔌 HOME: Joining ${conversationIds.length} conversations after update`);
+      socket.emit('join-conversations', conversationIds);
+    }
+  }, [conversations]);
+  
+  // Fetch conversations when component mounts
   useEffect(() => {
     dispatch(fetchConversations());
   }, [dispatch]);
   
+  // Setup socket listeners for new messages
+  useEffect(() => {
+    const socket = getSocket();
+    
+    if (socket) {
+      console.log('🔌 HOME: Socket connected and ready in HomeScreen');
+      
+      // Listen for new messages
+      socket.on('new-message', (conversationId, message) => {
+        console.log('📩 HOME: New message received:', {
+          conversationId,
+          messageId: message?._id,
+          content: message?.content?.substring(0, 20) || '[non-text]',
+          type: message?.type,
+          senderId: message?.sender?._id,
+          currentUserId: user?._id
+        });
+        
+        // Log thêm điều kiện kiểm tra
+        console.log('📩 HOME: Message sender check:', {
+          hasSender: !!message.sender,
+          senderIdMatch: message.sender?._id === user?._id,
+          willProcess: message.sender && message.sender._id !== user?._id
+        });
+        
+        // Nếu là tin nhắn từ người khác
+        if (message.sender && message.sender._id !== user?._id) {
+          console.log('📩 HOME: Processing message from other user');
+          // Cập nhật UI
+          setHasNewMessage(true);
+          
+          // Phát âm thanh và rung
+          notificationService.playNotificationSound();
+          notificationService.vibrate();
+          
+          // Cập nhật danh sách cuộc trò chuyện
+          console.log('📩 HOME: Dispatching fetchConversations()');
+          dispatch(fetchConversations());
+        } else {
+          console.log('📩 HOME: Ignoring message from current user');
+          // SỬA: Thêm vào đây để cập nhật cuộc hội thoại khi người dùng gửi tin nhắn
+          console.log('📩 HOME: But still updating conversations for self messages');
+          dispatch(fetchConversations());
+        }
+      });
+      
+      // Clean up listener when component unmounts
+      return () => {
+        console.log('🔌 HOME: Removing socket listeners in HomeScreen');
+        socket.off('new-message');
+      };
+    } else {
+      console.log('❌ HOME: Socket connection not available in HomeScreen');
+    }
+  }, [dispatch, user]);
+  
+  // Thêm useEffect để quan sát thay đổi của conversations
+  useEffect(() => {
+    console.log(`🗂️ HOME: Conversations updated: ${conversations?.length || 0} conversations`);
+    if (conversations?.length > 0) {
+      console.log('🗂️ HOME: Last conversation:', {
+        name: conversations[0].name,
+        lastMessage: formatLastMessage(conversations[0].lastMessage),
+        time: conversations[0].lastMessage?.createdAt ? 
+          new Date(conversations[0].lastMessage.createdAt).toLocaleTimeString() : 'unknown'
+      });
+    }
+  }, [conversations]);
+  
   const handleConversationPress = (conversation) => {
-    navigation.navigate('Message', { conversationId: conversation.id, name: conversation.name });
+    console.log('👆 HOME: Conversation pressed:', {
+      id: conversation._id,
+      name: conversation.name,
+      lastMessage: formatLastMessage(conversation.lastMessage)
+    });
+    
+    // Reset new message indicator when entering a conversation
+    setHasNewMessage(false);
+    
+    // Navigate to message screen
+    navigation.navigate('MessageScreen', {
+      conversationId: conversation._id,
+      conversationName: conversation.name,
+      avatar: conversation.avatar,
+      avatarColor: conversation.avatarColor,
+      isGroupChat: conversation.isGroup,
+      participants: conversation.participants
+    });
   };
   
   const handleAddNew = () => {
-    navigation.navigate('Contact');
+    navigation.navigate('ContactScreen');
   };
 
   return (
@@ -75,11 +282,13 @@ const HomeScreen = ({ navigation }) => {
       <StatusBar backgroundColor={colors.white} barStyle="dark-content" />
       
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tin nhắn</Text>
+        <Text style={styles.headerTitle}>
+          Tin nhắn {hasNewMessage && <Text style={styles.newMessageDot}>●</Text>}
+        </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.headerButton}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('SearchScreen')}
           >
             <Icon name="search" size={24} color={colors.primary} />
           </TouchableOpacity>
@@ -98,13 +307,15 @@ const HomeScreen = ({ navigation }) => {
         renderItem={({ item }) => (
           <ConversationItem 
             item={item} 
-            onPress={handleConversationPress} 
+            onPress={handleConversationPress}
+            currentUserId={user?._id}
           />
-        )}
-        keyExtractor={item => item.id}
+        )
+        }
+        keyExtractor={item => item._id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          !isLoading && (
+          !loading && (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
                 Không có cuộc trò chuyện nào
@@ -218,18 +429,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.gray,
   },
+  unreadConversation: {
+    backgroundColor: 'rgba(0, 132, 255, 0.05)',
+  },
   unreadMessage: {
     fontWeight: 'bold',
     color: colors.dark,
   },
   unreadBadge: {
-    width: 20,
+    minWidth: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: spacing.sm,
+    paddingHorizontal: 5,
   },
   unreadBadgeText: {
     color: colors.white,
@@ -283,6 +497,11 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: 'bold',
     marginTop: spacing.xs,
+  },
+  newMessageDot: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

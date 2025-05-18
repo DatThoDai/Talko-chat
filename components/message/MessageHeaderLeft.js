@@ -6,6 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons'; // Thêm dòng này
 import CustomAvatar from '../CustomAvatar';
 import PropTypes from 'prop-types';
 
@@ -16,7 +17,8 @@ const MessageHeaderLeft = ({
   avatarColor = '#1982FC', 
   isGroup = false, 
   onBack = () => {}, 
-  onPress = () => {} 
+  onPress = () => {},
+  onVideoCall = () => {} // Thêm prop này
 }) => {
   console.log('[MessageHeaderLeft] Rendering with:', conversationName);
   console.log('[MessageHeaderLeft] Rendering with name:', conversationName, 'isGroup:', isGroup);
@@ -63,6 +65,13 @@ const MessageHeaderLeft = ({
           </Text>
         </View>
       </TouchableOpacity>
+      
+      {/* Thêm nút gọi video */}
+      <TouchableOpacity
+        style={styles.videoCallButton}
+        onPress={onVideoCall}>
+        <MaterialIcons name="video-call" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -74,8 +83,8 @@ MessageHeaderLeft.propTypes = {
   isGroup: PropTypes.bool,
   onBack: PropTypes.func,
   onPress: PropTypes.func,
+  onVideoCall: PropTypes.func, // Thêm prop type cho onVideoCall
 };
-
 
 const styles = StyleSheet.create({
   container: {
@@ -83,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 8,
-    width: 260,
+    width: 300, // Tăng width để chứa thêm nút gọi video
   },
   backButton: {
     width: 36,
@@ -124,6 +133,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#1982FC',
     borderRadius: 8,
     padding: 2,
+  },
+  videoCallButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 });
 

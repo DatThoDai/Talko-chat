@@ -19,7 +19,7 @@ import { logoutUser } from '../redux/authSlice';
 import { userService } from '../api/userService';
 import { authService } from '../api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import meApi from '../api/meApi';
 // Hiển thị một mục thông tin cá nhân
 const ProfileItem = ({ label, value, extraInfo }) => {
   return (
@@ -217,32 +217,67 @@ const ProfileScreen = ({ navigation }) => {
         const imageUri = result.assets[0].uri;
         const filename = imageUri.split('/').pop();
         
-        // Determine file type
+        // Determine file type - bổ sung xác định loại file tốt hơn
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image';
+        const extension = match ? match[1].toLowerCase() : 'jpg';
         
+        let fileType;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            fileType = 'image/jpeg';
+            break;
+          case 'png':
+            fileType = 'image/png';
+            break;
+          case 'gif':
+            fileType = 'image/gif';
+            break;
+          default:
+            fileType = 'image/jpeg';
+        }
+        
+        // Thêm file vào FormData với mimetype đúng
         formData.append('file', {
           uri: imageUri,
-          name: filename,
-          type
+          name: filename || `avatar-${Date.now()}.${extension}`,
+          type: fileType,
+          mimetype: fileType  // Thêm trường mimetype mà server yêu cầu
         });
+        
+        // Thêm các trường khác để giải quyết vấn đề trong MeController.js
+        formData.append('mimetype', fileType);  // Thêm mimetype ngoài object
         
         try {
           // Upload ảnh sử dụng meApi
           const response = await meApi.updateAvatar(formData);
           
-          // Cập nhật UI
-          setProfileImage(response.avatar || imageUri);
+          console.log('Avatar upload success response:', response);
           
-          // Cập nhật user object
-          setUser(prev => ({
-            ...prev,
-            avatar: response.avatar || imageUri
-          }));
-          
-          Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
+          // Cập nhật UI - kiểm tra cấu trúc response đúng
+          const avatarUrl = response?.data?.avatar || response?.avatar;
+          if (avatarUrl) {
+            setProfileImage(avatarUrl);
+            
+            // Cập nhật user object
+            setUser(prev => ({
+              ...prev,
+              avatar: avatarUrl
+            }));
+            
+            Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
+          } else {
+            console.warn('Avatar URL không tìm thấy trong response:', response);
+            Alert.alert('Thành công', 'Ảnh đã được tải lên nhưng có thể không hiển thị ngay.');
+          }
         } catch (uploadError) {
           console.error('Error uploading avatar:', uploadError);
+          
+          // Log chi tiết về lỗi để debug
+          if (uploadError.response) {
+            console.error('Error response:', uploadError.response.data);
+          }
+          
           Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại sau.');
         } finally {
           setIsLoading(false);

@@ -13,7 +13,9 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, typography, borderRadius } from '../styles';
 import { conversationApi, userService } from '../api'; // Thêm userService
 import { useSelector } from 'react-redux'; // Import để lấy user ID
-
+import { useDispatch } from 'react-redux';
+import { fetchFiles } from '../redux/chatSlice';
+import { messageType } from '../constants'; // Import messageType từ constants
 const OptionItem = ({ icon, title, onPress, color = colors.dark }) => {
   return (
     <TouchableOpacity style={styles.optionItem} onPress={onPress}>
@@ -33,8 +35,11 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const { user } = useSelector(state => state.auth);
   const userId = user?._id;
-  const [isGroupAdmin, setIsGroupAdmin] = useState(false); // Thêm state này
-
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false);
+  
+  // Thêm dòng này để khởi tạo dispatch
+  const dispatch = useDispatch();
+  
   useEffect(() => {
     // Giả định trạng thái mặc định là "đã bật thông báo"
     setNotificationEnabled(true);
@@ -113,11 +118,32 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     // Xóa dòng navigation.goBack() ở đây vì nó sẽ làm người dùng quay lại trước khi thấy màn hình Member
   };
 
-  const handleViewMedia = () => {
-    // In a real app, navigate to media gallery
-    Alert.alert('Tính năng đang phát triển', 'Tính năng này sẽ sớm được cập nhật');
-    navigation.goBack();
-  };
+  // Sửa hàm handleViewMedia
+const handleViewMedia = async () => {
+  try {
+    console.log('handleViewMedia called with conversationId:', conversationId);
+    console.log('Route params:', route.params);
+    // Hiển thị loading nếu cần
+    setIsLoading(prev => ({ ...prev, media: true }));
+    
+    // Sử dụng conversationId từ route.params thay vì currentConversationId
+    await dispatch(
+      fetchFiles({
+        conversationId: conversationId, // Sửa ở đây
+        type: messageType.ALL,
+      })
+    );
+    
+    // Điều hướng đến FileScreen - đảm bảo tên này trùng khớp với định nghĩa trong navigator
+    navigation.navigate('FileScreen');
+  } catch (error) {
+    console.error('Error loading files:', error);
+    Alert.alert('Lỗi', 'Không thể tải dữ liệu. Vui lòng thử lại sau.');
+  } finally {
+    // Tắt loading
+    setIsLoading(prev => ({ ...prev, media: false }));
+  }
+};
 
   const handleNotifications = async () => {
     try {

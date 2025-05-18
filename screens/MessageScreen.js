@@ -33,6 +33,7 @@ import {
   disconnectSocket,
   getSocket,
   leaveConversation,
+  markConversationAsViewed,
 } from '../utils/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useDispatch} from 'react-redux';
@@ -49,7 +50,14 @@ import voteApi from '../api/voteApi';
 import socketService from '../utils/socketService';
 // Thêm vào đầu file
 import { useFocusEffect } from '@react-navigation/native';
-
+import SystemNotificationMessage from '../components/message/SystemNotificationMessage';
+// Thêm imports
+// import { 
+//   bulkCacheNotificationUsers,
+//   cacheNotificationUser
+// } from '../redux/chatSlice';
+// Thêm import
+import IncomingCallModal from '../components/modal/IncomingCallModal';
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
@@ -135,11 +143,23 @@ const MessageScreen = ({navigation, route}) => {
   // Thêm state mới để lưu trữ userId thực
   const [realUserId, setRealUserId] = useState(null);
 
+  // Thêm vào đầu component MessageScreen trong phần khai báo state
+  const [incomingCall, setIncomingCall] = useState({
+    visible: false,
+    caller: null,
+  });
+
+  const dispatch = useDispatch(); 
+
+
   // References
   const flatListRef = useRef(null);
 
   // Tạo một Set để theo dõi ID tin nhắn đã xử lý
   const [processedMessageIds] = useState(new Set());
+
+  // Thêm vào sau phần khai báo state, trước các useEffect
+  const currentUserId = realUserId || user?._id;
 
   // Phương thức cuộn đến tin nhắn mới nhất ở dưới cùng - cải tiến để không tự động nhảy
   const scrollToBottom = (animated = false, force = false) => {
@@ -409,6 +429,33 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         socketInstance.on('new-message', handleNewMessage);
       }
       
+      // Thêm lắng nghe sự kiện new-user-call
+      const handleIncomingCall = (data) => {
+        console.log('Có người gọi vào với peerId:', data.peerId);
+        
+        // Nếu người gọi không phải là mình
+        if (data.newUserId !== user._id && data.newUserId !== realUserId) {
+          // Tìm thông tin người gọi từ danh sách participants
+          const callerInfo = participants?.find(p => p._id === data.newUserId) || {
+            _id: data.newUserId,
+            name: 'Người dùng',
+            avatar: '',
+            avatarColor: colors.primary
+          };
+          
+          // Hiển thị modal cuộc gọi đến
+          setIncomingCall({
+            visible: true,
+            caller: callerInfo,
+            peerId: data.peerId,
+            conversationId: data.conversationId
+          });
+        }
+      };
+      
+      // Đăng ký lắng nghe sự kiện cuộc gọi đến
+      socketService.on('new-user-call', handleIncomingCall);
+      
       // Ưu tiên lấy tên từ route.params trước
       const actualName = route.params?.name || conversationName || 'Cuộc trò chuyện';
       const actualAvatar = typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || '');
@@ -434,6 +481,7 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             isGroup={isGroupConversation} // Thêm prop này
             onBack={() => navigation.goBack()}
             onPress={() => handleGoToOptionScreen()}
+            onVideoCall={handleStartVideoCall} // Thêm dòng này
           />
         ),
         headerTitle: () => null,
@@ -452,6 +500,8 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
           console.log('Leaving conversation:', conversationId);
           leaveConversation(conversationId);
         }
+        // Clean up
+        socketService.off('new-user-call', handleIncomingCall);
       };
     }
   }, [conversationId, user?._id, conversationName, route.params?.name, route.params?.isGroup]);
@@ -817,7 +867,6 @@ const loadVoteDetails = async () => {
         sender: currentUserInfo,
         isTemp: true,
         isMyMessage: true, // Mark as the user's message explicitly
-        forceMyMessage: true, // Always set this flag for messages from current user
         status: 'sending', // Keep existing status property
       };
 
@@ -1283,11 +1332,10 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
   }
 };
 
-// Render message item
+// Cập nhật hàm renderMessage để xử lý tin nhắn hệ thống
 const renderMessage = (message, index) => {
   // Đảm bảo tin nhắn hợp lệ
   if (!message) return null;
-  
   // Bổ sung thông tin người gửi nếu thiếu
   if (message.sender && !message.sender.name) {
     // Tìm thông tin người gửi từ danh sách participants
@@ -1349,6 +1397,19 @@ const renderMessage = (message, index) => {
     realId: realUserId
   });
 
+  
+  // Xử lý các tin nhắn hệ thống
+  if (message.type === 'NOTIFICATION' || 
+      message.isNotification === true || 
+      message.isSystemMessage === true) {
+    return (
+      <SystemNotificationMessage 
+        key={message._id || `notification-${index}`}
+        message={message}
+      />
+    );
+  }
+  
   // Kiểm tra nếu là tin nhắn vote
   if (message.type === 'VOTE') {
     // Đảm bảo message có cấu trúc hợp lệ trước khi render
@@ -1411,6 +1472,74 @@ const renderMessage = (message, index) => {
       return () => {};
     }, [conversationId, messages.length])
   );
+
+  // Trong useEffect, khi nhận thông tin participants
+// useEffect(() => {
+//   if (participants && participants.length > 0) {
+//     // Cache thông tin người dùng từ participants vào Redux
+//     dispatch(bulkCacheNotificationUsers({ users: participants }));
+//     console.log(`Cached ${participants.length} users for notifications to Redux`);
+//   }
+// }, [participants]);
+
+  // Thêm hàm xử lý chấp nhận cuộc gọi
+const handleAcceptCall = () => {
+  // Đóng modal
+  setIncomingCall(prev => ({ ...prev, visible: false }));
+  
+  // Điều hướng đến VideoCallScreen
+  navigation.navigate('VideoCallScreen', {
+    conversationId,
+    conversationName,
+    participants,
+    isGroup: actualIsGroupChat,
+    isIncoming: true,
+    remotePeerId: incomingCall.peerId,
+    effectiveUserId: realUserId || user?._id, // Đảm bảo dùng ID chính xác
+  });
+};
+
+// Thêm hàm xử lý từ chối cuộc gọi
+const handleRejectCall = () => {
+  // Đóng modal
+  setIncomingCall(prev => ({ ...prev, visible: false }));
+};
+
+// Thêm hàm khởi tạo cuộc gọi video
+const handleStartVideoCall = () => {
+  console.log('📞 VIDEO CALL: Starting call from MessageScreen');
+  console.log('📞 VIDEO CALL: Route params:', {
+    conversationId,
+    conversationName,
+    participants: participants?.length || 0,
+    isGroup: actualIsGroupChat,
+    effectiveUserId: realUserId || user?._id,
+  });
+
+  // Điều hướng đến VideoCallScreen
+  navigation.navigate('VideoCallScreen', {
+    conversationId,
+    conversationName,
+    participants,
+    isGroup: actualIsGroupChat,
+    isInitiator: true,
+    effectiveUserId: realUserId || user?._id,
+  });
+};
+
+  // Trong useEffect của MessageScreen, sau khi đã load tin nhắn
+useEffect(() => {
+  if (conversationId) {
+    // Đánh dấu cuộc trò chuyện là đã đọc khi mở màn hình
+    markConversationAsViewed(conversationId);
+    
+    // Gửi trạng thái đã đọc lên server
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('conversation-last-view', conversationId);
+    }
+  }
+}, [conversationId]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -1552,6 +1681,14 @@ const renderMessage = (message, index) => {
               setModalVisible={setMessageDetailProps}
             />
           )}
+          
+          <IncomingCallModal
+            visible={incomingCall.visible}
+            caller={incomingCall.caller}
+            conversationName={conversationName}
+            onAccept={handleAcceptCall}
+            onReject={handleRejectCall}
+          />
           
         </KeyboardAvoidingView>
       </SafeAreaView>

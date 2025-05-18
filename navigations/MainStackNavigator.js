@@ -19,7 +19,12 @@ import MemberScreen from '../screens/MemberScreen';
 import AddToGroupScreen from '../screens/AddToGroupScreen';
 import CreateVoteScreen from '../screens/CreateVoteScreen';
 import VoteDetailScreen from '../screens/VoteDetailScreen';
+import FileScreen from '../screens/FileScreen';
+import ImageViewer from '../screens/ImageViewer';
+import VideoPlayer from '../screens/VideoPlayer';
+import VideoCallScreen from '../screens/VideoCallScreen';
 
+import {colors} from '../styles';
 // Tab Navigator chính (điều hướng giữa các tab)
 import TabNavigator from './TabNavigator';
 
@@ -122,6 +127,36 @@ const MainStackNavigator = () => {
           headerShown: false,
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
+      />
+      <Stack.Screen
+        name="FileScreen"
+        component={FileScreen}
+        options={{
+          headerShown: true,
+          title: "Ảnh, video, file đã gửi",
+          headerStyle: {
+            backgroundColor: colors.primary,
+          },
+          headerTintColor: colors.white,
+          headerTitleStyle: {
+            fontWeight: '500',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="ImageViewer"
+        component={ImageViewer}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="VideoPlayer"
+        component={VideoPlayer}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="VideoCallScreen"
+        component={VideoCallScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

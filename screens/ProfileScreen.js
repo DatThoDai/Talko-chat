@@ -317,6 +317,42 @@ const ProfileScreen = ({ navigation }) => {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setIsLoading(true);
         
+        // Tạo FormData để upload ảnh
+        const formData = new FormData();
+        const imageUri = result.assets[0].uri;
+        const filename = imageUri.split('/').pop();
+        
+        // Determine file type - bổ sung xác định loại file tốt hơn
+        const match = /\.(\w+)$/.exec(filename);
+        const extension = match ? match[1].toLowerCase() : 'jpg';
+        
+        let fileType;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            fileType = 'image/jpeg';
+            break;
+          case 'png':
+            fileType = 'image/png';
+            break;
+          case 'gif':
+            fileType = 'image/gif';
+            break;
+          default:
+            fileType = 'image/jpeg';
+        }
+        
+        // Thêm file vào FormData với mimetype đúng
+        formData.append('file', {
+          uri: imageUri,
+          name: filename || `avatar-${Date.now()}.${extension}`,
+          type: fileType,
+          mimetype: fileType  // Thêm trường mimetype mà server yêu cầu
+        });
+        
+        // Thêm các trường khác để giải quyết vấn đề trong MeController.js
+        formData.append('mimetype', fileType);  // Thêm mimetype ngoài object
+        
         try {
           const asset = result.assets[0];
           const imageUri = asset.uri;

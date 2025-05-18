@@ -474,11 +474,12 @@ function ReceiverMessage({
     <View style={styles.container}>
       <View style={styles.avatarContainer}>
         <CustomAvatar
-          size={36}
-          name={senderName}
-          avatar={sender?.avatar || null}
-          color={sender?.avatarColor}
-        />
+  size={36}
+  name={senderName}
+  avatar={sender?.avatar}
+  imageUrl={sender?.avatar} // Thêm imageUrl để đảm bảo hoạt động
+  color={sender?.avatarColor}
+/>
       </View>
 
       <View style={styles.messageContainer}>

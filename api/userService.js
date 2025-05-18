@@ -68,7 +68,7 @@ export const userService = {
       }
       
       // Sử dụng đúng endpoint từ UserController: /search/id/:userId
-      const response = await api.get(`/search/id/${userId}`);
+      const response = await api.get(`/users/search/id/${userId}`);
       return response;
     } catch (error) {
       console.error('Error searching by ID:', error);
@@ -122,7 +122,7 @@ export const userService = {
   getUserById: async (userId) => {
     try {
       // Sử dụng endpoint có sẵn từ backend
-      const response = await api.get(`/search/id/${userId}`);
+      const response = await api.get(`/users/search/id/${userId}`);
       return response;
     } catch (error) {
       console.error('Error getting user by ID:', error);

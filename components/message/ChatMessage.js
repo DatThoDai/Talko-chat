@@ -6,7 +6,7 @@ import commonFuc from '../../utils/commonFuc';
 import { formatMessageTime } from '../../utils/dateUtils';
 import ReceiverMessage from './ReceiverMessage';
 import SenderMessage from './SenderMessage';
-
+import SystemNotificationMessage from './SystemNotificationMessage';
 // Định nghĩa MESSAGE_STATUS để tránh lỗi
 const MESSAGE_STATUS = {
   recalled: 'recalled',
@@ -38,6 +38,17 @@ const ChatMessage = ({
   // Skip rendering completely if the message is deleted (but NOT if it's recalled)
   if (message?.isDeleted && !message?.isRecalled) {
     return null;
+  }
+
+  // Thêm vào trong hàm ChatMessage, trước đoạn code xác định sender/receiver
+
+  // Nếu là tin nhắn thông báo từ hệ thống, sử dụng SystemNotificationMessage
+  if (message.type === 'NOTIFY') {
+    return (
+      <SystemNotificationMessage
+        message={message}
+      />
+    );
   }
 
   // Sửa hàm isSender để debug rõ ràng hơn

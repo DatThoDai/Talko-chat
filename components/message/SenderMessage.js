@@ -539,11 +539,12 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
       
       <View style={styles.avatarContainer}>
         <CustomAvatar
-          size={36}
-          name={sender?.name}
-          avatar={sender?.avatar}
-          color={sender?.avatarColor}
-        />
+  size={36}
+  name={sender?.name || 'Bạn'}
+  avatar={sender?.avatar}
+  imageUrl={sender?.avatar} // Thêm imageUrl để đảm bảo hoạt động
+  color={sender?.avatarColor}
+/>
       </View>
       
       <MessageActions

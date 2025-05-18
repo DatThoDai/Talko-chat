@@ -33,6 +33,7 @@ import {
   disconnectSocket,
   getSocket,
   leaveConversation,
+  markConversationAsViewed,
 } from '../utils/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useDispatch} from 'react-redux';
@@ -51,6 +52,14 @@ import pinMessagesApi from '../api/pinMessagesApi';
 // Thêm vào đầu file
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
+import SystemNotificationMessage from '../components/message/SystemNotificationMessage';
+// Thêm imports
+// import { 
+//   bulkCacheNotificationUsers,
+//   cacheNotificationUser
+// } from '../redux/chatSlice';
+// Thêm import
+import IncomingCallModal from '../components/modal/IncomingCallModal';
 // Constants for default values - matching zelo_mobile implementation
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
@@ -137,6 +146,15 @@ const MessageScreen = ({navigation, route}) => {
   // Thêm state mới để lưu trữ userId thực
   const [realUserId, setRealUserId] = useState(null);
 
+  // Thêm vào đầu component MessageScreen trong phần khai báo state
+  const [incomingCall, setIncomingCall] = useState({
+    visible: false,
+    caller: null,
+  });
+
+  const dispatch = useDispatch(); 
+
+
   // References
   const flatListRef = useRef(null);
 
@@ -152,6 +170,8 @@ const MessageScreen = ({navigation, route}) => {
       setConversationName(route.params.conversationName);
     }
   }, [route.params?.conversationName, isFocused]);
+  // Thêm vào sau phần khai báo state, trước các useEffect
+  const currentUserId = realUserId || user?._id;
 
   // Phương thức cuộn đến tin nhắn mới nhất ở dưới cùng - cải tiến để không tự động nhảy
   const scrollToBottom = (animated = false, force = false) => {
@@ -283,10 +303,37 @@ const MessageScreen = ({navigation, route}) => {
                                 message.sender?._id === realUserId;
             
             // 3. Kiểm tra tin nhắn tạm thời đã được gửi thành công
-            const matchingTempMessage = prevMessages.find(msg => 
-              msg.isTemp && msg.content === message.content && 
-              Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000
-            );
+const matchingTempMessage = prevMessages.find(msg => {
+  // Nếu là tin nhắn văn bản, so sánh content
+  if (message.type === 'TEXT' && msg.content === message.content) {
+    return Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000;
+  }
+  
+  // NẾU TIN NHẮN DẠNG FILE - so sánh URL hoặc mediaUrl
+  if ((message.type === 'IMAGE' || message.type === 'FILE' || message.type === 'VIDEO') && 
+      (msg.type === message.type)) {
+    
+    // So sánh fileUrl/url/mediaUrl từ cả hai phía
+    const msgUrl = msg.fileUrl || msg.url || msg.mediaUrl || '';
+    const newMsgUrl = message.fileUrl || message.url || message.mediaUrl || '';
+    
+    // So sánh phần cuối của URL (vì đôi khi URL đầy đủ sẽ khác nhau)
+    const msgUrlEnd = msgUrl.split('/').pop();
+    const newMsgUrlEnd = newMsgUrl.split('/').pop();
+    
+    console.log('File matching check:', {
+      msgUrl: msgUrlEnd,
+      newUrl: newMsgUrlEnd,
+      match: msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== ''
+    });
+    
+    // Nếu tên file giống nhau hoặc thời gian gửi gần nhau -> đây là tin nhắn trùng lặp
+    return (msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== '') || 
+           (Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 20000);
+  }
+  
+  return false;
+});
             
             if (matchingTempMessage) {
               console.log('Found matching temp message, skipping socket message');
@@ -310,14 +357,81 @@ const MessageScreen = ({navigation, route}) => {
             // Xử lý thông tin người gửi
             let enhancedMessage = {...message};
             
-            // 4. QUAN TRỌNG: Đảm bảo tin nhắn từ socket luôn có sender
-            if (!enhancedMessage.sender || !enhancedMessage.sender._id) {
-              enhancedMessage.sender = {
-                _id: isOwnMessage ? user._id : 'unknown',
-                name: isOwnMessage ? (user.name || user.username || 'Bạn') : 'Người dùng khác',
-                avatar: isOwnMessage ? user.avatar : '',
-              };
-            }
+            // 4. QUAN TRỌNG: Đảm bảo tin nhắn từ socket luôn có sender đầy đủ
+if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.sender.name) {
+  // Xác định ID người gửi từ nhiều nguồn có thể
+  const senderId = enhancedMessage.sender?._id || enhancedMessage.userId || enhancedMessage.user?._id;
+  
+  // Tìm thông tin người gửi từ danh sách participants
+  const senderInfo = participants?.find(p => p._id === senderId);
+  
+  if (senderInfo) {
+    // Nếu tìm thấy trong participants, sử dụng thông tin từ đó
+    console.log(`Found sender info for ${senderId} in participants:`, senderInfo.name);
+    enhancedMessage.sender = {
+      _id: senderId,
+      name: senderInfo.name || senderInfo.username || 'Người dùng',
+      avatar: senderInfo.avatar || '',
+      avatarColor: senderInfo.avatarColor || '#1194ff'
+    };
+  } else if (isOwnMessage) {
+    // Nếu là tin nhắn của người dùng hiện tại
+    enhancedMessage.sender = {
+      _id: user._id,
+      name: user.name || user.username || 'Bạn',
+      avatar: user.avatar || '',
+      avatarColor: user.avatarColor || '#1194ff'
+    };
+  } else if (senderId && senderId !== 'unknown') {
+    // Set temporary name
+    enhancedMessage.sender = {
+      _id: senderId,
+      name: 'Đang tải...',  // Thay vì "Người dùng khác"
+      avatar: '',
+    };
+    
+    // Fetch real user info without blocking (async)
+    setTimeout(async () => {
+      try {
+        // Sử dụng searchByUsername thay vì getUserById
+        const userResponse = await userService.getUserById(senderId);
+        
+        if (userResponse && userResponse.data) {
+          // Trích xuất dữ liệu người dùng
+          const userData = Array.isArray(userResponse.data) ? userResponse.data[0] : userResponse.data;
+          
+          if (userData) {
+            console.log(`Found user info for ${senderId}:`, userData.name);
+            
+            // Cập nhật tin nhắn với thông tin đầy đủ từ API
+            setMessages(prevMsgs => 
+              prevMsgs.map(msg => 
+                msg._id === enhancedMessage._id ? {
+                  ...msg, 
+                  sender: {
+                    _id: userData._id || senderId,
+                    name: userData.name || userData.username || 'Người dùng',
+                    avatar: userData.avatar || '',
+                    avatarColor: userData.avatarColor || '#1194ff'
+                  }
+                } : msg
+              )
+            );
+          }
+        }
+      } catch (error) {
+        console.log('Error searching user info:', error);
+      }
+    }, 100);
+  } else {
+    // Fallback nếu không có ID
+    enhancedMessage.sender = {
+      _id: 'unknown',
+      name: 'Người dùng không xác định',
+      avatar: '',
+    };
+  }
+}
             
             // 5. QUAN TRỌNG: Đánh dấu đúng nếu là tin nhắn của mình
             if (isOwnMessage) {
@@ -352,6 +466,33 @@ const MessageScreen = ({navigation, route}) => {
         }
       }
       
+      // Thêm lắng nghe sự kiện new-user-call
+      const handleIncomingCall = (data) => {
+        console.log('Có người gọi vào với peerId:', data.peerId);
+        
+        // Nếu người gọi không phải là mình
+        if (data.newUserId !== user._id && data.newUserId !== realUserId) {
+          // Tìm thông tin người gọi từ danh sách participants
+          const callerInfo = participants?.find(p => p._id === data.newUserId) || {
+            _id: data.newUserId,
+            name: 'Người dùng',
+            avatar: '',
+            avatarColor: colors.primary
+          };
+          
+          // Hiển thị modal cuộc gọi đến
+          setIncomingCall({
+            visible: true,
+            caller: callerInfo,
+            peerId: data.peerId,
+            conversationId: data.conversationId
+          });
+        }
+      };
+      
+      // Đăng ký lắng nghe sự kiện cuộc gọi đến
+      socketService.on('new-user-call', handleIncomingCall);
+      
       // Ưu tiên lấy tên từ route.params trước
       const actualName = route.params?.name || conversationName || 'Cuộc trò chuyện';
       const actualAvatar = typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || '');
@@ -377,6 +518,7 @@ const MessageScreen = ({navigation, route}) => {
             isGroup={isGroupConversation} // Thêm prop này
             onBack={() => navigation.goBack()}
             onPress={() => handleGoToOptionScreen()}
+            onVideoCall={handleStartVideoCall} // Thêm dòng này
           />
         ),
         headerTitle: () => null,
@@ -441,6 +583,8 @@ const MessageScreen = ({navigation, route}) => {
         if (socket) {
           socket.off('rename-conversation', handleRenameConversation);
         }
+        // Clean up
+        socketService.off('new-user-call', handleIncomingCall);
       };
     }
   }, [conversationId, user?._id, route.params.conversationId]);
@@ -806,7 +950,6 @@ const loadVoteDetails = async () => {
         sender: currentUserInfo,
         isTemp: true,
         isMyMessage: true, // Mark as the user's message explicitly
-        forceMyMessage: true, // Always set this flag for messages from current user
         status: 'sending', // Keep existing status property
       };
 
@@ -1272,11 +1415,10 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
   }
 };
 
-// Render message item
+// Cập nhật hàm renderMessage để xử lý tin nhắn hệ thống
 const renderMessage = (message, index) => {
   // Đảm bảo tin nhắn hợp lệ
   if (!message) return null;
-  
   // Bổ sung thông tin người gửi nếu thiếu
   if (message.sender && !message.sender.name) {
     // Tìm thông tin người gửi từ danh sách participants
@@ -1338,6 +1480,19 @@ const renderMessage = (message, index) => {
     realId: realUserId
   });
 
+  
+  // Xử lý các tin nhắn hệ thống
+  if (message.type === 'NOTIFICATION' || 
+      message.isNotification === true || 
+      message.isSystemMessage === true) {
+    return (
+      <SystemNotificationMessage 
+        key={message._id || `notification-${index}`}
+        message={message}
+      />
+    );
+  }
+  
   // Kiểm tra nếu là tin nhắn vote
   if (message.type === 'VOTE') {
     // Đảm bảo message có cấu trúc hợp lệ trước khi render
@@ -1474,6 +1629,73 @@ const renderMessage = (message, index) => {
       });
     }
   }, [conversationName, conversationId]);
+  // Trong useEffect, khi nhận thông tin participants
+// useEffect(() => {
+//   if (participants && participants.length > 0) {
+//     // Cache thông tin người dùng từ participants vào Redux
+//     dispatch(bulkCacheNotificationUsers({ users: participants }));
+//     console.log(`Cached ${participants.length} users for notifications to Redux`);
+//   }
+// }, [participants]);
+
+  // Thêm hàm xử lý chấp nhận cuộc gọi
+const handleAcceptCall = () => {
+  // Đóng modal
+  setIncomingCall(prev => ({ ...prev, visible: false }));
+  
+  // Điều hướng đến VideoCallScreen
+  navigation.navigate('VideoCallScreen', {
+    conversationId,
+    conversationName,
+    participants,
+    isGroup: actualIsGroupChat,
+    isIncoming: true,
+    remotePeerId: incomingCall.peerId,
+    effectiveUserId: realUserId || user?._id, // Đảm bảo dùng ID chính xác
+  });
+};
+
+// Thêm hàm xử lý từ chối cuộc gọi
+const handleRejectCall = () => {
+  // Đóng modal
+  setIncomingCall(prev => ({ ...prev, visible: false }));
+};
+
+// Thêm hàm khởi tạo cuộc gọi video
+const handleStartVideoCall = () => {
+  console.log('📞 VIDEO CALL: Starting call from MessageScreen');
+  console.log('📞 VIDEO CALL: Route params:', {
+    conversationId,
+    conversationName,
+    participants: participants?.length || 0,
+    isGroup: actualIsGroupChat,
+    effectiveUserId: realUserId || user?._id,
+  });
+
+  // Điều hướng đến VideoCallScreen
+  navigation.navigate('VideoCallScreen', {
+    conversationId,
+    conversationName,
+    participants,
+    isGroup: actualIsGroupChat,
+    isInitiator: true,
+    effectiveUserId: realUserId || user?._id,
+  });
+};
+
+  // Trong useEffect của MessageScreen, sau khi đã load tin nhắn
+useEffect(() => {
+  if (conversationId) {
+    // Đánh dấu cuộc trò chuyện là đã đọc khi mở màn hình
+    markConversationAsViewed(conversationId);
+    
+    // Gửi trạng thái đã đọc lên server
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('conversation-last-view', conversationId);
+    }
+  }
+}, [conversationId]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -1629,6 +1851,14 @@ const renderMessage = (message, index) => {
               setModalVisible={setMessageDetailProps}
             />
           )}
+          
+          <IncomingCallModal
+            visible={incomingCall.visible}
+            caller={incomingCall.caller}
+            conversationName={conversationName}
+            onAccept={handleAcceptCall}
+            onReject={handleRejectCall}
+          />
           
         </KeyboardAvoidingView>
       </SafeAreaView>

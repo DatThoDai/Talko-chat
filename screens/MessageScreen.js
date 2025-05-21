@@ -258,6 +258,7 @@ const MessageScreen = ({navigation, route}) => {
   useEffect(() => {
     if (conversationId && user?._id) {
       // Initialize socket connection
+      
       initiateSocket(user?._id, conversationId);
       
       // Load initial messages
@@ -1045,8 +1046,8 @@ const loadVoteDetails = async () => {
           ...response.data,
           sender: {
             _id: user._id,
-            name: user.name || user.username || 'Bạn',
-            avatar: user.avatar || '',
+            name: user.name,
+            avatar: user.avatar,
           },
           isMyMessage: true,
           forceMyMessage: true

@@ -9,16 +9,20 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Platform,
+  Vibration
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomAvatar from '../components/CustomAvatar';
 import { colors, spacing, borderRadius } from '../styles';
 import { formatConversationDate } from '../utils/dateUtils';
-import socketService from '../utils/socketService';
+import { initiateSocket, getSocket } from '../utils/socketService';
 import conversationApi from '../api/conversationApi';
+import notificationService from '../utils/notificationService';
+import userService from '../api/userService'; // Đảm bảo import userService từ '../api/userService'
 
 const ConversationItem = ({ conversation, onPress }) => {
   const { user } = useSelector(state => state.auth);
@@ -140,8 +144,18 @@ const ConversationItem = ({ conversation, onPress }) => {
 };
 
 const ConversationsScreen = ({ navigation }) => {
+  // States hiện tại...
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Thêm states mới
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [processedMessageIds] = useState(new Set());  // Để tránh xử lý trùng lặp
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [realUserId, setRealUserId] = useState(null);
+  
+  const isFocused = useIsFocused();
+  
   const { user } = useSelector((state) => state.auth);
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -149,44 +163,6 @@ const ConversationsScreen = ({ navigation }) => {
 
   // Function to load conversations
   // Dữ liệu mẫu để phát triển UI trong khi API chưa sẵn sàng
-  const mockConversations = [
-    {
-      _id: '1',
-      name: 'Nhóm bạn thân',
-      avatar: '',
-      avatarColor: '#1890ff',
-      lastMessage: {
-        content: 'Cafe cuối tuần nhé các bạn!',
-        createdAt: new Date().toISOString(),
-        userId: '999',
-        user: { name: 'Hương' }
-      },
-      type: true, // group chat
-      members: [
-        { _id: '101', name: 'Tuấn' },
-        { _id: '102', name: 'Hương' },
-        { _id: '103', name: 'Minh' },
-      ],
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: '2',
-      name: 'Minh Anh',
-      avatar: '',
-      avatarColor: '#52c41a',
-      lastMessage: {
-        content: 'Gửi cho mình file báo cáo đồ án nhé',
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        userId: '201',
-        user: { name: 'Minh Anh' }
-      },
-      type: false, // individual chat
-      members: [
-        { _id: '201', name: 'Minh Anh' }
-      ],
-      updatedAt: new Date(Date.now() - 3600000).toISOString()
-    }
-  ];
   
   const loadConversations = useCallback(async () => {
     setIsLoading(true);
@@ -250,32 +226,164 @@ const ConversationsScreen = ({ navigation }) => {
     }
   }, [searchText]);
 
-  // Effect to initialize socket
+  // Effect to initialize socket - cải thiện từ hiện tại
   useEffect(() => {
-    // Khởi tạo socket khi cần
+    // Cài đặt âm thanh thông báo
+    notificationService.setupSound();
+    
+    // Khởi tạo socket khi component mount
     const initializeSocket = async () => {
       try {
-        // Lấy userId từ đối tượng user
         const userId = user?._id;
         if (userId) {
-          console.log('Initializing socket with userId:', userId);
-          await socketService.initiateSocket(userId);
-        } else {
-          console.error('Cannot initialize socket: userId is undefined');
+          console.log('🔌 CONV: Initializing socket with userId:', userId);
+          
+          // Khởi tạo socket với Promise
+          initiateSocket(userId)
+            .then(socket => {
+              if (socket && socket.connected) {
+                console.log('🔌 CONV: Socket connected successfully, id:', socket.id);
+                setSocketConnected(true);
+                
+                // Join vào các cuộc trò chuyện ngay sau khi kết nối
+                if (conversations?.length > 0) {
+                  const conversationIds = conversations.map(conv => conv._id);
+                  console.log(`🔌 CONV: Joining ${conversationIds.length} conversations`);
+                  socket.emit('join-conversations', conversationIds);
+                }
+              }
+            })
+            .catch(err => {
+              console.error('🔌 CONV: Error initializing socket:', err);
+            });
         }
       } catch (error) {
-        console.error('Error initializing socket:', error);
+        console.error('❌ CONV: Error initializing socket:', error);
       }
     };
     
     initializeSocket();
     
     return () => {
-      // Cleanup socket khi unmount
-      socketService.disconnectSocket();
+      // Dọn dẹp khi unmount
+      notificationService.unloadSound();
+      
+      // Chỉ hủy listeners, không disconnect socket
+      const socket = getSocket();
+      if (socket) {
+        socket.off('new-message');
+      }
     };
-  }, [user]);
+  }, [user?._id]);
 
+  // Đăng ký sự kiện socket cho tin nhắn mới - cải thiện từ hiện tại
+  useEffect(() => {
+    const socketInstance = getSocket();
+    const currentUserId = realUserId || user?._id;
+    
+    if (socketInstance && socketInstance.connected) {
+      console.log('🔌 CONV: Setting up new-message listener with currentUserId:', currentUserId);
+      
+      const handleMessageReceived = (conversationId, message) => {
+        // Xử lý tin nhắn mới
+        console.log('📩 CONV: New message received:', {
+          conversationId,
+          messageId: message?._id,
+          content: message?.content?.substring(0, 20) || '[non-text]',
+          sender: message?.sender?._id
+        });
+        
+        // Tránh xử lý trùng lặp
+        if (message._id && processedMessageIds.has(message._id)) {
+          console.log('📩 CONV: Skipping already processed message:', message._id);
+          return;
+        }
+        
+        // Đánh dấu đã xử lý
+        if (message._id) {
+          processedMessageIds.add(message._id);
+        }
+        
+        // Kiểm tra xem tin nhắn có phải của mình hay không
+        const isOwnMessage = 
+          (message.sender && message.sender._id === user?._id) ||
+          (realUserId && message.sender && message.sender._id === realUserId) ||
+          message.isMyMessage === true ||
+          message.forceMyMessage === true;
+        
+        console.log('📩 CONV: Message ownership check:', {
+          isOwnMessage,
+          senderId: message.sender?._id,
+          currentId: user?._id,
+          realId: realUserId
+        });
+        
+        // Nếu không phải tin nhắn từ mình và màn hình hiện tại không phải MessageScreen
+        if (!isOwnMessage && !navigation.isFocused('MessageScreen')) {
+          console.log('📩 CONV: Message from other user, showing notification');
+          
+          // Cập nhật UI
+          setHasNewMessage(true);
+          
+          // Phát âm thanh và rung
+          notificationService.playNotificationSound();
+          if (Platform.OS === 'android' || Platform.OS === 'ios') {
+            Vibration.vibrate(300);
+          }
+        }
+        
+        // Cập nhật danh sách cuộc trò chuyện
+        setConversations(prevConversations => {
+          return prevConversations.map(conversation => {
+            if (conversation._id === conversationId) {
+              // Cập nhật cuộc trò chuyện với tin nhắn mới
+              return {
+                ...conversation,
+                lastMessage: message,
+                updatedAt: new Date().toISOString(),
+                // Tăng số tin nhắn chưa đọc nếu không phải tin nhắn của mình
+                unreadCount: !isOwnMessage ? (conversation.unreadCount || 0) + 1 : conversation.unreadCount || 0
+              };
+            }
+            return conversation;
+          });
+        });
+      };
+      
+      // Đăng ký lắng nghe sự kiện new-message
+      socketInstance.on('new-message', handleMessageReceived);
+      
+      // Thêm sự kiện check-online-status để nắm bắt trạng thái kết nối
+      socketInstance.on('connect', () => {
+        console.log('🔌 CONV: Socket connected event');
+        setSocketConnected(true);
+      });
+      
+      socketInstance.on('disconnect', () => {
+        console.log('🔌 CONV: Socket disconnected event');
+        setSocketConnected(false);
+      });
+      
+      return () => {
+        socketInstance.off('new-message', handleMessageReceived);
+        socketInstance.off('connect');
+        socketInstance.off('disconnect');
+      };
+    } else {
+      console.log('❌ CONV: Socket not connected when setting up listeners');
+    }
+  }, [realUserId, user?._id, socketConnected]);
+  
+  // Thêm useEffect để join vào các conversation khi danh sách thay đổi
+  useEffect(() => {
+    const socket = getSocket();
+    if (socket && socket.connected && conversations?.length > 0) {
+      const conversationIds = conversations.map(conv => conv._id);
+      console.log(`🔌 CONV: Joining ${conversationIds.length} conversations after update`);
+      socket.emit('join-conversations', conversationIds);
+    }
+  }, [conversations, socketConnected]);
+  
   // Initial load of conversations
   useEffect(() => {
     loadConversations();
@@ -296,7 +404,23 @@ const ConversationsScreen = ({ navigation }) => {
   
   // Handler for conversation item press
   const handleConversationPress = (conversation) => {
-    // Sửa tên màn hình "Message" thành "MessageScreen" để khớp với tên đã đăng ký trong MainStackNavigator
+    // Reset thông báo tin nhắn mới khi vào cuộc hội thoại
+    setHasNewMessage(false);
+    
+    // Reset số lượng tin nhắn chưa đọc cho cuộc trò chuyện này
+    setConversations(prevConversations => {
+      return prevConversations.map(conv => {
+        if (conv._id === conversation._id) {
+          return {
+            ...conv,
+            unreadCount: 0 // Reset unreadCount
+          };
+        }
+        return conv;
+      });
+    });
+    
+    // Điều hướng đến MessageScreen
     navigation.navigate('MessageScreen', {
       conversationId: conversation._id,
       name: conversation.name,
@@ -319,10 +443,44 @@ const ConversationsScreen = ({ navigation }) => {
         conversation.name.toLowerCase().includes(searchText.toLowerCase())
       );
   
+  // Thêm useEffect để lấy realUserId
+  useEffect(() => {
+    const fetchRealUserId = async () => {
+      if (user && user._id && user._id.includes('@')) {
+        try {
+          // Đảm bảo import userService từ '../api/userService'
+          const userId = await userService.getUserIdByEmail(user._id);
+          if (userId) {
+            console.log('🔑 CONV: Found real user ID:', userId);
+            setRealUserId(userId);
+          }
+        } catch (error) {
+          console.error('❌ CONV: Error fetching real user ID:', error);
+        }
+      }
+    };
+    
+    fetchRealUserId();
+  }, [user]);
+  
+  // Cập nhật phần return trong component để hiển thị thông báo
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tin nhắn</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Tin nhắn</Text>
+          {hasNewMessage && (
+            <View style={styles.newMessageIndicator}>
+              <Text style={styles.newMessageDot}>●</Text>
+              <Text style={styles.newMessageText}>Mới</Text>
+            </View>
+          )}
+          {!socketConnected && (
+            <View style={styles.connectionStatusContainer}>
+              <Text style={styles.disconnectedText}>Đang kết nối...</Text>
+            </View>
+          )}
+        </View>
         <TouchableOpacity
           style={styles.newButton}
           onPress={handleNewConversation}
@@ -376,7 +534,8 @@ const ConversationsScreen = ({ navigation }) => {
               conversation={item}
               onPress={handleConversationPress}
             />
-          )}
+          )
+          }
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -429,10 +588,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.dark,
+  },
+  newMessageIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 132, 255, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 5,
+  },
+  newMessageDot: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  newMessageText: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 2,
+  },
+  connectionStatusContainer: {
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255, 173, 51, 0.1)',
+    borderRadius: 10,
+  },
+  disconnectedText: {
+    color: '#FF9500',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   newButton: {
     backgroundColor: colors.primary,

@@ -18,6 +18,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomAvatar from '../components/CustomAvatar';
 import { colors, spacing, borderRadius } from '../styles';
 import friendApi from '../api/friendApi';
+import conversationApi from '../api/conversationApi';
 
 const FriendItem = ({ friend, onPress, onUnfriend }) => {
   return (
@@ -183,14 +184,35 @@ const FriendsScreen = ({ navigation }) => {
     );
   }, [friends, searchText]); // Phụ thuộc vào friends và searchText
   
-  const handleFriendPress = useCallback((friend) => {
-    // Create or navigate to an existing conversation with this friend
-    navigation.navigate('Message', {
-      userId: friend._id,
-      name: friend.name,
-      avatar: friend.avatar,
-      avatarColor: friend.avatarColor
-    });
+  const handleFriendPress = useCallback(async (friend) => {
+    try {
+      // Hiển thị loading nếu cần
+      setIsLoading(true);
+      
+      // Gọi API để tạo hoặc lấy conversationId với người bạn này
+      const response = await conversationApi.addConversation(friend._id);
+      
+      // Kiểm tra dữ liệu trả về
+      if (response && response.data && response.data._id) {
+        // Chuyển hướng với conversationId đúng
+        navigation.navigate('MessageScreen', {
+          conversationId: response.data._id, // Quan trọng: Sử dụng ID cuộc trò chuyện
+          conversationName: friend.name,
+          name: friend.name,
+          avatar: friend.avatar,
+          avatarColor: friend.avatarColor,
+          isGroupChat: false
+        });
+      } else {
+        console.error('Không nhận được conversationId từ API');
+        Alert.alert('Lỗi', 'Không thể bắt đầu cuộc trò chuyện. Vui lòng thử lại.');
+      }
+    } catch (error) {
+      console.error('Lỗi khi tạo cuộc trò chuyện:', error);
+      Alert.alert('Lỗi', 'Không thể bắt đầu cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [navigation]);
   
   const handleAddFriend = useCallback(() => {

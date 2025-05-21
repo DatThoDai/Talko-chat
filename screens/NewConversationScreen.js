@@ -78,12 +78,24 @@ const NewConversationScreen = ({ navigation }) => {
     setUsers(filteredUsers);
   }, [searchText, allFriends, selectedUsers]);
   
-  // Thêm useEffect để tự động bật chức năng nhóm khi có từ 2 người được chọn
+  // Cập nhật useEffect để tự động bật/tắt chế độ nhóm
   useEffect(() => {
     // Nếu người dùng chọn từ 2 người trở lên, tự động bật chế độ nhóm
     if (selectedUsers.length >= 2 && !isGroup) {
       setIsGroup(true);
+      
+      // Đặt tên nhóm mặc định nếu chưa có
+      if (!groupName.trim()) {
+        const nameList = selectedUsers.map(user => user.name || user.username || 'User').slice(0, 3);
+        setGroupName(nameList.join(', ') + (selectedUsers.length > 3 ? '...' : ''));
+      }
     }
+    
+    // Tùy chọn: Tự động tắt chế độ nhóm khi chỉ còn 1 người
+    // Bỏ comment dòng dưới nếu muốn tắt tự động
+    // if (selectedUsers.length === 1 && isGroup) {
+    //   setIsGroup(false);
+    // }
   }, [selectedUsers]);
 
   // Handle user selection
@@ -112,32 +124,56 @@ const NewConversationScreen = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      const participantIds = selectedUsers.map(user => user._id);
-      
-      let response;
-      if (isGroup) {
-        response = await conversationApi.createGroup(groupName.trim(), participantIds);
-      } else {
-        const userId = participantIds[0];
-        response = await conversationApi.addConversation(userId);
-      }
-      
-      if (response && response.data) {
-        const conversation = response.data;
-        console.log('Conversation created:', conversation);
+      // Trường hợp chỉ chọn 1 người và không phải là nhóm
+      if (selectedUsers.length === 1 && !isGroup) {
+        // Giống cách xử lý trong FriendScreen
+        const userId = selectedUsers[0]._id;
+        const user = selectedUsers[0];
+        const response = await conversationApi.addConversation(userId);
         
-        navigation.replace('MessageScreen', {
-          conversationId: conversation._id,
-          name: groupName,
-          conversationName: groupName || conversation.name,
-          isGroup: true, // Bắt buộc set true khi là nhóm
-          isGroupChat: true, // Thêm prop này
-          avatar: conversation.avatar || '',
-          avatarColor: conversation.avatarColor || '#' + Math.floor(Math.random()*16777215).toString(16),
-          participants: selectedUsers
-        });
-      } else {
-        throw new Error('Invalid response from server');
+        if (response && response.data) {
+          // Điều hướng giống FriendScreen với isGroupChat: false
+          navigation.replace('MessageScreen', {
+            conversationId: response.data._id,
+            conversationName: user.name,
+            name: user.name,
+            avatar: user.avatar,
+            avatarColor: user.avatarColor,
+            isGroupChat: false // Quan trọng: Set false cho cuộc trò chuyện 1-1
+          });
+        } else {
+          throw new Error('Invalid response from server');
+        }
+      } 
+      // Trường hợp nhóm (nhiều người hoặc đã bật chế độ nhóm)
+      else {
+        const participantIds = selectedUsers.map(user => user._id);
+        
+        let response;
+        if (isGroup) {
+          response = await conversationApi.createGroup(groupName.trim(), participantIds);
+        } else {
+          // Trường hợp này hiếm khi xảy ra (nhiều người nhưng không bật isGroup)
+          const userId = participantIds[0];
+          response = await conversationApi.addConversation(userId);
+        }
+        
+        if (response && response.data) {
+          const conversation = response.data;
+          
+          navigation.replace('MessageScreen', {
+            conversationId: conversation._id,
+            name: isGroup ? groupName : selectedUsers[0].name,
+            conversationName: isGroup ? groupName : conversation.name,
+            isGroup: isGroup, // Sử dụng giá trị isGroup
+            isGroupChat: isGroup, // Đảm bảo isGroupChat khớp với isGroup
+            avatar: conversation.avatar || '',
+            avatarColor: conversation.avatarColor || '#' + Math.floor(Math.random()*16777215).toString(16),
+            participants: selectedUsers
+          });
+        } else {
+          throw new Error('Invalid response from server');
+        }
       }
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -335,6 +371,15 @@ const NewConversationScreen = ({ navigation }) => {
               </View>
             }
           />
+        )}
+        
+        {/* Thông tin cuộc trò chuyện cá nhân (khi chỉ chọn 1 người) */}
+        {selectedUsers.length === 1 && !isGroup && (
+          <View style={styles.individualChatInfo}>
+            <Text style={styles.infoText}>
+              Bạn đang tạo cuộc trò chuyện với <Text style={styles.highlightText}>{selectedUsers[0].name || selectedUsers[0].username}</Text>
+            </Text>
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -538,6 +583,21 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: 2,
+  },
+  individualChatInfo: {
+    padding: spacing.md,
+    backgroundColor: 'rgba(0, 132, 255, 0.1)',
+    borderRadius: 8,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  infoText: {
+    fontSize: 14,
+    color: colors.dark,
+  },
+  highlightText: {
+    fontWeight: 'bold',
+    color: colors.primary,
   },
 });
 

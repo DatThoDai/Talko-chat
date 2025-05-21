@@ -129,6 +129,24 @@ export const userService = {
       throw error.response || { message: 'Lỗi kết nối đến server' };
     }
   },
+  //Lấy avatar từ userName
+  getAvatarByEmail: async (email) => {
+    try {
+      if (!email) return null;
+      
+      // Gọi API để lấy thông tin user từ email
+      const response = await api.get(`/users/search/username/${encodeURIComponent(email)}`);
+      
+      if (response && response.data) {
+        // Trả về _id từ response
+        return response.data.avatar || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user ID from email:', error);
+      return null;
+    }
+  },
   
   // Lấy thông tin profile của người dùng hiện tại
   getUserProfile: async (username) => {

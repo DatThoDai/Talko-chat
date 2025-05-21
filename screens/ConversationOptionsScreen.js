@@ -110,28 +110,23 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   };
 
   const handleClose = () => {
-    // Nếu tên nhóm đã thay đổi, đảm bảo màn hình MessageScreen được cập nhật
-    if (name !== groupName) {
-      // Cập nhật tham số cho màn hình trước đó (MessageScreen)
-      const previousScreen = navigation.getState().routes.find(route => 
-        route.name === 'MessageScreen' || 
-        (route.params && route.params.conversationId === conversationId)
-      );
+    try {
+      // Chỉ đơn giản quay lại màn hình trước đó
+      navigation.goBack();
       
-      if (previousScreen) {
-        // Sử dụng navigate để cập nhật params cho màn hình tin nhắn
-        navigation.navigate({
-          name: previousScreen.name,
-          params: { 
-            ...previousScreen.params,
-            conversationName: groupName 
-          },
-          merge: true,
-        });
+      // Nếu bạn muốn cập nhật tên nhóm, thực hiện sau khi đã quay lại
+      if (name !== groupName && navigation.canGoBack()) {
+        // Sử dụng setParams để cập nhật params cho màn hình hiện tại (MessageScreen)
+        navigation.setParams({ conversationName: groupName });
       }
+    } catch (error) {
+      console.error('Error navigating back:', error);
+      // Attempt direct navigation to MessageScreen as fallback
+      navigation.navigate('MessageScreen', {
+        conversationId: conversationId,
+        conversationName: groupName
+      });
     }
-    
-    navigation.goBack();
   };
 
   const handleViewMembers = () => {

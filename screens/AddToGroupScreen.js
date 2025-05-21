@@ -26,7 +26,7 @@ const FriendItem = ({ friend, onSelect, isSelected }) => {
         <CustomAvatar
           size={50}
           name={friend.name || friend.username}
-          source={friend.avatar}
+          avatar={friend.avatar}
           online={friend.status === 'online'}
         />
         {isSelected && (

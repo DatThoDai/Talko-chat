@@ -467,26 +467,74 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       }
       
       // Thêm lắng nghe sự kiện new-user-call
-      const handleIncomingCall = (data) => {
+      const handleIncomingCall = async (data) => {
         console.log('Có người gọi vào với peerId:', data.peerId);
+        
+        // Kiểm tra xem cuộc gọi này có phải cho đoạn chat hiện tại không
+        if (data.conversationId !== conversationId) {
+          console.log('Bỏ qua thông báo cuộc gọi từ đoạn chat khác:', data.conversationId);
+          return;
+        }
         
         // Nếu người gọi không phải là mình
         if (data.newUserId !== user._id && data.newUserId !== realUserId) {
-          // Tìm thông tin người gọi từ danh sách participants
-          const callerInfo = participants?.find(p => p._id === data.newUserId) || {
+          // Tạo thông tin người gọi tạm thời để hiển thị ngay
+          let callerInfo = {
             _id: data.newUserId,
-            name: 'Người dùng',
+            name: 'Đang tải...',
             avatar: '',
             avatarColor: colors.primary
           };
           
-          // Hiển thị modal cuộc gọi đến
+          // Hiển thị modal cuộc gọi đến với thông tin tạm thời trước
           setIncomingCall({
             visible: true,
             caller: callerInfo,
             peerId: data.peerId,
             conversationId: data.conversationId
           });
+          
+          // Tìm thông tin người gọi từ danh sách participants
+          const participantInfo = participants?.find(p => p._id === data.newUserId);
+          
+          if (participantInfo) {
+            // Nếu tìm thấy trong participants, cập nhật ngay
+            callerInfo = {
+              _id: data.newUserId,
+              name: participantInfo.name || 'Người dùng',
+              avatar: participantInfo.avatar || '',
+              avatarColor: participantInfo.avatarColor || colors.primary
+            };
+            
+            // Cập nhật lại modal với thông tin đầy đủ
+            setIncomingCall(prev => ({
+              ...prev,
+              caller: callerInfo
+            }));
+          } else {
+            // Nếu không tìm thấy trong participants, gọi API
+            try {
+              const response = await userService.getUserById(data.newUserId);
+              
+              if (response && response.data) {
+                const userData = response.data;
+                callerInfo = {
+                  _id: data.newUserId,
+                  name: userData.name || userData.username || 'Người gọi',
+                  avatar: userData.avatar || '',
+                  avatarColor: userData.avatarColor || colors.primary
+                };
+                
+                // Cập nhật lại modal với thông tin từ API
+                setIncomingCall(prev => ({
+                  ...prev,
+                  caller: callerInfo
+                }));
+              }
+            } catch (error) {
+              console.error('Lỗi khi lấy thông tin người gọi:', error);
+            }
+          }
         }
       };
       

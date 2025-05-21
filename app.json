@@ -29,14 +29,24 @@
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
+        "MEDIA_LIBRARY",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "MEDIA_LIBRARY"
-      ]
+      ],
+      "package": "com.anonymous.talkochat"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "93e94025-60b7-4c2e-bd03-640ebae04286"
+      }
+    },
+    "owner": "dinhtiendat"
   }
 }

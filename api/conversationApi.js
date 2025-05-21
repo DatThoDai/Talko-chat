@@ -170,8 +170,7 @@ const conversationApi = {
         timeout: 15000 // Tăng timeout lên 15 giây vì có thể server chậm
       });
       
-      console.log('Conversations fetched successfully:', response);
-      console.log('Conversations response:', response);
+      
       
       // Format kết quả để phù hợp với cấu trúc dữ liệu của mobile app
       const formattedData = Array.isArray(response.data) ? response.data : [];

@@ -195,7 +195,6 @@ const ConversationsScreen = ({ navigation }) => {
       
       // Trực tiếp xử lý axios fetch bên trong component thay vì qua service
       const response = await conversationApi.fetchConversations({search: searchText});
-      console.log('Conversations response:', response);
       
       /* 
        * Lưu ý: Dựa vào memory, chúng ta cần hết sức cẩn thận với việc extract response.data

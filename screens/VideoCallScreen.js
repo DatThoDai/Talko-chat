@@ -21,6 +21,7 @@ import {
   getSocket,
   initiateSocket
 } from '../utils/socketService';
+import InCallManager from 'react-native-incall-manager';
 
 const { width, height } = Dimensions.get('window');
 
@@ -59,6 +60,11 @@ const VideoCallScreen = ({ navigation, route }) => {
   // Khởi tạo khi component được mount
   useEffect(() => {
     console.log('📞 VIDEO CALL: VideoCallScreen mounted');
+    
+    // Thêm đoạn này để chuyển đổi sang loa ngoài
+    InCallManager.start({media: 'video'});
+    InCallManager.setForceSpeakerphoneOn(true);
+    
     console.log('📞 VIDEO CALL: Route params received:', JSON.stringify({
       conversationId,
       isInitiator,
@@ -82,6 +88,9 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
 
     return () => {
+      // Thêm dòng này để dọn dẹp
+      InCallManager.stop();
+      
       // Dọn dẹp khi unmount
       backHandler.remove();
       endCall();
@@ -176,19 +185,19 @@ const VideoCallScreen = ({ navigation, route }) => {
       
       peerServer.current.on('open', (id) => {
         console.log('📞 VIDEO CALL: PeerJS connected with ID:', id);
-        clearTimeout(connectTimeout); // Xóa timeout vì đã kết nối thành công
+        clearTimeout(connectTimeout);
         peerId.current = id;
         
-        // Gửi ID tới người dùng khác qua socket
-        subscribeCallVideo(conversationId, userIdForCall, id);
-        
-        // Các xử lý khác giữ nguyên
-        // Đăng ký sự kiện cuộc gọi video - điều này sẽ thông báo cho tất cả người dùng khác
-        console.log('📞 VIDEO CALL: Subscribing to call room with conversation ID:', conversationId);
-        console.log('📞 VIDEO CALL: Using user ID for call:', userIdForCall);
-
-        const subscribeResult = subscribeCallVideo(conversationId, userIdForCall, id);
-        console.log('📞 VIDEO CALL: Subscribe result:', subscribeResult);
+        // Chỉ gọi subscribeCallVideo nếu là người khởi tạo cuộc gọi
+        if (isInitiator) {
+          console.log('📞 VIDEO CALL: Subscribing to call room as initiator');
+          console.log('📞 VIDEO CALL: Using user ID for call:', userIdForCall);
+          
+          const subscribeResult = subscribeCallVideo(conversationId, userIdForCall, id);
+          console.log('📞 VIDEO CALL: Subscribe result:', subscribeResult);
+        } else {
+          console.log('📞 VIDEO CALL: Joining call as receiver, not sending subscribe event');
+        }
 
         setIsCallActive(true);
 
@@ -287,45 +296,90 @@ const VideoCallScreen = ({ navigation, route }) => {
   const callPeer = (remotePeerId, stream) => {
     try {
       console.log('📞 VIDEO CALL: Calling peer:', remotePeerId);
-      console.log('📞 VIDEO CALL: My stream has tracks:',
-        'video =', stream.getVideoTracks().length,
-        'audio =', stream.getAudioTracks().length);
+
+      // Kiểm tra xem đã có kết nối với peer này chưa
+      if (peerConnections.current[remotePeerId]) {
+        console.log('📞 VIDEO CALL: Already connected to this peer, closing old connection');
+        try {
+          peerConnections.current[remotePeerId].close();
+          // Xóa khỏi remoteStreams nếu tồn tại
+          if (remoteStreams[remotePeerId]) {
+            const oldStream = remoteStreams[remotePeerId];
+            oldStream.getTracks().forEach(track => track.stop());
+            setRemoteStreams(prev => {
+              const updated = {...prev};
+              delete updated[remotePeerId];
+              return updated;
+            });
+          }
+        } catch (e) {
+          console.error('Error closing existing peer connection:', e);
+        }
+      }
 
       const call = peerServer.current.call(remotePeerId, stream);
-      console.log('📞 VIDEO CALL: Call initiated, waiting for stream event');
+      console.log('📞 VIDEO CALL: Call initiated, waiting for stream');
 
       // Thêm timeout để phát hiện nếu không nhận được stream
       const streamTimeout = setTimeout(() => {
         console.log('📞 VIDEO CALL: No stream received after 10 seconds');
+        // Chỉ xóa timeout, KHÔNG xóa kết nối
       }, 10000);
 
+      // Xử lý khi nhận được stream từ xa
       call.on('stream', (remoteStream) => {
         clearTimeout(streamTimeout);
         console.log('📞 VIDEO CALL: Received stream from called peer:', remotePeerId);
-        console.log('📞 VIDEO CALL: Remote stream has tracks:',
-          'video =', remoteStream.getVideoTracks().length,
-          'audio =', remoteStream.getAudioTracks().length);
-
+        
+        // Kiểm tra xem stream có tracks không
+        if (!remoteStream.getTracks().length) {
+          console.log('📞 VIDEO CALL: Remote stream has no tracks, ignoring');
+          return;
+        }
+        
+        // Thêm vào state
         setRemoteStreams(prev => ({
           ...prev,
           [remotePeerId]: remoteStream
         }));
+        
+        // Cập nhật trạng thái UI
+        setHasRemoteParticipants(true);
+        setWaitingForAnswer(false);
+        setCallStatus('connected');
       });
 
-      call.on('error', (err) => {
-        console.error('📞 VIDEO CALL ERROR: Call error with peer', remotePeerId, err);
-      });
-
+      // Xử lý sự kiện close
       call.on('close', () => {
         console.log('📞 VIDEO CALL: Call closed with peer:', remotePeerId);
+        
+        // Dừng stream nếu có
+        if (remoteStreams[remotePeerId]) {
+          try {
+            remoteStreams[remotePeerId].getTracks().forEach(track => track.stop());
+          } catch (e) {
+            console.error('Error stopping tracks on close:', e);
+          }
+        }
+        
+        // Xóa khỏi state
         setRemoteStreams(prev => {
-          const updated = { ...prev };
+          const updated = {...prev};
           delete updated[remotePeerId];
           return updated;
         });
+        
+        // Xóa khỏi peerConnections
+        delete peerConnections.current[remotePeerId];
+        
+        // Kiểm tra xem còn kết nối nào không
+        const remainingPeers = Object.keys(peerConnections.current).length;
+        if (remainingPeers === 0) {
+          setHasRemoteParticipants(false);
+        }
       });
 
-      // Lưu kết nối
+      // Lưu trữ kết nối
       peerConnections.current[remotePeerId] = call;
 
     } catch (error) {
@@ -367,28 +421,80 @@ const VideoCallScreen = ({ navigation, route }) => {
 
   // Kết thúc cuộc gọi và dọn dẹp
   const endCall = () => {
-    // Đóng các kết nối peer
-    Object.values(peerConnections.current).forEach(call => {
-      if (call && typeof call.close === 'function') {
-        call.close();
+    console.log('📞 VIDEO CALL: Ending call, cleaning up resources');
+    
+    // 1. Dừng và dọn dẹp remote streams
+    Object.entries(remoteStreams).forEach(([peerId, stream]) => {
+      console.log(`📞 VIDEO CALL: Cleaning up remote stream for peer: ${peerId}`);
+      try {
+        if (stream && stream.getTracks) {
+          stream.getTracks().forEach(track => {
+            track.stop();
+            console.log(`📞 VIDEO CALL: Stopped remote track: ${track.kind}`);
+          });
+        }
+      } catch (err) {
+        console.error('Error stopping remote stream tracks:', err);
       }
     });
 
-    // Đóng peer server
+    // 2. Đóng tất cả kết nối peer
+    Object.entries(peerConnections.current).forEach(([peerId, call]) => {
+      try {
+        console.log(`📞 VIDEO CALL: Closing peer connection: ${peerId}`);
+        if (call) {
+          if (typeof call.close === 'function') {
+            call.close();
+          }
+          
+          // Nếu có peerConnection - đóng nó
+          if (call.peerConnection) {
+            call.peerConnection.close();
+          }
+        }
+      } catch (err) {
+        console.error(`Error closing peer connection ${peerId}:`, err);
+      }
+    });
+
+    // 3. Đóng peer server
     if (peerServer.current) {
-      peerServer.current.destroy();
+      try {
+        peerServer.current.destroy();
+        console.log('📞 VIDEO CALL: Destroyed peer server');
+      } catch (err) {
+        console.error('Error destroying peer server:', err);
+      }
+      peerServer.current = null;
     }
 
-    // Dừng các track của local stream
-    if (localStream) {
-      localStream.getTracks().forEach(track => {
-        track.stop();
-      });
+    // 4. Dừng local stream
+    try {
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          track.stop();
+          console.log(`📞 VIDEO CALL: Stopped local ${track.kind} track`);
+        });
+      }
+    } catch (err) {
+      console.error('Error stopping local stream:', err);
     }
+    
+    // 5. Reset tất cả state và refs
+    peerConnections.current = {};
+    peerId.current = null;
 
-    setIsCallActive(false);
-    setLocalStream(null);
-    setRemoteStreams({});
+    // 6. Reset state trong setTimeout để tránh race condition
+    setTimeout(() => {
+      setRemoteStreams({});
+      setLocalStream(null);
+      setHasRemoteParticipants(false);
+      setIsCallActive(false);
+      setWaitingForAnswer(false);
+      setCallStatus('ended');
+    }, 100);
+    
+    console.log('📞 VIDEO CALL: Call cleanup completed');
   };
 
   // Xử lý kết thúc cuộc gọi và di chuyển
@@ -450,6 +556,87 @@ const VideoCallScreen = ({ navigation, route }) => {
       </View>
     );
   };
+
+  // Thêm useEffect mới để theo dõi khi có thể gọi peer
+  useEffect(() => {
+    // Khi tất cả điều kiện cần thiết đã sẵn sàng
+    const { remotePeerId } = route.params || {};
+    if (remotePeerId && localStream && isCallActive && isIncoming) {
+      console.log('📞 VIDEO CALL: Ready to call remote peer:', remotePeerId);
+      if (peerId.current) {
+        console.log('📞 VIDEO CALL: Calling remote peer now:', remotePeerId);
+        callPeer(remotePeerId, localStream);
+      }
+    }
+  }, [localStream, isCallActive, route.params?.remotePeerId, isIncoming]);
+
+  // Thêm useEffect mới
+  useEffect(() => {
+    if (!isCallActive) return;
+    
+    // Kiểm tra trạng thái kết nối của từng peer định kỳ
+    const checkConnectionsInterval = setInterval(() => {
+      console.log('📞 VIDEO CALL: Checking peer connections');
+      
+      Object.entries(peerConnections.current).forEach(([peerId, call]) => {
+        if (!call || !call.peerConnection) return;
+        
+        const connectionState = call.peerConnection.connectionState;
+        const iceConnectionState = call.peerConnection.iceConnectionState;
+        
+        console.log(`📞 VIDEO CALL: Peer ${peerId} state: ${connectionState}, ice: ${iceConnectionState}`);
+        
+        // Kiểm tra nếu kết nối đã mất
+        if (connectionState === 'disconnected' || 
+            connectionState === 'failed' || 
+            connectionState === 'closed' ||
+            iceConnectionState === 'disconnected' ||
+            iceConnectionState === 'failed' ||
+            iceConnectionState === 'closed') {
+          
+          console.log(`📞 VIDEO CALL: Removing disconnected peer: ${peerId}`);
+          
+          // Dừng stream
+          const stream = remoteStreams[peerId];
+          if (stream) {
+            try {
+              stream.getTracks().forEach(track => {
+                track.stop();
+              });
+            } catch (e) {
+              console.error(`Error stopping tracks for peer ${peerId}:`, e);
+            }
+          }
+          
+          // Xóa khỏi remoteStreams
+          setRemoteStreams(prev => {
+            const updated = {...prev};
+            delete updated[peerId];
+            return updated;
+          });
+          
+          // Xóa khỏi peerConnections
+          delete peerConnections.current[peerId];
+        }
+      });
+      
+      // Kiểm tra nếu tất cả các peer đã ngắt kết nối
+      const activePeers = Object.values(peerConnections.current).filter(call => {
+        return call && 
+               call.peerConnection && 
+               call.peerConnection.connectionState !== 'closed' &&
+               call.peerConnection.connectionState !== 'failed';
+      });
+      
+      if (activePeers.length === 0 && isCallActive) {
+        console.log('📞 VIDEO CALL: No active peers remaining');
+        setHasRemoteParticipants(false);
+      }
+      
+    }, 5000); // Kiểm tra mỗi 5 giây
+    
+    return () => clearInterval(checkConnectionsInterval);
+  }, [isCallActive]);
 
   return (
     <SafeAreaView style={styles.container}>

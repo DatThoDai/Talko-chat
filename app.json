@@ -18,8 +18,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Ứng dụng cần quyền truy cập thư viện ảnh để lưu file tải xuống",
-        "NSDocumentsFolderUsageDescription": "Ứng dụng cần quyền truy cập thư mục tài liệu để lưu file tải xuống"
-      }
+        "NSDocumentsFolderUsageDescription": "Ứng dụng cần quyền truy cập thư mục tài liệu để lưu file tải xuống",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.anonymous.talkochat"
     },
     "android": {
       "adaptiveIcon": {

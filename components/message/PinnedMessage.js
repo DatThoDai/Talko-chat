@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
-  Alert
+  Alert,
+  Platform,
+  ToastAndroid
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -19,18 +21,22 @@ const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage, onUnpin }) =
   const handleUnpin = async (messageId) => {
     try {
       // Gọi API để bỏ ghim tin nhắn
-      await pinMessagesApi.unpinMessage(messageId);
-      
-      // Hiển thị thông báo thành công
-      Alert.alert('Thành công', 'Đã bỏ ghim tin nhắn');
+      const response = await pinMessagesApi.unpinMessage(messageId);
       
       // Gọi callback nếu được truyền vào
       if (typeof onUnpin === 'function') {
         onUnpin(messageId);
       }
+      
+      // Hiển thị thông báo thành công
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã bỏ ghim tin nhắn', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thành công', 'Đã bỏ ghim tin nhắn');
+      }
     } catch (error) {
       console.error('Error unpinning message:', error);
-      Alert.alert('Lỗi', 'Không thể bỏ ghim tin nhắn. Vui lòng thử lại sau.');
+      Alert.alert('Lỗi', error.message || 'Không thể bỏ ghim tin nhắn. Vui lòng thử lại sau.');
     }
   };
   if (!pinnedMessages || pinnedMessages.length === 0) {
@@ -103,9 +109,19 @@ const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage, onUnpin }) =
           </View>
           
           <View style={styles.pinnedContent}>
-            <Text style={styles.pinnedBy}>
-              Ghim bởi {item.pinnedBy?.name || 'Người dùng'}
-            </Text>
+            {/* Hiển thị người ghim tin nhắn */}
+            <View style={styles.pinnedHeader}>
+              <Text style={styles.pinnedBy} numberOfLines={1}>
+                {item.pinnedBy?.name 
+                  ? `Ghim bởi ${item.pinnedBy.name}` 
+                  : 'Tin nhắn đã ghim'}
+              </Text>
+              {item.pinnedAt && (
+                <Text style={styles.pinnedTime}>
+                  {new Date(item.pinnedAt).toLocaleDateString('vi-VN')}
+                </Text>
+              )}
+            </View>
             {renderContentPreview(item)}
           </View>
         </TouchableOpacity>
@@ -199,7 +215,24 @@ const styles = StyleSheet.create({
   pinnedContent: {
     flex: 1,
   },
+  pinnedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   pinnedBy: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    flex: 1,
+  },
+  pinnedTime: {
+    fontSize: 10,
+    color: '#888',
+    marginLeft: 8,
+  },
+  messageBy: {
     fontSize: 10,
     color: '#888',
     marginBottom: 2,

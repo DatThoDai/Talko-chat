@@ -455,13 +455,8 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         // Chỉ lắng nghe sự kiện ghim/bỏ ghim nếu đây là nhóm trò chuyện
         if (actualIsGroupChat) {
           // Listen for pin-message events
-          socketInstance.on('pin-message', (data) => {
-            console.log('Pin message event received:', data);
-            fetchPinnedMessages(); // Refresh pinned messages
-          });
-          
-          socketInstance.on('unpin-message', (data) => {
-            console.log('Unpin message event received:', data);
+          socketInstance.on('action-pin-message', (conversationId) => {
+            console.log('Pin message event received for conversation:', conversationId);
             fetchPinnedMessages(); // Refresh pinned messages
           });
         }
@@ -618,8 +613,7 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
           
           // Chỉ hủy lắng nghe các sự kiện ghim nếu đây là nhóm trò chuyện
           if (actualIsGroupChat) {
-            socketInstance.off('pin-message');
-            socketInstance.off('unpin-message');
+            socketInstance.off('action-pin-message');
           }
         }
         
@@ -1598,7 +1592,6 @@ const renderMessage = (message, index) => {
   // Fetch pinned messages for this conversation
   const fetchPinnedMessages = async () => {
     try {
-      // Sử dụng biến actualIsGroupChat đã được xác định ở trên
       if (!actualIsGroupChat) {
         console.log('Skipping pinned messages for private chat');
         setPinnedMessages([]);
@@ -1608,24 +1601,82 @@ const renderMessage = (message, index) => {
       console.log('Fetching pinned messages for group conversation:', conversationId);
       const response = await pinMessagesApi.fetchPinMessages(conversationId);
       
-      // Check if the response is valid and has data
       if (response && response.data) {
-        // Get pinned messages from the response
         const fetchedPinnedMessages = response.data;
-        
         console.log('Pinned messages fetched:', fetchedPinnedMessages.length);
-        setPinnedMessages(fetchedPinnedMessages);
+
+        // Tìm tin nhắn thông báo ghim cho mỗi tin nhắn được ghim
+        const pinnedMessagesWithPinner = await Promise.all(fetchedPinnedMessages.map(async pinnedMsg => {
+          try {
+            // Lấy tất cả tin nhắn của cuộc trò chuyện để tìm tin nhắn thông báo
+            const notificationsResponse = await conversationService.getMessages(
+              conversationId,
+              0,
+              100,  // Lấy 100 tin nhắn gần nhất
+              user?._id
+            );
+
+            let pinNotifications = [];
+            if (notificationsResponse && notificationsResponse.data) {
+              // Lọc tin nhắn thông báo ghim
+              pinNotifications = notificationsResponse.data.filter(msg => 
+                msg.type === 'NOTIFY' && 
+                msg.content === 'PIN_MESSAGE' &&
+                new Date(msg.createdAt) >= new Date(pinnedMsg.createdAt)
+              );
+
+              // Sắp xếp theo thời gian để lấy tin nhắn thông báo gần nhất
+              pinNotifications.sort((a, b) => 
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+            }
+
+            // Lấy tin nhắn thông báo gần nhất
+            const latestPinNotification = pinNotifications[0];
+
+            console.log(`Found pin notification for message ${pinnedMsg._id}:`, 
+              latestPinNotification ? {
+                notificationId: latestPinNotification._id,
+                pinnedBy: latestPinNotification.sender?.name || 'Unknown',
+                pinnedByTime: latestPinNotification.createdAt
+              } : 'No notification found'
+            );
+
+            // Nếu không tìm thấy tin nhắn thông báo, sử dụng thông tin từ tin nhắn được ghim
+            const pinner = latestPinNotification?.sender || pinnedMsg.pinnedBy || {
+              _id: pinnedMsg.userId || 'unknown',
+              name: 'Người dùng'
+            };
+
+            return {
+              ...pinnedMsg,
+              pinnedBy: pinner,
+              pinnedAt: latestPinNotification?.createdAt || pinnedMsg.updatedAt || pinnedMsg.createdAt
+            };
+          } catch (error) {
+            console.error('Error processing pin notification for message:', pinnedMsg._id, error);
+            return {
+              ...pinnedMsg,
+              pinnedBy: pinnedMsg.pinnedBy || { _id: 'unknown', name: 'Người dùng' },
+              pinnedAt: pinnedMsg.updatedAt || pinnedMsg.createdAt
+            };
+          }
+        }));
         
-        // QUAN TRỌNG: Đánh dấu tin nhắn đã ghim trong danh sách tin nhắn chính
-        // để menu hiển thị đúng nút "Bỏ ghim"
-        if (fetchedPinnedMessages.length > 0) {
+        setPinnedMessages(pinnedMessagesWithPinner);
+        
+        // Cập nhật danh sách tin nhắn chính
+        if (pinnedMessagesWithPinner.length > 0) {
           setMessages(prevMessages => {
             return prevMessages.map(msg => {
-              // Kiểm tra xem tin nhắn này có trong danh sách ghim không
-              const isPinned = fetchedPinnedMessages.some(pinnedMsg => pinnedMsg._id === msg._id);
-              if (isPinned) {
-                // Đánh dấu tin nhắn đã ghim
-                return { ...msg, isPinned: true };
+              const pinnedMessage = pinnedMessagesWithPinner.find(pinnedMsg => pinnedMsg._id === msg._id);
+              if (pinnedMessage) {
+                return { 
+                  ...msg, 
+                  isPinned: true,
+                  pinnedBy: pinnedMessage.pinnedBy,
+                  pinnedAt: pinnedMessage.pinnedAt
+                };
               }
               return msg;
             });

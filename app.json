@@ -18,8 +18,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Ứng dụng cần quyền truy cập thư viện ảnh để lưu file tải xuống",
-        "NSDocumentsFolderUsageDescription": "Ứng dụng cần quyền truy cập thư mục tài liệu để lưu file tải xuống"
-      }
+        "NSDocumentsFolderUsageDescription": "Ứng dụng cần quyền truy cập thư mục tài liệu để lưu file tải xuống",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.anonymous.talkochat"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,11 +31,24 @@
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
+        "MEDIA_LIBRARY",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "MEDIA_LIBRARY"
-      ]
+      ],
+      "package": "com.anonymous.talkochat"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "93e94025-60b7-4c2e-bd03-640ebae04286"
+      }
+    },
+    "owner": "dinhtiendat"
   }
 }

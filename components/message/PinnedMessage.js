@@ -5,13 +5,40 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image
+  Image,
+  Alert,
+  Platform,
+  ToastAndroid
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { messageType } from '../../constants';
 import commonFuc from '../../utils/commonFuc';
+import { pinMessagesApi } from '../../api/pinMessagesApi';
 
-const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage }) => {
+const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage, onUnpin }) => {
+  // Hàm xử lý bỏ ghim tin nhắn
+  const handleUnpin = async (messageId) => {
+    try {
+      // Gọi API để bỏ ghim tin nhắn
+      const response = await pinMessagesApi.unpinMessage(messageId);
+      
+      // Gọi callback nếu được truyền vào
+      if (typeof onUnpin === 'function') {
+        onUnpin(messageId);
+      }
+      
+      // Hiển thị thông báo thành công
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã bỏ ghim tin nhắn', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thành công', 'Đã bỏ ghim tin nhắn');
+      }
+    } catch (error) {
+      console.error('Error unpinning message:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể bỏ ghim tin nhắn. Vui lòng thử lại sau.');
+    }
+  };
   if (!pinnedMessages || pinnedMessages.length === 0) {
     return null;
   }
@@ -70,23 +97,43 @@ const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage }) => {
   // Render a single pinned message item
   const renderPinnedItem = ({ item }) => {
     return (
-      <TouchableOpacity
-        style={styles.pinnedItem}
-        onPress={() => onViewDetail({
-          isVisible: true,
-          message: item
-        })}>
-        <View style={styles.pinnedIconContainer}>
-          <Icon name="bookmark" size={16} color="#FFFFFF" />
-        </View>
+      <View style={styles.pinnedItemContainer}>
+        <TouchableOpacity
+          style={styles.pinnedItem}
+          onPress={() => onViewDetail({
+            isVisible: true,
+            message: item
+          })}>
+          <View style={styles.pinnedIconContainer}>
+            <Icon name="bookmark" size={16} color="#FFFFFF" />
+          </View>
+          
+          <View style={styles.pinnedContent}>
+            {/* Hiển thị người ghim tin nhắn */}
+            <View style={styles.pinnedHeader}>
+              <Text style={styles.pinnedBy} numberOfLines={1}>
+                {item.pinnedBy?.name 
+                  ? `Ghim bởi ${item.pinnedBy.name}` 
+                  : 'Tin nhắn đã ghim'}
+              </Text>
+              {item.pinnedAt && (
+                <Text style={styles.pinnedTime}>
+                  {new Date(item.pinnedAt).toLocaleDateString('vi-VN')}
+                </Text>
+              )}
+            </View>
+            {renderContentPreview(item)}
+          </View>
+        </TouchableOpacity>
         
-        <View style={styles.pinnedContent}>
-          <Text style={styles.pinnedBy}>
-            Ghim bởi {item.pinnedBy?.name || 'Người dùng'}
-          </Text>
-          {renderContentPreview(item)}
-        </View>
-      </TouchableOpacity>
+        {/* Nút bỏ ghim */}
+        <TouchableOpacity 
+          style={styles.unpinButton}
+          onPress={() => handleUnpin(item._id)}
+        >
+          <FontAwesome name="times" size={16} color="#888" />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -114,11 +161,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+  pinnedItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 4,
+    position: 'relative',
+  },
   pinnedItem: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginHorizontal: 4,
     padding: 8,
     alignItems: 'center',
     maxWidth: 250,
@@ -130,6 +182,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 1.0,
     elevation: 1,
+  },
+  unpinButton: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.0,
+    elevation: 2,
+    zIndex: 10,
   },
   pinnedIconContainer: {
     width: 24,
@@ -143,7 +215,24 @@ const styles = StyleSheet.create({
   pinnedContent: {
     flex: 1,
   },
+  pinnedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   pinnedBy: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    flex: 1,
+  },
+  pinnedTime: {
+    fontSize: 10,
+    color: '#888',
+    marginLeft: 8,
+  },
+  messageBy: {
     fontSize: 10,
     color: '#888',
     marginBottom: 2,

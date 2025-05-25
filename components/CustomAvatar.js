@@ -1,20 +1,29 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import PropTypes from 'prop-types';
 import { colors, spacing, borderRadius } from '../styles';
+
+// Thêm cache toàn cục cho avatar URLs
+const avatarCache = {};
 
 const CustomAvatar = ({ 
   size = 40, 
   source, 
   imageUrl,
+  avatar, // Thêm prop avatar để tương thích với nhiều component
   name = '',
   color,
   avatarColor,
   online = false,
   style 
 }) => {
-  // Debug avatar info
-  console.log(`CustomAvatar - name: ${name}, imageUrl type: ${typeof imageUrl}`);
+  const [imageError, setImageError] = useState(false);
+  
+  // Sử dụng avatar nếu imageUrl không tồn tại
+  const actualImageUrl = imageUrl || avatar;
+  
+  // Log thông tin cho debugging
+  console.log(`CustomAvatar - name: ${name}, imageUrl: ${ actualImageUrl}`);
   
   // Get initials from name (maximum 2 characters)
   const initials = name
@@ -35,10 +44,29 @@ const CustomAvatar = ({
   if (source) {
     imageSource = source;
   } 
-  // Then check imageUrl string
-  else if (typeof imageUrl === 'string' && imageUrl.trim() !== '') {
-    imageSource = { uri: imageUrl };
-    console.log('Using imageUrl as source:', imageUrl);
+  // Then check actual image URL
+  else if (typeof actualImageUrl === 'string' && actualImageUrl && !imageError) {
+    // Validate URL format
+    if (actualImageUrl.startsWith('http://') || actualImageUrl.startsWith('https://')) {
+      imageSource = { uri: actualImageUrl };
+      
+      // Cache valid URLs 
+      if (!avatarCache[actualImageUrl]) {
+        avatarCache[actualImageUrl] = true;
+      }
+    } else {
+      // Thêm base URL nếu là URL tương đối
+      const fullUrl = actualImageUrl.startsWith('/') 
+        ? `https://talko.s3.ap-southeast-1.amazonaws.com${actualImageUrl}`
+        : actualImageUrl;
+        
+      imageSource = { uri: fullUrl };
+      
+      // Cache full URL
+      if (!avatarCache[fullUrl]) {
+        avatarCache[fullUrl] = true;
+      }
+    }
   }
   
   // Determine if we should show an image
@@ -50,7 +78,10 @@ const CustomAvatar = ({
         <Image
           source={imageSource}
           style={[styles.image, { borderRadius: size / 2 }]}
-          defaultSource={require('../assets/default-avatar.png')}
+          onError={(e) => {
+            console.log('Avatar image error:', e.nativeEvent);
+            setImageError(true); // Switch to initials on error
+          }}
         />
       ) : (
         <View
@@ -81,6 +112,7 @@ CustomAvatar.propTypes = {
   size: PropTypes.number,
   source: PropTypes.oneOfType([PropTypes.object, PropTypes.number]),
   imageUrl: PropTypes.string,
+  avatar: PropTypes.string, // Thêm prop avatar vào propTypes
   name: PropTypes.string,
   color: PropTypes.string,
   avatarColor: PropTypes.string,
@@ -91,21 +123,22 @@ CustomAvatar.propTypes = {
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    borderRadius: 20,
   },
   initialsContainer: {
     width: '100%',
     height: '100%',
+    borderRadius: 20,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   initials: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontWeight: 'bold',
   },
   onlineIndicator: {
@@ -117,7 +150,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#4CAF50',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.white,
   },
 });
 

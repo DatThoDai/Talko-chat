@@ -7,7 +7,12 @@ import {
   setTypingUsers,
   updateUserOnlineStatus,
   updateMessages,
+  setListLastViewer,
 } from '../redux/chatSlice';
+import notificationService from '../utils/notificationService';
+
+// Thêm vào đầu file socketService.js:
+let flag = true; // Thêm biến flag
 
 // Khai báo biến để lưu store sau này
 let storeInstance = null;
@@ -21,7 +26,7 @@ export const registerStore = (store) => {
 // import { REACT_APP_SOCKET_URL } from '../constants';
 
 // Sử dụng trực tiếp địa chỉ IP của người dùng
-let SOCKET_URL = 'http://192.168.1.4:3001';
+let SOCKET_URL = 'http://192.168.101.14:3001';
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds
@@ -182,10 +187,28 @@ const setupSocketEventHandlers = () => {
   });
 
   // Handle message events
-  socket.on('new-message', (newMessage) => {
-    console.log('New message received:', newMessage._id);
+  socket.on('new-message', (conversationId, message) => {
+    console.log('new-message received');
     if (storeInstance) {
-      storeInstance.dispatch(addNewMessage(newMessage));
+      // Thêm vào store Redux
+      storeInstance.dispatch(addNewMessage({conversationId, message}));
+      
+      // Lấy thông tin user và conversation
+      const state = storeInstance.getState();
+      const currentUserId = state.auth?.user?._id;
+      const conversation = state.chat.conversations.find(c => c._id === conversationId);
+      
+      // Nếu tin nhắn từ người khác và không đang ở màn hình message
+      if (message.sender?._id !== currentUserId && conversation) {
+        // Tạo thông báo
+        notificationService.showMessageNotification(message, conversation);
+        
+        // Cập nhật đếm tin nhắn chưa đọc
+        storeInstance.dispatch(updateUnreadCount({
+          conversationId,
+          hasUnread: true
+        }));
+      }
     }
   });
 
@@ -194,6 +217,11 @@ const setupSocketEventHandlers = () => {
     if (storeInstance) {
       storeInstance.dispatch(updateMessage(updatedMessage));
     }
+  });
+
+  socket.on('update-vote-message', (conversationId, message) => {
+    console.log('update-vote-message');
+    dispatch(updateVoteMessage({conversationId, message}));
   });
 
   // Handle message recall events
@@ -211,6 +239,19 @@ const setupSocketEventHandlers = () => {
         }));
       }
     }
+  });
+
+  // Handle rename conversation event
+  socket.on('rename-conversation', (conversationId, newName, message) => {
+    console.log('Rename conversation event received:', { conversationId, newName });
+    
+    // If we have a store instance, we can update redux state
+    if (storeInstance) {
+      // Dispatch an action to update the conversation name in the store if you have one
+      // Right now we're handling this in the MessageScreen component
+    }
+    
+    // The message processing will be handled in MessageScreen.js
   });
 
   // Handle both possible message deletion event formats from server
@@ -292,6 +333,25 @@ const setupSocketEventHandlers = () => {
   socket.io.on('reconnect_error', (error) => {
     console.error('Socket reconnection error:', error);
   });
+  
+  socket.on('user-last-view', (data) => {
+    console.log('user-last-view event received:', data);
+    
+    if (storeInstance) {
+      // Đảm bảo userId nhận được khác với userId hiện tại
+      const currentState = storeInstance.getState();
+      const currentUserId = currentState.auth?.user?._id;
+      
+      if (data.userId !== currentUserId) {
+        storeInstance.dispatch(setListLastViewer({
+          conversationId: data.conversationId,
+          channelId: data.channelId,
+          userId: data.userId,
+          lastView: data.lastView
+        }));
+      }
+    }
+  });
 };
 
 // Try to reconnect to socket server with exponential backoff
@@ -338,7 +398,7 @@ export const joinConversation = (conversationId) => {
   }
   
   console.log(`Joining conversation: ${conversationId}`);
-  socket.emit('join-conversation', { conversationId });
+  socket.emit('join-conversation', conversationId);
   return true;
 };
 
@@ -360,7 +420,7 @@ export const joinConversations = (conversationIds) => {
   }
   
   console.log(`Joining ${conversationIds.length} conversations`);
-  socket.emit('join-conversations', { conversationIds });
+  socket.emit('join-conversations', conversationIds);
   return true;
 };
 
@@ -372,7 +432,7 @@ export const leaveConversation = (conversationId) => {
   }
   
   console.log(`Leaving conversation: ${conversationId}`);
-  socket.emit('leave-conversation', { conversationId });
+  socket.emit('leave-conversation', conversationId);
   return true;
 };
 
@@ -383,7 +443,8 @@ export const emitTyping = (isTyping, conversationId) => {
     return false;
   }
   
-  socket.emit('typing', { conversationId, isTyping });
+  const user = storeInstance ? storeInstance.getState().auth.user : null;
+  socket.emit('typing', conversationId, user);
   return true;
 };
 
@@ -419,6 +480,18 @@ const handleTypingEvent = (conversationId, user, isTyping) => {
     conversationId,
     typingUsers: conversationTypingUsers,
   }));
+};
+
+// Emit not typing event
+export const emitNotTyping = (conversationId) => {
+  if (!socket || !socket.connected || !conversationId) {
+    console.log(`Cannot emit not typing for conversation ${conversationId}: socket not connected`);
+    return false;
+  }
+  
+  const user = storeInstance ? storeInstance.getState().auth.user : null;
+  socket.emit('not-typing', conversationId, user);
+  return true;
 };
 
 // Disconnect socket
@@ -458,6 +531,85 @@ export const isSocketConnected = () => {
   }
 };
 
+// Thêm vào cuối file trước export default
+export const getSocket = () => {
+  return socket;
+};
+
+// Thêm phương thức on và off
+export const on = (event, callback) => {
+  if (!socket) {
+    console.log(`Cannot register event ${event}: socket is null`);
+    return false;
+  }
+  
+  socket.on(event, callback);
+  return true;
+};
+
+export const off = (event, callback) => {
+  if (!socket) {
+    console.log(`Cannot unregister event ${event}: socket is null`);
+    return false;
+  }
+  
+  socket.off(event, callback);
+  return true;
+};
+
+// Hàm để tham gia cuộc gọi video
+export const subscribeCallVideo = (conversationId, userId, peerId) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot subscribe to video call: Socket not connected');
+    return false;
+  }
+  
+  console.log('Subscribing to video call:', { conversationId, userId, peerId });
+  socket.emit('subscribe-call-video', {
+    conversationId,
+    newUserId: userId,
+    peerId,
+  });
+  
+  return true;
+};
+
+// Đăng ký lắng nghe sự kiện có người tham gia cuộc gọi
+export const onNewUserCall = (callback) => {
+  if (!socket) {
+    console.log('Cannot listen for new-user-call: Socket not connected');
+    return false;
+  }
+  
+  socket.on('new-user-call', (data) => {
+    console.log('New user joined call:', data);
+    if (typeof callback === 'function') {
+      callback(data);
+    }
+  });
+  
+  return true;
+};
+
+// Thêm vào socketService.js
+export const markConversationAsViewed = (conversationId, channelId = null) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot mark conversation as viewed: Socket not connected');
+    return false;
+  }
+  
+  if (channelId) {
+    console.log(`Marking channel ${channelId} in conversation ${conversationId} as viewed`);
+    socket.emit('conversation-last-view', conversationId, channelId);
+  } else {
+    console.log(`Marking conversation ${conversationId} as viewed`);
+    socket.emit('conversation-last-view', conversationId);
+  }
+  
+  return true;
+};
+
+// Cập nhật export default để bao gồm các phương thức mới
 export default {
   initiateSocket,
   joinConversation,
@@ -466,4 +618,11 @@ export default {
   emitTyping,
   disconnectSocket,
   isSocketConnected,
+  getSocket, // Thêm phương thức này
+  on,        // Thêm phương thức này
+  off,       // Thêm phương thức này
+  emitNotTyping, // Thêm phương thức này
+  subscribeCallVideo, // Thêm phương thức này
+  onNewUserCall, // Thêm phương thức này
+  markConversationAsViewed, // Thêm phương thức này
 };

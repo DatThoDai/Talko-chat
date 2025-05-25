@@ -68,7 +68,7 @@ export const userService = {
       }
       
       // Sử dụng đúng endpoint từ UserController: /search/id/:userId
-      const response = await api.get(`/search/id/${userId}`);
+      const response = await api.get(`/users/search/id/${userId}`);
       return response;
     } catch (error) {
       console.error('Error searching by ID:', error);
@@ -122,11 +122,29 @@ export const userService = {
   getUserById: async (userId) => {
     try {
       // Sử dụng endpoint có sẵn từ backend
-      const response = await api.get(`/search/id/${userId}`);
+      const response = await api.get(`/users/search/id/${userId}`);
       return response;
     } catch (error) {
       console.error('Error getting user by ID:', error);
       throw error.response || { message: 'Lỗi kết nối đến server' };
+    }
+  },
+  //Lấy avatar từ userName
+  getAvatarByEmail: async (email) => {
+    try {
+      if (!email) return null;
+      
+      // Gọi API để lấy thông tin user từ email
+      const response = await api.get(`/users/search/username/${encodeURIComponent(email)}`);
+      
+      if (response && response.data) {
+        // Trả về _id từ response
+        return response.data.avatar || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user ID from email:', error);
+      return null;
     }
   },
   

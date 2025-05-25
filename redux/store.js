@@ -1,12 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './authSlice';
 import globalReducer from './globalSlice';
-
+import chatReducer from './chatSlice';
 // Tạo store với tất cả các reducer
 const store = configureStore({
   reducer: {
     auth: authReducer,
     global: globalReducer,
+    chat: chatReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

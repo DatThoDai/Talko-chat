@@ -20,36 +20,39 @@ import MessageActions from './MessageActions';
 import { downloadFile, openFile } from '../../utils/downloadUtils';
 import * as Sharing from 'expo-sharing';
 
-function SenderMessage({
-  message = {},
-  isMessageRecalled = false,
-  onPressEmoji = null,
-  handleShowReactDetails = null,
-  onPressDelete = null,
-  onPressEdit = null,
-  onReply = () => {},
-  onPressRecall = null,
-  loading = false,
-  previewImage = null,
-  navigation = {},
-  conversationId = '',
-  content = '',
-  time = '',
-  reactVisibleInfo = '',
-  reactLength = 0,
-  handleViewImage = null,
-  currentUserId = '',
-  scrollToMessage = null,
-}) {
+function SenderMessage({ someProp = 'defaultValue', ...rest }) {
+  const {
+    message = {},
+    isMessageRecalled = false,
+    onPressEmoji = null,
+    handleShowReactDetails = null,
+    onPressDelete = null,
+    onPressEdit = null,
+    onReply = () => {},
+    onPressRecall = null,
+    loading = false,
+    previewImage = null,
+    navigation = {},
+    conversationId = '',
+    content = '',
+    time = '',
+    reactVisibleInfo = '',
+    reactLength = 0,
+    handleViewImage = null,
+    currentUserId = '',
+    scrollToMessage = null
+  } = rest;
+  
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
-  content = message?.content || content;
-  time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : time;
-  reactLength = message?.reactions?.length || reactLength;
-  reactVisibleInfo = reactLength > 0 ? `${reactLength}` : reactVisibleInfo;
-  // Ưu tiên sử dụng conversationId từ props, nếu không có thì lấy từ message
+  const messageContent = message?.content || content;
+  const messageTime = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : time;
+  const messageReactLength = message?.reactions?.length || reactLength;
+  const messageReactVisibleInfo = messageReactLength > 0 ? `${messageReactLength}` : reactVisibleInfo;
+  // Ưe tiên sử dụng conversationId từ props, nếu không có thì lấy từ message
   const msgConversationId = conversationId || message?.conversationId;
-  currentUserId = currentUserId || message?.sender?._id;
+  const userCurrentId = currentUserId || message?.sender?._id;
   const messageStatus = message?.status || 'sent';
+  console.log('[SenderMessage] messageTime:', messageTime, 'from createdAt:', message.createdAt);
 
   // Make sure we have message and sender
   if (!message) {
@@ -144,10 +147,10 @@ function SenderMessage({
       default:
         // Kiểm tra nếu là tin nhắn emoji đơn lẻ
         if (message.isOnlyEmoji === true) {
-          return <Text style={styles.bigEmoji}>{content}</Text>;
+          return <Text style={styles.bigEmoji}>{messageContent}</Text>;
         }
         // Tin nhắn bình thường
-        return <Text style={styles.content}>{content}</Text>;
+        return <Text style={styles.content}>{messageContent}</Text>;
     }
   };
 
@@ -308,13 +311,37 @@ function SenderMessage({
 
   // Handle text selection for copy
   const handleCopyText = (text) => {
-    Clipboard.setString(text);
+    // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
+    let textToCopy = text || '';
     
-    // Show toast or alert based on platform
-    if (Platform.OS === 'android') {
-      ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+    // Nếu không có nội dung, thử lấy từ message
+    if (!textToCopy && message) {
+      // Lấy nội dung từ messageContent hoặc trực tiếp từ message.content
+      textToCopy = messageContent || message.content || message.text || '';
+    }
+    
+    // Ghi log để debug
+    console.log('[SenderMessage] Sao chép nội dung:', { 
+      textParameter: text,
+      messageContent: messageContent,
+      message_content: message?.content,
+      finalTextToCopy: textToCopy
+    });
+    
+    if (textToCopy) {
+      // Sao chép vào clipboard
+      Clipboard.setString(textToCopy);
+      
+      // Thông báo thành công dựa trên nền tảng
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      }
     } else {
-      Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      // Thông báo lỗi nếu không có nội dung để sao chép
+      console.warn('[SenderMessage] Không có nội dung để sao chép');
+      Alert.alert('Thông báo', 'Không có nội dung để sao chép');
     }
   };
 
@@ -323,7 +350,20 @@ function SenderMessage({
   const isDeleted = message.isDeleted;
   
   // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
-  const isForwarded = message.metadata?.isForwarded === true;
+  // Sử dụng nhiều cách khác nhau để xác định tin nhắn chuyển tiếp
+  const isForwarded = 
+    message.metadata?.isForwarded === true || 
+    message.forwardedMessage === true ||
+    message.content?.startsWith('📤 Tin nhắn được chuyển tiếp:') ||
+    (typeof message.forwardedMessage === 'string' && message.forwardedMessage === 'true');
+  
+  // Log thông tin để debug
+  console.log('[SenderMessage] Trạng thái chuyển tiếp:', {
+    metadata_isForwarded: message.metadata?.isForwarded,
+    forwardedMessage: message.forwardedMessage,
+    content_start: message.content?.substring(0, 30),
+    final_isForwarded: isForwarded
+  });
   
   // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
@@ -479,12 +519,12 @@ function SenderMessage({
                 )}
                 {renderReplyPreview()}
                 {renderContent()}
+                <View style={styles.timeContainer}>
+                  {renderMessageStatus()}
+                  <Text style={styles.time}>{messageTime}</Text>
+                </View>
               </>
             )}
-            <View style={styles.timeContainer}>
-              {renderMessageStatus()}
-              <Text style={styles.time}>{time}</Text>
-            </View>
           </View>
         </TouchableWithoutFeedback>
         
@@ -499,18 +539,19 @@ function SenderMessage({
       
       <View style={styles.avatarContainer}>
         <CustomAvatar
-          size={36}
-          name={sender?.name}
-          avatar={sender?.avatar}
-          color={sender?.avatarColor}
-        />
+  size={36}
+  name={sender?.name || 'Bạn'}
+  avatar={sender?.avatar}
+  imageUrl={sender?.avatar} // Thêm imageUrl để đảm bảo hoạt động
+  color={sender?.avatarColor}
+/>
       </View>
       
       <MessageActions
         visible={showActions}
         onClose={handleCloseActions}
         message={message}
-        currentUserId={currentUserId}
+        currentUserId={userCurrentId}
         onReply={(msg) => {
           console.log('SenderMessage - onReply được gọi với message:', msg?._id);
           if (typeof onReply === 'function') {
@@ -520,10 +561,14 @@ function SenderMessage({
           }
         }}
         onSelect={handleCopyText}
-        onPressRecall={onPressRecall}
+        onPressRecall={onPressRecall} 
+        onPressDelete={onPressDelete}
+        onPressEdit={onPressEdit}
         navigation={navigation}
         conversationId={msgConversationId}
         position={menuPosition}
+        showCopyOption={true}
+        showRecallOption={true}
       />
     </View>
   );

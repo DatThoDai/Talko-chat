@@ -1,7 +1,7 @@
 // Cấu hình API URL và các hằng số khác
 
-export const REACT_APP_API_URL = 'http://192.168.1.4:3001';
-export const REACT_APP_SOCKET_URL = 'http://192.168.1.4:3001';
+export const REACT_APP_API_URL = 'http://192.168.101.14:3001';
+export const REACT_APP_SOCKET_URL = 'http://192.168.101.14:3001';
 
 // CẤU HÌNH ĐÚNG THEO BACKEND CNM_CHAT (FIXED)
 // Đã phân tích code CNM_Chat/routes/index.js

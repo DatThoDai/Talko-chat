@@ -10,6 +10,8 @@ import {
   Animated,
   Dimensions,
   Vibration,
+  Platform,
+  ToastAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -30,6 +32,8 @@ const MessageActions = ({
   navigation = {},
   conversationId = '',
   position = null,
+  showCopyOption = true,
+  showRecallOption = true,
 }) => {
   const [loading, setLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
@@ -112,7 +116,44 @@ const MessageActions = ({
 
   // Handle message copy
   const handleCopy = () => {
-    onSelect(message.content);
+    // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
+    let textToCopy = '';
+    
+    // Thử lấy nội dung từ nhiều nguồn khác nhau
+    if (typeof message === 'string') {
+      // Nếu message là string, dùng trực tiếp
+      textToCopy = message;
+    } else if (message) {
+      // Thử các trường khác nhau có thể chứa nội dung
+      textToCopy = message.content || 
+                  message.text || 
+                  message.message || 
+                  (typeof message === 'object' ? JSON.stringify(message) : '') || 
+                  '';
+    }
+    
+    // Ghi log để debug
+    console.log('[MessageActions] Sao chép nội dung:', { 
+      messageType: typeof message,
+      messageContent: message?.content,
+      textToCopy: textToCopy
+    });
+    
+    if (textToCopy) {
+      onSelect(textToCopy);
+      
+      // Thông báo thành công dựa trên nền tảng
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      }
+    } else {
+      // Thông báo lỗi nếu không có nội dung để sao chép
+      console.warn('[MessageActions] Không có nội dung để sao chép');
+      Alert.alert('Thông báo', 'Không có nội dung để sao chép');
+    }
+    
     handleClose();
   };
 
@@ -185,18 +226,26 @@ const MessageActions = ({
       setLoading(true);
       
       // Call the pinMessage API
-      await pinMessagesApi.pinMessage(message._id);
+      const response = await pinMessagesApi.pinMessage(message._id);
       
       // Update UI immediately
-      message.isPinned = true;
-      
-      handleClose();
+      if (response && response.data) {
+        const { conversationId } = response.data;
+        // Emit local event to trigger UI update
+        if (typeof onClose === 'function') {
+          onClose();
+        }
+      }
       
       // Show success feedback
-      Alert.alert('Thành công', 'Tin nhắn đã được ghim');
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Tin nhắn đã được ghim', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thành công', 'Tin nhắn đã được ghim');
+      }
     } catch (error) {
       console.error('Error pinning message:', error);
-      Alert.alert('Lỗi', 'Không thể ghim tin nhắn. Vui lòng thử lại sau.');
+      Alert.alert('Lỗi', error.message || 'Không thể ghim tin nhắn. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -300,25 +349,34 @@ const MessageActions = ({
     <Modal
       transparent
       visible={visible}
-      animationType="none"
+      animationType="fade"
       onRequestClose={handleClose}
+      statusBarTranslucent={true}
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <View style={styles.overlay}>
-          <Animated.View 
-            style={[
-              styles.actionsContainer, 
-              menuStyle,
-              {
-                transform: [{ scale: scaleAnim }],
-                opacity: opacityAnim,
-              }
-            ]}
-          >
-            <View style={styles.bubbleArrow} />
-            {/* Top row - 3 buttons */}
+      <Animated.View 
+        style={[
+          styles.modalContainer,
+          {
+            opacity: opacityAnim,
+          }
+        ]}
+      >
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View style={styles.touchableOverlay} />
+        </TouchableWithoutFeedback>
+
+        <Animated.View 
+          style={[
+            styles.actionsContainer,
+            menuStyle,
+            {
+              transform: [{ scale: scaleAnim }],
+            }
+          ]}
+        >
+          <View style={styles.menuContent}>
+            {/* Top row - exact 3 buttons */}
             <View style={styles.actionsRow}>
-              {/* Reply button */}
               <TouchableOpacity onPress={handleReply} style={styles.actionButton}>
                 <View style={[styles.iconContainer, styles.replyIcon]}>
                   <FontAwesome name="reply" size={16} color="#ffffff" />
@@ -326,24 +384,25 @@ const MessageActions = ({
                 <Text style={styles.actionText}>Trả lời</Text>
               </TouchableOpacity>
 
-              {/* Copy button - only for text messages */}
-              {message.type === 'TEXT' ? (
+              {showCopyOption && (
                 <TouchableOpacity onPress={handleCopy} style={styles.actionButton}>
                   <View style={[styles.iconContainer, styles.copyIcon]}>
                     <FontAwesome name="copy" size={16} color="#ffffff" />
                   </View>
                   <Text style={styles.actionText}>Sao chép</Text>
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
-                  <View style={[styles.iconContainer, styles.forwardIcon]}>
-                    <FontAwesome name="share" size={16} color="#ffffff" />
-                  </View>
-                  <Text style={styles.actionText}>Chuyển</Text>
-                </TouchableOpacity>
               )}
-
-              {/* Pin/Unpin Button */}
+              
+              <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
+                <View style={[styles.iconContainer, styles.forwardIcon]}>
+                  <FontAwesome name="share" size={16} color="#ffffff" />
+                </View>
+                <Text style={styles.actionText}>Chuyển</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Bottom row - exact 3 buttons */}
+            <View style={styles.actionsRow}>
               {!isDeleted && !isRecalled && (
                 message.isPinned ? (
                   <TouchableOpacity onPress={handleUnpin} style={styles.actionButton} disabled={loading}>
@@ -361,22 +420,8 @@ const MessageActions = ({
                   </TouchableOpacity>
                 )
               )}
-            </View>
-            
-            {/* Bottom row - 3 buttons */}
-            <View style={styles.actionsRow}>
-              {/* If it's a text message, show Forward here (to balance the rows) */}
-              {message.type === 'TEXT' && (
-                <TouchableOpacity onPress={handleForward} style={styles.actionButton}>
-                  <View style={[styles.iconContainer, styles.forwardIcon]}>
-                    <FontAwesome name="share" size={16} color="#ffffff" />
-                  </View>
-                  <Text style={styles.actionText}>Chuyển</Text>
-                </TouchableOpacity>
-              )}
               
-              {/* Recall button - only for my messages */}
-              {isMyMessage && !isDeleted && !isRecalled && onPressRecall !== null ? (
+              {isMyMessage && !isDeleted && !isRecalled && onPressRecall !== null && showRecallOption ? (
                 <TouchableOpacity onPress={handleRecall} style={styles.actionButton} disabled={loading}>
                   <View style={[styles.iconContainer, styles.recallIcon]}>
                     <FontAwesome name="history" size={16} color="#ffffff" />
@@ -387,7 +432,6 @@ const MessageActions = ({
                 <View style={styles.emptySlot} />
               )}
 
-              {/* Delete button */}
               <TouchableOpacity 
                 onPress={handleDelete} 
                 style={styles.actionButton}
@@ -399,19 +443,31 @@ const MessageActions = ({
                 <Text style={styles.actionText}>Xóa</Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </View>
-      </TouchableWithoutFeedback>
+          </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  modalContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  touchableOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
   },
   actionsContainer: {
     backgroundColor: 'white',
@@ -424,20 +480,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
   },
-  bubbleArrow: {
-    position: 'absolute',
-    bottom: -10,
-    left: 30,
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderTopWidth: 10,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'white',
+  menuContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -505,7 +550,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     color: '#757575',
-  }
+  },
+  bubbleArrow: {
+    position: 'absolute',
+    bottom: -10,
+    left: 30,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: 'white',
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
 });
 
 export default MessageActions;

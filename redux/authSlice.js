@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import trực tiếp từ file service thay vì qua index.js
 import { authService } from '../api/authService';
 import meApi from '../api/meApi';
-
+import { userService } from '../api/userService';
 const initialState = {
   user: null,
   token: null,
@@ -19,6 +19,8 @@ const initialState = {
   passwordChangeSuccess: false,
   profileUpdateSuccess: false
 };
+
+// Sửa lại hàm loginUser trong authSlice.js để lấy ID thực từ API
 
 export const loginUser = createAsyncThunk(
   'auth/login',
@@ -47,7 +49,6 @@ export const loginUser = createAsyncThunk(
       if (!user) {
         console.log('No user data in response, creating minimal user object');
         user = {
-          _id: credentials._id, // Sử dụng email như là ID trong trường hợp không có ID thực
           username: credentials.email,
           name: credentials.email.split('@')[0],
           email: credentials.email
@@ -58,16 +59,43 @@ export const loginUser = createAsyncThunk(
       if (!user._id && user.id) {
         user._id = user.id; // Dùng id nếu có
       } else if (!user._id) {
-        if (user.username && user.username.includes('@')) {
-          // Nếu username là email, dùng làm ID
-          user._id = user.username;
-          user.email = user.username;
-        } else if (user.email) {
-          user._id = user.email; // Dùng email như là ID dự phòng
-        } else {
-          // Trường hợp cuối cùng, dùng email từ credentials
-          user._id = credentials.email;
-          user.email = credentials.email;
+        // Nếu không có _id, sử dụng API để lấy ID thực từ email
+        try {
+          console.log('Fetching real user ID from email:', user.email || credentials.email);
+          const email = user.email || credentials.email;
+          const realUserId = await userService.getUserIdByEmail(email);
+          
+          if (realUserId) {
+            console.log('Found real user ID:', realUserId);
+            user._id = realUserId;
+          } else {
+            // Nếu không lấy được ID thực, tạm thời sử dụng email
+            console.log('Could not get real user ID, using email as fallback');
+            
+            if (user.username && user.username.includes('@')) {
+              user._id = user.username;
+              user.email = user.username;
+            } else if (user.email) {
+              user._id = user.email;
+            } else {
+              user._id = credentials.email;
+              user.email = credentials.email;
+            }
+            
+            // Lưu email vào một trường riêng để sử dụng sau này
+            user.emailIdentifier = user.email;
+          }
+        } catch (idError) {
+          console.error('Error getting real user ID:', idError);
+          // Fallback: sử dụng email làm ID tạm thời
+          if (user.email) {
+            user._id = user.email;
+          } else {
+            user._id = credentials.email;
+            user.email = credentials.email;
+          }
+          // Lưu email vào một trường riêng để sử dụng sau này
+          user.emailIdentifier = user.email;
         }
       }
       
@@ -139,10 +167,24 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (profileData, { getState, rejectWithValue }) => {
     try {
-      console.log('authSlice: updating profile with data:', profileData);
+      console.log('authSlice: updating profile with data:', JSON.stringify(profileData, null, 2));
       
-      // Gọi API cập nhật thông tin profile sử dụng authApi mới
-      const updatedUser = await meApi.updateUserProfile(profileData);
+      // Ensure data types match exactly what the backend expects
+      const apiData = {
+        ...profileData,
+        // Ensure gender is EXACTLY 0 or 1 (number type, not boolean, not string)
+        gender: profileData.gender === 1 ? 1 : 0,
+        // Don't modify dateOfBirth format, keep as is
+        dateOfBirth: profileData.dateOfBirth
+      };
+      
+      console.log('Data for API call:', JSON.stringify(apiData, null, 2));
+      
+      // Gọi API cập nhật thông tin profile sử dụng meApi.updateProfile
+      const response = await meApi.updateProfile(apiData);
+      console.log('Profile update API response:', response);
+      
+      const updatedUser = response.data || response;
       
       // Nếu cập nhật thành công, lấy dữ liệu user hiện tại từ state và merge
       const { auth } = getState();
@@ -151,7 +193,11 @@ export const updateProfile = createAsyncThunk(
         ...updatedUser
       };
       
-      console.log('authSlice: updated user data:', mergedUser);
+      console.log('authSlice: updated user data:', JSON.stringify(mergedUser, null, 2));
+      console.log('authSlice: checking dateOfBirth format:', {
+        original: updatedUser.dateOfBirth,
+        type: typeof updatedUser.dateOfBirth
+      });
       
       // Lưu vào AsyncStorage để duy trì đăng nhập
       await AsyncStorage.setItem('user', JSON.stringify(mergedUser));
@@ -159,16 +205,39 @@ export const updateProfile = createAsyncThunk(
       return mergedUser;
     } catch (error) {
       console.error('authSlice updateProfile error:', error);
-      // // Xử lý các trường hợp lỗi khác nhau
-      // if (error.status === 408) {
-      //   return rejectWithValue('Yêu cầu hết thời gian, vui lòng thử lại');
-      // } else if (error.status === 401) {
-      //   return rejectWithValue('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
-      // } else if (error.status === 0) {
-      //   return rejectWithValue('Không có kết nối internet, vui lòng kiểm tra mạng');
-      // } else {
-      //   return rejectWithValue(error.message || 'Cập nhật thông tin thất bại');
-      // }
+      
+      // Format error message to show validation errors clearly
+      let errorMessage = 'Cập nhật thông tin thất bại';
+      
+      if (error.response) {
+        console.error('API error status:', error.response.status);
+        
+        if (error.response.data) {
+          const responseData = error.response.data;
+          console.error('API error data:', responseData);
+          
+          // Handle case where response data has a message property that's an object with validation errors
+          if (responseData.message && typeof responseData.message === 'object') {
+            const validationErrors = Object.entries(responseData.message)
+              .map(([field, error]) => `${field}: ${error}`)
+              .join('\n');
+            
+            errorMessage = `Lỗi dữ liệu:\n${validationErrors}`;
+          } else if (typeof responseData === 'string') {
+            errorMessage = responseData;
+          } else if (responseData.message) {
+            errorMessage = responseData.message;
+          } else if (responseData.error) {
+            errorMessage = responseData.error;
+          } else {
+            errorMessage = JSON.stringify(responseData);
+          }
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return rejectWithValue(errorMessage);
     }
   }
 );

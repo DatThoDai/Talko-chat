@@ -170,8 +170,7 @@ const conversationApi = {
         timeout: 15000 // Tăng timeout lên 15 giây vì có thể server chậm
       });
       
-      console.log('Conversations fetched successfully:', response);
-      console.log('Conversations response:', response);
+      
       
       // Format kết quả để phù hợp với cấu trúc dữ liệu của mobile app
       const formattedData = Array.isArray(response.data) ? response.data : [];
@@ -224,6 +223,9 @@ const conversationApi = {
 
   updateName: (id, name) => {
     const url = `${BASE_URL}/${id}/name`;
+    console.log('Updating conversation name:', { id, name });
+    // Make sure to send a proper JSON object in the request body
+    // The backend expects a JSON with a name property: { "name": "New name" }
     return axiosClient.patch(url, name);
   },
 
@@ -298,6 +300,7 @@ const conversationApi = {
     return axiosClient.patch(url, image, config);
   },
 
+  
   addManager: (conversationId, managerIds) => {
     return axiosClient.post(`${BASE_URL}/${conversationId}/managers`, {
       managerIds,
@@ -309,7 +312,6 @@ const conversationApi = {
       data: {managerIds},
     });
   },
-  
   // Thêm phương thức getPinnedMessages để khắc phục lỗi trong MessageScreen
   getPinnedMessages: (conversationId) => {
     // Cố gắng lấy tin nhắn được ghim từ server nếu có

@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -19,6 +20,49 @@ import { logoutUser } from '../redux/authSlice';
 import { userService } from '../api/userService';
 import { authService } from '../api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import meApi from '../api/meApi';
+
+// Hàm xử lý an toàn định dạng ngày, tránh lỗi khi ngày không hợp lệ
+const formatDateSafely = (dateString) => {
+  try {
+    if (!dateString) return 'Chưa cập nhật';
+    
+    // Xử lý trường hợp dateString là một object với các trường day, month, year
+    if (typeof dateString === 'object' && dateString !== null) {
+      if (dateString.day && dateString.month && dateString.year) {
+        return `${String(dateString.day).padStart(2, '0')}/${String(dateString.month).padStart(2, '0')}/${dateString.year}`;
+      }
+      
+      // Nếu là Date object
+      if (dateString instanceof Date && !isNaN(dateString.getTime())) {
+        return dateString.toLocaleDateString('vi-VN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+    }
+    
+    // Xử lý trường hợp dateString là một chuỗi ISO 8601
+    const date = new Date(dateString);
+    
+    // Kiểm tra xem date có hợp lệ không
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date format:', JSON.stringify(dateString));
+      return 'Định dạng không hợp lệ';
+    }
+    
+    // Định dạng ngày tháng kiểu Việt Nam: DD/MM/YYYY
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, typeof dateString, dateString);
+    return 'Định dạng không hợp lệ';
+  }
+};
 
 // Hiển thị một mục thông tin cá nhân
 const ProfileItem = ({ label, value, extraInfo }) => {
@@ -48,6 +92,7 @@ const ProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user: authUser } = useSelector((state) => state.auth);
   const [profileImage, setProfileImage] = useState(null);
+  const [coverImage, setCoverImage] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -55,12 +100,22 @@ const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     // Lấy thông tin người dùng từ API khi màn hình được hiển thị
     fetchUserProfile();
-  }, []);
+
+    // Thêm một event listener để tải lại profile khi màn hình được focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('ProfileScreen focused - refreshing data');
+      fetchUserProfile();
+    });
+
+    // Cleanup function
+    return unsubscribe;
+  }, [navigation]);
 
   // Log trực tiếp URL hình nền nếu có
   React.useEffect(() => {
     if (user && (user.coverImage || user.backgroundImage)) {
       console.log('User has cover image:', user.coverImage || user.backgroundImage);
+      setCoverImage(user.coverImage || user.backgroundImage);
     }
   }, [user]);
 
@@ -81,37 +136,67 @@ const ProfileScreen = ({ navigation }) => {
         setTimeout(() => reject(new Error('Yêu cầu hết thời gian')), 30000)
       );
       
-      // Sử dụng userService.getUserProfile() để lấy thông tin người dùng
-      // Truyền đầy đủ username của người dùng đã đăng nhập
-      const username = authUser.username || authUser.email;
-      console.log('Fetching profile for username:', username);
+      // Thử lấy thông tin từ /me/profile trước
+      console.log('Fetching profile using meApi.fetchProfile');
+      let response;
       
-      const responsePromise = userService.getUserProfile(username);
-      const response = await Promise.race([responsePromise, timeoutPromise]);
-      
-      console.log('User profile response:', response);
-      
-      // Kiểm tra response để đảm bảo dữ liệu hợp lệ
-      if (!response) {
-        throw new Error('Dữ liệu người dùng không hợp lệ');
+      try {
+        setIsLoading(true);
+        const responsePromise = meApi.fetchProfile();
+        response = await Promise.race([responsePromise, timeoutPromise]);
+        console.log('Me profile response:', response);
+      } catch (error) {
+        console.error('Error fetching from me/profile:', error);
+        response = null;
+      } finally {
+        setIsLoading(false);
       }
       
-      // Tách trường 'data' từ response
-      // Cấu trúc API trả về: { data: { user_data }, message: '', success: true }
-      const userData = response.data || {};
-      console.log('Extracted user data:', userData);
+      // Nếu không có dữ liệu đầy đủ từ me/profile, thử với user service
+      const userData = response?.data || {};
+      console.log('Data from meApi:', userData);
       
-      // Lưu trữ dữ liệu người dùng với các tên trường chính xác
-      // Đảm bảo có ít nhất các trường cơ bản để tránh hiển thị "Chưa cập nhật"
-      // Thêm trực tiếp mẫu dữ liệu từ MongoDB
+      // Kiểm tra xem có đủ dữ liệu không
+      if (!userData.dateOfBirth && !userData.gender && authUser?.username) {
+        console.log('Data from meApi insufficient, trying userService...');
+        try {
+          const userResponse = await userService.getUserProfile(authUser.username);
+          console.log('User service response:', userResponse);
+          
+          // Kết hợp dữ liệu từ cả hai nguồn
+          if (userResponse?.data) {
+            const userServiceData = userResponse.data;
+            
+            // Kết hợp dữ liệu từ hai nguồn
+            Object.keys(userServiceData).forEach(key => {
+              if (!userData[key] && userServiceData[key]) {
+                userData[key] = userServiceData[key];
+              }
+            });
+            
+            console.log('Combined user data:', userData);
+          }
+        } catch (userServiceError) {
+          console.error('Error fetching from userService:', userServiceError);
+        }
+      }
+      
+      console.log('Final user data to set:', userData);
+      
+      // Lưu trữ dữ liệu người dùng và kết hợp với dữ liệu từ authUser
       setUser({
         ...userData,
-        username: userData.username || authUser?.username || 'chibaotruong1506@gmail.com',
-        name: userData.name || authUser?.name || 'truong chi bao',
-        dateOfBirth: '2003-06-14T17:00:00.000+00:00',
-        gender: true,
-        createdAt: '2025-02-04T10:03:29.147+00:00',
-        coverImage: 'https://talko-chat.s3.ap-southeast-1.amazonaws.com/talko-1744128981360-129915654.jpg'
+        // Thông tin cơ bản
+        _id: userData._id || authUser?._id,
+        username: userData.username || authUser?.username || '',
+        name: userData.name || authUser?.name || '',
+        
+        // Các trường bổ sung - Nếu API không trả về, giữ giá trị cũ hoặc dùng giá trị mặc định
+        dateOfBirth: userData.dateOfBirth || user?.dateOfBirth || null,
+        gender: userData.gender !== undefined ? userData.gender : (user?.gender !== undefined ? user.gender : true),
+        createdAt: userData.createdAt || user?.createdAt || new Date().toISOString(),
+        coverImage: userData.coverImage || user?.coverImage,
+        avatarColor: userData.avatarColor || user?.avatarColor || '#1890ff'
       });
 
       // Cập nhật ảnh hồ sơ và ảnh nền từ dữ liệu người dùng nếu có
@@ -123,25 +208,19 @@ const ProfileScreen = ({ navigation }) => {
       // Kiểm tra và log ảnh nền từ dữ liệu người dùng - coverImage là field đúng trong MongoDB
       if (userData?.coverImage) {
         console.log('Cover image exists:', userData.coverImage);
-        // Đảm bảo set backgroundImage và coverImage đều có giá trị để hiển thị được
-        userData.backgroundImage = userData.coverImage;
-      } else if (userData?.backgroundImage) {
-        console.log('Background image exists:', userData.backgroundImage);
-        // Đảm bảo set coverImage và backgroundImage đều có giá trị để hiển thị được
-        userData.coverImage = userData.backgroundImage;
       } else {
         console.log('No cover/background image in userData:', userData);
       }
       
-      // Đảm bảo coverImage được gán vào state user
-      setUser(prevUser => ({
-        ...prevUser,
-        coverImage: userData?.coverImage || prevUser?.coverImage,
-        backgroundImage: userData?.backgroundImage || prevUser?.backgroundImage
-      }));
-      
       // Kiểm tra xem có thể log trực tiếp dữ liệu gốc không bị biến đổi
       console.log('Raw user data from API:', JSON.stringify(response, null, 2));
+      
+      // Log thông tin ngày sinh để debug
+      console.log('Date of birth from API:', {
+        rawDateOfBirth: userData.dateOfBirth,
+        type: typeof userData.dateOfBirth,
+        formatted: formatDateSafely(userData.dateOfBirth)
+      });
 
     } catch (err) {
       // Chỉ log lỗi vào console để debug, không hiển thị trực tiếp lỗi lên UI
@@ -174,23 +253,43 @@ const ProfileScreen = ({ navigation }) => {
           fetchUserProfile();
         }, 3000);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
   // Yêu cầu quyền truy cập thư viện ảnh
   const requestMediaLibraryPermissions = async () => {
     if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Quyền truy cập bị từ chối',
-          'Xin lỗi, chúng tôi cần quyền truy cập thư viện ảnh để thực hiện điều này!'
-        );
+      try {
+        // Yêu cầu quyền truy cập vào thư viện ảnh
+        const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        
+        if (mediaLibraryStatus !== 'granted') {
+          Alert.alert(
+            'Cấp quyền truy cập',
+            'Ứng dụng cần quyền truy cập vào thư viện ảnh để thay đổi ảnh đại diện.',
+            [
+              { text: 'Hủy', style: 'cancel' },
+              { 
+                text: 'Cài đặt', 
+                onPress: () => {
+                  // Hiển thị trang cài đặt thiết bị để người dùng có thể cấp quyền
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error requesting permissions:', error);
         return false;
       }
-      return true;
     }
     return true;
   };
@@ -202,11 +301,17 @@ const ProfileScreen = ({ navigation }) => {
     if (!hasPermission) return;
 
     try {
+      // Sử dụng MediaType thay vì MediaTypeOptions để tránh warning
+      const mediaType = ImagePicker.MediaType 
+        ? ImagePicker.MediaType.Images 
+        : "images";
+        
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: mediaType,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5,
+        quality: 0.5, // Giảm quality để giảm kích thước base64
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -217,47 +322,265 @@ const ProfileScreen = ({ navigation }) => {
         const imageUri = result.assets[0].uri;
         const filename = imageUri.split('/').pop();
         
-        // Determine file type
+        // Determine file type - bổ sung xác định loại file tốt hơn
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image';
+        const extension = match ? match[1].toLowerCase() : 'jpg';
         
+        let fileType;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            fileType = 'image/jpeg';
+            break;
+          case 'png':
+            fileType = 'image/png';
+            break;
+          case 'gif':
+            fileType = 'image/gif';
+            break;
+          default:
+            fileType = 'image/jpeg';
+        }
+        
+        // Thêm file vào FormData với mimetype đúng
         formData.append('file', {
           uri: imageUri,
-          name: filename,
-          type
+          name: filename || `avatar-${Date.now()}.${extension}`,
+          type: fileType,
+          mimetype: fileType  // Thêm trường mimetype mà server yêu cầu
         });
         
+        // Thêm các trường khác để giải quyết vấn đề trong MeController.js
+        formData.append('mimetype', fileType);  // Thêm mimetype ngoài object
+        
         try {
-          // Upload ảnh sử dụng meApi
-          const response = await meApi.updateAvatar(formData);
+          const asset = result.assets[0];
+          const imageUri = asset.uri;
           
-          // Cập nhật UI
-          setProfileImage(response.avatar || imageUri);
+          // Debug thông tin ảnh gốc
+          console.log('Image info:', {
+            uri: imageUri,
+            width: asset.width,
+            height: asset.height,
+            base64Present: asset.base64 ? 'Yes' : 'No',
+            base64Length: asset.base64?.length,
+          });
           
-          // Cập nhật user object
-          setUser(prev => ({
-            ...prev,
-            avatar: response.avatar || imageUri
-          }));
+          // Lấy đuôi file từ URI
+          let fileExt = imageUri.split('.').pop().toLowerCase();
           
-          Alert.alert('Thành công', 'Ảnh đại diện đã được cập nhật');
+          // Đảm bảo fileExtension là một trong những định dạng hợp lệ
+          if (fileExt !== 'jpg' && fileExt !== 'jpeg' && fileExt !== 'png') {
+            fileExt = 'jpeg'; // Mặc định là jpeg nếu không xác định được
+          }
+          
+          // Thêm dấu chấm trước phần mở rộng theo yêu cầu của backend
+          const fileExtension = `.${fileExt}`;
+          
+          console.log(`File extension detected: ${fileExt}, sending as: ${fileExtension}`);
+          
+          // Kiểm tra có base64 không
+          if (!asset.base64) {
+            throw new Error('Không thể lấy dữ liệu base64 từ ảnh');
+          }
+          
+          // Xử lý base64
+          let base64Data = asset.base64;
+          
+          // Xây dựng payload cho API
+          const imageData = {
+            fileName: `avatar-${Date.now()}`,
+            fileExtension, // Đã có dấu chấm phía trước
+            fileBase64: base64Data,
+          };
+          
+          console.log(`Preparing to upload avatar image with size: ${base64Data.length} chars and extension: ${fileExtension}`);
+          
+          // Upload ảnh đại diện
+          try {
+            const response = await meApi.updateAvatarBase64(imageData);
+            console.log('Avatar update response:', response);
+            
+            // Kiểm tra cấu trúc response đúng định dạng
+            if (response && response.data && response.data.avatar) {
+              const avatarUrl = response.data.avatar;
+              console.log('Avatar URL from response:', avatarUrl);
+              
+              // Cập nhật UI với avatar URL mới
+              setProfileImage(avatarUrl);
+              
+              // Cập nhật user object
+              setUser(prev => ({
+                ...prev,
+                avatar: avatarUrl
+              }));
+              
+              Alert.alert(
+                'Thành công', 
+                'Ảnh đại diện đã được cập nhật thành công.',
+                [{ text: 'OK' }]
+              );
+            } else {
+              console.error('Unexpected response format:', response);
+              throw new Error('Không nhận được URL ảnh từ server');
+            }
+          } catch (apiError) {
+            console.error('API error:', apiError);
+            if (apiError.response) {
+              console.error('Error response:', apiError.response.data);
+            }
+            throw apiError;
+          }
         } catch (uploadError) {
           console.error('Error uploading avatar:', uploadError);
-          Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại sau.');
+          Alert.alert(
+            'Lỗi',
+            'Không thể cập nhật ảnh đại diện. Vui lòng thử lại sau.',
+            [{ text: 'OK' }]
+          );
         } finally {
           setIsLoading(false);
         }
       }
-    } catch (e) {
-      console.error('Error picking image:', e);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh. Vui lòng thử lại sau.');
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      Alert.alert(
+        'Lỗi',
+        'Không thể chọn ảnh. Vui lòng thử lại sau.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  // Xử lý thay đổi ảnh bìa cá nhân
+  const handleChangeCoverImage = async () => {
+    const hasPermission = await requestMediaLibraryPermissions();
+
+    if (!hasPermission) return;
+
+    try {
+      // Sử dụng MediaType thay vì MediaTypeOptions để tránh warning
+      const mediaType = ImagePicker.MediaType 
+        ? ImagePicker.MediaType.Images 
+        : "images";
+        
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: mediaType,
+        allowsEditing: true,
+        aspect: [16, 9], // Tỷ lệ khung hình phổ biến cho ảnh bìa
+        quality: 0.5, // Giảm quality để giảm kích thước base64
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsLoading(true);
+        
+        try {
+          const asset = result.assets[0];
+          const imageUri = asset.uri;
+          
+          // Debug thông tin ảnh gốc
+          console.log('Cover image info:', {
+            uri: imageUri,
+            width: asset.width,
+            height: asset.height,
+            base64Present: asset.base64 ? 'Yes' : 'No',
+            base64Length: asset.base64?.length,
+          });
+          
+          // Lấy đuôi file từ URI
+          let fileExt = imageUri.split('.').pop().toLowerCase();
+          
+          // Đảm bảo fileExtension là một trong những định dạng hợp lệ
+          if (fileExt !== 'jpg' && fileExt !== 'jpeg' && fileExt !== 'png') {
+            fileExt = 'jpeg'; // Mặc định là jpeg nếu không xác định được
+          }
+          
+          // Thêm dấu chấm trước phần mở rộng theo yêu cầu của backend
+          const fileExtension = `.${fileExt}`;
+          
+          console.log(`File extension detected: ${fileExt}, sending as: ${fileExtension}`);
+          
+          // Kiểm tra có base64 không
+          if (!asset.base64) {
+            throw new Error('Không thể lấy dữ liệu base64 từ ảnh');
+          }
+          
+          // Xử lý base64
+          let base64Data = asset.base64;
+          
+          // Xây dựng payload cho API
+          const imageData = {
+            fileName: `cover-${Date.now()}`,
+            fileExtension, // Đã có dấu chấm phía trước
+            fileBase64: base64Data,
+          };
+          
+          console.log(`Preparing to upload cover image with size: ${base64Data.length} chars and extension: ${fileExtension}`);
+          
+          // Upload ảnh bìa
+          try {
+            const response = await meApi.updateCoverImageBase64(imageData);
+            console.log('Cover image update response:', response);
+            
+            // Kiểm tra cấu trúc response đúng định dạng
+            if (response && response.data && response.data.coverImage) {
+              const coverImageUrl = response.data.coverImage;
+              console.log('Cover image URL from response:', coverImageUrl);
+              
+              // Cập nhật UI với ảnh bìa URL mới
+              setCoverImage(coverImageUrl);
+              
+              // Cập nhật user object
+              setUser(prev => ({
+                ...prev,
+                coverImage: coverImageUrl
+              }));
+              
+              Alert.alert(
+                'Thành công', 
+                'Ảnh bìa cá nhân đã được cập nhật thành công.',
+                [{ text: 'OK' }]
+              );
+            } else {
+              console.error('Unexpected response format:', response);
+              throw new Error('Không nhận được URL ảnh bìa từ server');
+            }
+          } catch (apiError) {
+            console.error('API error:', apiError);
+            if (apiError.response) {
+              console.error('Error response:', apiError.response.data);
+            }
+            throw apiError;
+          }
+        } catch (uploadError) {
+          console.error('Error uploading cover image:', uploadError);
+          Alert.alert(
+            'Lỗi',
+            'Không thể cập nhật ảnh bìa. Vui lòng thử lại sau.',
+            [{ text: 'OK' }]
+          );
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      Alert.alert(
+        'Lỗi',
+        'Không thể chọn ảnh. Vui lòng thử lại sau.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
   // Xử lý cập nhật thông tin cá nhân
   const handleEditProfile = () => {
-    // Chuyển đến màn hình chỉnh sửa thông tin cá nhân
-    navigation.navigate('EditProfile', { user });
+    // Log the user data being passed to the edit screen
+    console.log('Passing user data to EditProfile:', user);
+    
+    // Ensure we pass the complete user object to the edit screen
+    navigation.navigate('EditProfile', { userData: user });
   };
 
   // Xử lý thay đổi mật khẩu
@@ -335,24 +658,40 @@ const ProfileScreen = ({ navigation }) => {
         />
         
         {/* Thử hiển thị ảnh bìa nếu có */}
-        {(user?.coverImage || user?.backgroundImage) && (
+        {(coverImage || user?.coverImage || user?.backgroundImage) && (
           <Image
             source={{ 
-              uri: user.coverImage || user.backgroundImage,
+              uri: coverImage || user?.coverImage || user?.backgroundImage,
               headers: { 'Cache-Control': 'no-cache' }, // Tránh sử dụng cache gây lỗi
               cache: 'reload'
             }}
             style={[styles.backgroundImage, { opacity: 0.9 }]}
             onError={(error) => {
               console.log('Cover image error details:', error.nativeEvent);
-              // Không cần làm gì nếu lỗi vì đã có nền màu dự phòng
+              // Không hiện cảnh báo lỗi đến người dùng
+              setCoverImage(null);
             }}
-            onLoad={() => console.log('Cover image loaded successfully!')}
+            defaultSource={require('../assets/default-avatar.png')} // Sử dụng hình ảnh mặc định nếu không tải được
+            onLoad={() => console.log('Cover image loaded successfully')}
             resizeMode="cover"
           />
         )}
+        
+        {/* Nút thay đổi ảnh bìa */}
+        <TouchableOpacity
+          style={styles.editCoverImageButton}
+          onPress={handleChangeCoverImage}
+          disabled={isLoading}
+        >
+          <Icon name="photo-camera" size={18} color={colors.white} />
+        </TouchableOpacity>
           <View style={styles.profileImageContainer}>
-            {profileImage ? (
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Đang cập nhật ảnh...</Text>
+              </View>
+            ) : profileImage ? (
               <Image 
                 source={{ 
                   uri: profileImage,
@@ -362,8 +701,10 @@ const ProfileScreen = ({ navigation }) => {
                 style={styles.profileImage}
                 onError={(error) => {
                   console.log('Profile image error:', error.nativeEvent);
-                  setProfileImage(null); // Đặt lại profileImage để hiển thị mặc định
+                  // Không hiển thị lỗi tới người dùng, chỉ quay lại hiển thị dạng mặc định
+                  setProfileImage(null);
                 }}
+                defaultSource={require('../assets/default-avatar.png')}
                 onLoad={() => console.log('Profile image loaded successfully')}
               />
             ) : (
@@ -374,6 +715,7 @@ const ProfileScreen = ({ navigation }) => {
             <TouchableOpacity
               style={styles.editProfileImageButton}
               onPress={handleChangeProfileImage}
+              disabled={isLoading}
             >
               <Icon name="edit" size={18} color={colors.white} />
             </TouchableOpacity>
@@ -398,11 +740,7 @@ const ProfileScreen = ({ navigation }) => {
               />
               <ProfileItem
                 label="Ngày sinh"
-                value={user?.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString('vi-VN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric'
-                }) : 'Chưa cập nhật'} 
+                value={user?.dateOfBirth ? formatDateSafely(user.dateOfBirth) : 'Chưa cập nhật'} 
               />
               <ProfileItem
                 label="Giới tính"
@@ -410,11 +748,7 @@ const ProfileScreen = ({ navigation }) => {
               />
               <ProfileItem
                 label="Ngày tham gia"
-                value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric'
-                }) : 'Không xác định'}
+                value={user?.createdAt ? formatDateSafely(user.createdAt) : 'Không xác định'}
               />
             </View>
           </>
@@ -513,6 +847,20 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.white,
   },
+  editCoverImageButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.white,
+    zIndex: 10,
+  },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -592,6 +940,22 @@ const styles = StyleSheet.create({
   retryText: {
     color: colors.white,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: colors.primary,
+    textAlign: 'center',
   },
 });
 

@@ -1,12 +1,12 @@
 // API URL options for different environments
-// Android Emulator - use 10.0.2.2 (points to host's localhost)
+// Android Emulator - use 10.0.2.2 (points to host's cd)
 // iOS Simulator - use localhost
 // Real device - use actual server IP
 
 // Sử dụng địa chỉ IP của máy chủ theo yêu cầu của người dùng
-export const API_BASE_URL = 'http://192.168.1.4:3001';
-export const REACT_APP_SOCKET_URL = 'http://192.168.1.4:3001';
-export const REACT_APP_API_URL = 'http://192.168.1.4:3001';
+export const API_BASE_URL = 'http://192.168.101.14:3001';
+export const REACT_APP_SOCKET_URL = 'http://192.168.101.14:3001';
+export const REACT_APP_API_URL = 'http://192.168.101.14:3001';
 
 // Các tùy chọn khác (không sử dụng):
 // export const API_BASE_URL = 'http://10.0.2.2:3001'; // Android emulator
@@ -46,7 +46,25 @@ export const messageType = {
   STICKER: 'STICKER',
   NOTIFICATION: 'NOTIFICATION',
   REPLY: 'REPLY',
-  VOICE: 'VOICE'
+  VOICE: 'VOICE',
+  PIN_MESSAGE: 'PIN_MESSAGE',
+  NOT_PIN_MESSAGE: 'NOT_PIN_MESSAGE',
+  CREATE_CHANNEL: 'CREATE_CHANNEL',
+  DELETE_CHANNEL: 'DELETE_CHANNEL',
+  UPDATE_CHANNEL: 'UPDATE_CHANNEL',
+  ADD_MANAGERS: 'ADD_MANAGERS',
+  DELETE_MANAGERS: 'DELETE_MANAGERS',
+};
+
+export const friendType = {
+  FRIEND: 'FRIEND',
+  FOLLOWER: 'FOLLOWER',
+  YOU_FOLLOW: 'YOU_FOLLOW',
+  NOT_FRIEND: 'NOT_FRIEND',
+  NOT_FRIEND: 'NOT_FRIEND',
+  DONT_HAVE_ACCOUNT: 'DONT_HAVE_ACCOUNT',
+  ADD_TO_GROUP: 'ADD_TO_GROUP',
+  REMOVE_FROM_GROUP: 'REMOVE_FROM_GROUP',
 };
 
 // Cập nhật endpoints để phù hợp với cấu trúc Talko-chat-web đang hoạt động

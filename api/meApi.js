@@ -15,7 +15,17 @@ export const meApi = {
 
   updateAvatar: image => {
     const url = `${BASE_URL}/avatar`;
-    return api.patch(url, image);
+    return api.patch(url, image, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/json'
+      },
+      transformRequest: [
+        function() {
+          return image; // Không biến đổi FormData
+        }
+      ],
+    });
   },
 
   updateCoverImage: image => {

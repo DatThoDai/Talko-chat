@@ -57,9 +57,10 @@ function ReceiverMessage({
   
   // Ensure we display a valid sender name
   const senderName = sender?.name || 
+                     sender?.username ||
                      (sender?.email && sender.email.includes('@') 
                       ? sender.email.split('@')[0] 
-                      : 'Unknown User');
+                      : sender?._id || 'Người dùng'); // Sử dụng ID nếu không có tên hoặc email
 
   // Thêm hàm formatFileSize
   const formatFileSize = (bytes) => {
@@ -335,13 +336,35 @@ function ReceiverMessage({
 
   // Handle text selection for copy
   const handleCopyText = (text) => {
-    Clipboard.setString(text);
+    // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
+    let textToCopy = text || '';
     
-    // Show toast or alert based on platform
-    if (Platform.OS === 'android') {
-      ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+    // Thử lấy nội dung từ message nếu text không có giá trị
+    if (!textToCopy && message) {
+      textToCopy = message.content || message.text || '';
+    }
+    
+    // Ghi log để debug
+    console.log('[ReceiverMessage] Sao chép nội dung:', { 
+      textParameter: text,
+      messageContent: message?.content,
+      finalTextToCopy: textToCopy
+    });
+    
+    if (textToCopy) {
+      // Sao chép vào clipboard
+      Clipboard.setString(textToCopy);
+      
+      // Thông báo thành công dựa trên nền tảng
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Đã sao chép văn bản', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      }
     } else {
-      Alert.alert('Thông báo', 'Đã sao chép văn bản');
+      // Thông báo lỗi nếu không có nội dung để sao chép
+      console.warn('[ReceiverMessage] Không có nội dung để sao chép');
+      Alert.alert('Thông báo', 'Không có nội dung để sao chép');
     }
   };
 
@@ -350,7 +373,21 @@ function ReceiverMessage({
   const isDeleted = message.isDeleted;
   
   // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
-  const isForwarded = message.metadata?.isForwarded === true;
+  // Sử dụng nhiều cách khác nhau để xác định tin nhắn chuyển tiếp
+  const isForwarded = 
+    message.metadata?.isForwarded === true || 
+    message.forwardedMessage === true ||
+    message.content?.startsWith('📤 Tin nhắn được chuyển tiếp:') ||
+    (typeof message.forwardedMessage === 'string' && message.forwardedMessage === 'true');
+  
+  // Log thông tin để debug
+  console.log('[ReceiverMessage] Trạng thái chuyển tiếp:', {
+    messageId: message._id,
+    metadata_isForwarded: message.metadata?.isForwarded,
+    forwardedMessage: message.forwardedMessage,
+    content_start: message.content?.substring(0, 30),
+    final_isForwarded: isForwarded
+  });
   
   // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
@@ -437,11 +474,12 @@ function ReceiverMessage({
     <View style={styles.container}>
       <View style={styles.avatarContainer}>
         <CustomAvatar
-          size={36}
-          name={senderName}
-          avatar={sender?.avatar || null}
-          color={sender?.avatarColor}
-        />
+  size={36}
+  name={senderName}
+  avatar={sender?.avatar}
+  imageUrl={sender?.avatar} // Thêm imageUrl để đảm bảo hoạt động
+  color={sender?.avatarColor}
+/>
       </View>
 
       <View style={styles.messageContainer}>
@@ -503,6 +541,8 @@ function ReceiverMessage({
         navigation={navigation}
         conversationId={conversationId}
         position={menuPosition}
+        showCopyOption={true}
+        showRecallOption={false}
       />
     </View>
   );

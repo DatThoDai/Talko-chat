@@ -229,9 +229,9 @@ const conversationApi = {
     return axiosClient.patch(url, name);
   },
 
-  updateAvatar: (groupId, avatar) => {
-    const url = `${BASE_URL}/${groupId}/avatar`;
-    return axiosClient.patch(url, avatar);
+  updateAvatar: (groupId, imageData) => {
+    const url = `${BASE_URL}/${groupId}/avatar/base64`;
+    return axiosClient.patch(url, imageData);
   },
 
   updateNotify: (conversationId, isNotify) => {

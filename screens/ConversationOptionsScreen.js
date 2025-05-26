@@ -114,20 +114,11 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const handleClose = () => {
     try {
       // Chỉ đơn giản quay lại màn hình trước đó
-      navigation.goBack();
-      
-      // Nếu bạn muốn cập nhật tên nhóm, thực hiện sau khi đã quay lại
-      if (name !== groupName && navigation.canGoBack()) {
-        // Sử dụng setParams để cập nhật params cho màn hình hiện tại (MessageScreen)
-        navigation.setParams({ conversationName: groupName });
+      if (navigation.canGoBack()) {
+        navigation.goBack();
       }
     } catch (error) {
       console.error('Error navigating back:', error);
-      // Attempt direct navigation to MessageScreen as fallback
-      navigation.navigate('MessageScreen', {
-        conversationId: conversationId,
-        conversationName: groupName
-      });
     }
   };
 

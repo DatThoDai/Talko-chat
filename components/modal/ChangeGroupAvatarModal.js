@@ -42,18 +42,26 @@ const ChangeGroupAvatarModal = ({ visible, onClose, conversationId, onAvatarChan
           else if (extension === 'jpeg' || extension === 'jpg') fileExtension = '.jpg';
           else if (extension === 'gif') fileExtension = '.gif';
 
-          // Prepare image data
+          // Prepare image data - don't add extension to fileName
           const imageData = {
-            fileName: `group_avatar${fileExtension}`,
-            fileExtension: fileExtension,
-            fileBase64: `data:image/jpeg;base64,${imageBase64}`
+            fileName: 'group_avatar', // Remove extension from fileName
+            fileExtension: fileExtension, // Extension will be added by backend
+            fileBase64: imageBase64 // Send raw base64 without data URI prefix
           };
 
           // Call API to update avatar
           const response = await conversationApi.updateAvatar(conversationId, imageData);
           
           if (response && response.data) {
-            onAvatarChanged(response.data.avatar);
+            // Ensure we're passing the new avatar URL correctly
+            const newAvatarUrl = response.data.avatar;
+            console.log('New avatar URL:', newAvatarUrl);
+            
+            // Call the callback with the new avatar URL
+            if (typeof onAvatarChanged === 'function') {
+              onAvatarChanged(newAvatarUrl);
+            }
+            
             Alert.alert('Thành công', 'Đã cập nhật ảnh nhóm');
             onClose();
           }

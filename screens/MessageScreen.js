@@ -672,13 +672,8 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
   // Handle go back
   const handleGoBack = () => {
     try {
-      // Kiểm tra xem có thể quay lại được không
       if (navigation.canGoBack()) {
         navigation.goBack();
-      } else {
-        // Nếu không thể quay lại, chỉ đơn giản quay trở về
-        // Không cần sử dụng reset vì có thể gây ra lỗi nếu 'Home' không tồn tại
-        console.log('Cannot go back, already at the root navigator');
       }
     } catch (error) {
       console.error('Navigation error:', error);
@@ -691,14 +686,20 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     // Kiểm tra xem có là nhóm không bằng nhiều nguồn
     const isGroup = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
     
-    console.log('Navigating to options, isGroupChat =', isGroup);
+    console.log('Navigating to options with params:', {
+      conversationId,
+      name: conversationName,
+      avatar: avatar,
+      isGroupChat: isGroup
+    });
     
+    // Sử dụng navigate thay vì push để tránh stack navigation
     navigation.navigate('ConversationOptionsScreen', {
       conversationId,
-      name: conversationName,      // Fix lỗi avatar là array
+      name: conversationName,
       avatar: typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || ''),
       avatarColor,
-      isGroupChat: isGroup, // Truyền biến isGroup đã kiểm tra
+      isGroupChat: isGroup,
       type: isGroup ? 'group' : 'private'
     });
   };

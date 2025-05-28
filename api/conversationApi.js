@@ -190,8 +190,41 @@ const conversationApi = {
   },
 
   updateAvatar: (groupId, imageData) => {
-    const url = `${BASE_URL}/${groupId}/avatar/base64`;
-    return axiosClient.patch(url, imageData);
+    const url = `${BASE_URL}/${groupId}/avatar`;
+    
+    // Tạo FormData thay vì gửi JSON trực tiếp
+    const formData = new FormData();
+    
+    // Xác định MIME type dựa trên định dạng file
+    let mimeType = 'image/jpeg'; // Mặc định
+    if (imageData.fileExtension === '.png') mimeType = 'image/png';
+    else if (imageData.fileExtension === '.gif') mimeType = 'image/gif';
+    
+    // Tạo tên file với định dạng
+    const fileName = `group_avatar${imageData.fileExtension}`;
+    
+    // Tạo file object sử dụng với React Native
+    const fileToUpload = {
+      uri: `data:${mimeType};base64,${imageData.fileBase64}`,
+      type: mimeType,
+      name: fileName
+    };
+    
+    // Thêm file vào FormData
+    formData.append('file', fileToUpload);
+    
+    console.log('Uploading avatar with formData:', {
+      fileName,
+      mimeType,
+      hasBase64: !!imageData.fileBase64
+    });
+    
+    // Gửi FormData với header Content-Type: multipart/form-data
+    return axiosClient.patch(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   },
 
   updateNotify: (conversationId, isNotify) => {

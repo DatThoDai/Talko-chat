@@ -101,7 +101,11 @@ const LoginScreen = ({ navigation }) => {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.inner}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>Talko</Text>
+            <Image 
+              source={require('../assets/logo.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.inputContainer}>
@@ -205,11 +209,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: spacing.xl * 2,
   },
-  logoText: {
-    ...typography.h1,
-    color: colors.primary,
-    fontSize: 48,
-    fontWeight: 'bold',
+  logo: {
+    width: 150,
+    height: 150,
   },
   inputContainer: {
     marginVertical: spacing.xl,

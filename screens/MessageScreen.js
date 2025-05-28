@@ -34,6 +34,8 @@ import {
   getSocket,
   leaveConversation,
   markConversationAsViewed,
+  subscribeCallVideo,
+  subscribeCallAudio,
 } from '../utils/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useDispatch} from 'react-redux';
@@ -51,7 +53,7 @@ import socketService from '../utils/socketService';
 import pinMessagesApi from '../api/pinMessagesApi';
 // Thêm vào đầu file
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-
+import { REACTIONS } from '../constants/index';
 import SystemNotificationMessage from '../components/message/SystemNotificationMessage';
 // Thêm imports
 // import { 
@@ -535,7 +537,33 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       };
       
       // Đăng ký lắng nghe sự kiện cuộc gọi đến
-      socketService.on('new-user-call', handleIncomingCall);
+      socketService.on('incoming-video-call', (data) => {
+        console.log('📹 INCOMING VIDEO CALL:', data);
+        
+        // Kiểm tra xem cuộc gọi này có phải cho đoạn chat hiện tại không
+        if (data.conversationId !== conversationId) {
+          console.log('Bỏ qua thông báo cuộc gọi từ đoạn chat khác:', data.conversationId);
+          return;
+        }
+        
+        // Nếu người gọi không phải là mình
+        if (data.caller && data.caller.userId !== user._id && data.caller.userId !== realUserId) {
+          // Tạo thông tin người gọi từ dữ liệu nhận được
+          let callerInfo = {
+            _id: data.caller.userId,
+            name: data.caller.name || 'Người gọi',
+            avatar: data.caller.avatar || '',
+            avatarColor: colors.primary
+          };
+          
+          // Hiển thị modal cuộc gọi đến
+          setIncomingCall({
+            visible: true,
+            caller: callerInfo,
+            conversationId: data.conversationId
+          });
+        }
+      });
       
       // Ưu tiên lấy tên từ route.params trước
       const actualName = route.params?.name || conversationName || 'Cuộc trò chuyện';
@@ -626,8 +654,10 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         if (socket) {
           socket.off('rename-conversation', handleRenameConversation);
         }
+        
         // Clean up
         socketService.off('new-user-call', handleIncomingCall);
+        socketService.off('incoming-video-call'); // Thêm dòng này
       };
     }
   }, [conversationId, user?._id, route.params.conversationId]);
@@ -672,13 +702,8 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
   // Handle go back
   const handleGoBack = () => {
     try {
-      // Kiểm tra xem có thể quay lại được không
       if (navigation.canGoBack()) {
         navigation.goBack();
-      } else {
-        // Nếu không thể quay lại, chỉ đơn giản quay trở về
-        // Không cần sử dụng reset vì có thể gây ra lỗi nếu 'Home' không tồn tại
-        console.log('Cannot go back, already at the root navigator');
       }
     } catch (error) {
       console.error('Navigation error:', error);
@@ -691,14 +716,20 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     // Kiểm tra xem có là nhóm không bằng nhiều nguồn
     const isGroup = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
     
-    console.log('Navigating to options, isGroupChat =', isGroup);
+    console.log('Navigating to options with params:', {
+      conversationId,
+      name: conversationName,
+      avatar: avatar,
+      isGroupChat: isGroup
+    });
     
+    // Sử dụng navigate thay vì push để tránh stack navigation
     navigation.navigate('ConversationOptionsScreen', {
       conversationId,
-      name: conversationName,      // Fix lỗi avatar là array
+      name: conversationName,
       avatar: typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || ''),
       avatarColor,
-      isGroupChat: isGroup, // Truyền biến isGroup đã kiểm tra
+      isGroupChat: isGroup,
       type: isGroup ? 'group' : 'private'
     });
   };
@@ -990,10 +1021,15 @@ const loadVoteDetails = async () => {
         type: 'TEXT',
         conversationId: conversationId,
         createdAt: new Date().toISOString(),
-        sender: currentUserInfo,
+        sender: {
+          _id: user?._id,  // Đảm bảo có _id
+          name: user?.name || user?.username || 'Bạn',
+          avatar: user?.avatar || ''
+        },
         isTemp: true,
-        isMyMessage: true, // Mark as the user's message explicitly
-        status: 'sending', // Keep existing status property
+        isMyMessage: true,
+        forceMyMessage: true, // Đảm bảo flag này được thiết lập
+        status: 'sending',
       };
 
       // Add reply information if this is a reply message
@@ -1355,29 +1391,45 @@ const handleSendFileMessage = async (file) => {
   // Handle add reaction
   const handleAddReaction = async (messageId, type) => {
     try {
-      await conversationService.dropReaction(messageId, type);
+      // Chuyển đổi emoji sang số nếu cần
+      let reactionNumber;
+      if (typeof type === 'string') {
+        const index = REACTIONS.findIndex(emoji => emoji === type);
+        reactionNumber = index !== -1 ? index + 1 : 1;
+        console.log(`Converting emoji ${type} to reaction number ${reactionNumber}`);
+      } else {
+        // Nếu đã là số thì giữ nguyên
+        reactionNumber = type;
+      }
       
-      // Update local messages list
+      // Vẫn giữ emoji gốc để hiển thị trong UI
+      const optimisticReaction = {
+        userId: user._id,
+        userName: user.name || user.username || 'Bạn',
+        userAvatar: user.avatar || '',
+        userAvatarColor: user.avatarColor || '#1194ff',
+        type: type, // Vẫn lưu emoji trong local state để hiển thị
+        createdAt: new Date().toISOString()
+      };
+      
+      // Cập nhật UI ngay lập tức
       setMessages(prevMessages => 
         prevMessages.map(msg => {
           if (msg._id === messageId) {
-            // Check if user already reacted with this type
-            const existingReactionIndex = msg.reactions?.findIndex(
+            const reactions = msg.reactions || [];
+            // Tìm kiếm reaction có cùng userId và type
+            const existingIndex = reactions.findIndex(
               r => r.userId === user._id && r.type === type
             );
             
-            let updatedReactions = [...(msg.reactions || [])];
-            
-            if (existingReactionIndex >= 0) {
-              // Remove existing reaction
-              updatedReactions.splice(existingReactionIndex, 1);
+            let updatedReactions;
+            if (existingIndex >= 0) {
+              // Xóa reaction nếu đã có
+              updatedReactions = [...reactions];
+              updatedReactions.splice(existingIndex, 1);
             } else {
-              // Add new reaction
-              updatedReactions.push({ 
-                userId: user._id, 
-                type,
-                createdAt: new Date().toISOString()
-              });
+              // Thêm reaction mới
+              updatedReactions = [...reactions, optimisticReaction];
             }
             
             return { ...msg, reactions: updatedReactions };
@@ -1386,7 +1438,10 @@ const handleSendFileMessage = async (file) => {
         })
       );
       
-      // Close reaction modal
+      // Gọi API với reactionNumber thay vì emoji
+      await messageApi.addReaction(messageId, reactionNumber);
+      
+      // Đóng modal reaction nếu đang mở
       setReactProps(DEFAULT_REACTION_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error adding reaction:', error);
@@ -1458,136 +1513,136 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
   }
 };
 
-// Cập nhật hàm renderMessage để xử lý tin nhắn hệ thống
-const renderMessage = (message, index) => {
-  // Đảm bảo tin nhắn hợp lệ
-  if (!message) return null;
-  // Bổ sung thông tin người gửi nếu thiếu
-  if (message.sender && !message.sender.name) {
-    // Tìm thông tin người gửi từ danh sách participants
-    const sender = participants?.find(p => p._id === message.sender._id);
-    if (sender) {
-      // Cập nhật thông tin người gửi
-      message = {
-        ...message,
-        sender: {
-          ...message.sender,
-          name: sender.name || sender.username || 'Người dùng',
-          avatar: sender.avatar || message.sender.avatar,
-          avatarColor: sender.avatarColor || message.sender.avatarColor
-        }
-      };
-    } else if (message.sender._id) {
-      // Nếu không tìm thấy trong participants, sử dụng ID làm tên
-      message = {
-        ...message,
-        sender: {
-          ...message.sender,
-          name: message.sender._id.substring(0, 8) + '...',
-        }
-      };
+  // Cập nhật hàm renderMessage để xử lý tin nhắn hệ thống
+  const renderMessage = (message, index) => {
+    // Đảm bảo tin nhắn hợp lệ
+    if (!message) return null;
+    // Bổ sung thông tin người gửi nếu thiếu
+    if (message.sender && !message.sender.name) {
+      // Tìm thông tin người gửi từ danh sách participants
+      const sender = participants?.find(p => p._id === message.sender._id);
+      if (sender) {
+        // Cập nhật thông tin người gửi
+        message = {
+          ...message,
+          sender: {
+            ...message.sender,
+            name: sender.name || sender.username || 'Người dùng',
+            avatar: sender.avatar || message.sender.avatar,
+            avatarColor: sender.avatarColor || message.sender.avatarColor
+          }
+        };
+      } else if (message.sender._id) {
+        // Nếu không tìm thấy trong participants, sử dụng ID làm tên
+        message = {
+          ...message,
+          sender: {
+            ...message.sender,
+            name: message.sender._id.substring(0, 8) + '...',
+          }
+        };
+      }
     }
-  }
-  
-  // Lấy ID của người dùng hiện tại
-  const currentUser = user || {};
-  
-  // Kiểm tra xem ID người dùng là ObjectID hay email
-  const isCurrentUserIdEmail = currentUser._id && 
-      (currentUser._id.includes('@') || currentUser._id.length > 30);
-  
-  // Kiểm tra xem message.sender._id có phải là ObjectID không
-  const isSenderIdObjectId = message.sender && message.sender._id && 
-      !message.sender._id.includes('@') && message.sender._id.length < 30;
-  
-  // Xác định isMyMessage dựa trên ID hoặc email
-  const currentUserId = realUserId || user?._id;
-  
-  // Xác định isMyMessage như trước đó
-  const isMyMessage = (
-    message.isMyMessage === true || 
-    message.forceMyMessage === true || 
-    message.isTemp === true || 
-    (message.sender && message.sender._id === currentUserId) ||
-    (realUserId && message.sender && message.sender._id === realUserId) ||
-    (isCurrentUserIdEmail && isSenderIdObjectId && 
-     (message.sender.username === currentUser._id || 
-      message.sender.email === currentUser._id))
-  );
-
-  // Log thêm thông tin để debug
-  console.log(`Message ${message._id?.substring(0, 8)} ownership check:`, {
-    isMyMessage,
-    senderId: message.sender?._id,
-    currentId: currentUserId,
-    realId: realUserId
-  });
-
-  
-  // Xử lý các tin nhắn hệ thống
-  if (message.type === 'NOTIFICATION' || 
-      message.isNotification === true || 
-      message.isSystemMessage === true) {
-    return (
-      <SystemNotificationMessage 
-        key={message._id || `notification-${index}`}
-        message={message}
-      />
-    );
-  }
-  
-  // Kiểm tra nếu là tin nhắn vote
-  if (message.type === 'VOTE') {
-    // Đảm bảo message có cấu trúc hợp lệ trước khi render
-    const enhancedMessage = {
-      ...message,
-      options: Array.isArray(message.options) ? message.options : []
-    };
     
+    // Lấy ID của người dùng hiện tại
+    const currentUser = user || {};
+    
+    // Kiểm tra xem ID người dùng là ObjectID hay email
+    const isCurrentUserIdEmail = currentUser._id && 
+        (currentUser._id.includes('@') || currentUser._id.length > 30);
+    
+    // Kiểm tra xem message.sender._id có phải là ObjectID không
+    const isSenderIdObjectId = message.sender && message.sender._id && 
+        !message.sender._id.includes('@') && message.sender._id.length < 30;
+    
+    // Xác định isMyMessage dựa trên ID hoặc email
+    const currentUserId = realUserId || user?._id;
+    
+    // Xác định isMyMessage như trước đó
+    const isMyMessage = (
+      message.isMyMessage === true || 
+      message.forceMyMessage === true || 
+      message.isTemp === true || 
+      (message.sender && message.sender._id === currentUserId) ||
+      (realUserId && message.sender && message.sender._id === realUserId) ||
+      (isCurrentUserIdEmail && isSenderIdObjectId && 
+       (message.sender.username === currentUser._id || 
+        message.sender.email === currentUser._id))
+    );
+
+    // Log thêm thông tin để debug
+    console.log(`Message ${message._id?.substring(0, 8)} ownership check:`, {
+      isMyMessage,
+      senderId: message.sender?._id,
+      currentId: currentUserId,
+      realId: realUserId
+    });
+
+  
+    // Xử lý các tin nhắn hệ thống
+    if (message.type === 'NOTIFICATION' || 
+        message.isNotification === true || 
+        message.isSystemMessage === true) {
+      return (
+        <SystemNotificationMessage 
+          key={message._id || `notification-${index}`}
+          message={message}
+        />
+      );
+    }
+    
+    // Kiểm tra nếu là tin nhắn vote
+    if (message.type === 'VOTE') {
+      // Đảm bảo message có cấu trúc hợp lệ trước khi render
+      const enhancedMessage = {
+        ...message,
+        options: Array.isArray(message.options) ? message.options : []
+      };
+      
+      return (
+        <VoteMessage
+          key={message._id || index}
+          message={enhancedMessage} // Sử dụng tin nhắn đã được kiểm tra
+          navigation={navigation}
+          onViewVoteDetailModal={(options) => {
+            // Xử lý hiển thị chi tiết bình chọn
+            setMessageDetailProps({
+              isVisible: true,
+              message: message
+            });
+          }}
+          userId={currentUserId}
+          isMyMessage={isMyMessage}
+          conversationId={conversationId}
+          onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
+          handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
+          onPressDelete={(messageId) => handleDeleteMessage(messageId)}
+          previewImage={handlePreviewImage}
+          scrollToMessage={scrollToMessage}
+          handleVoteOption={handleVoteOption}
+        />
+      );
+    }
+    
+    // Các loại tin nhắn khác sử dụng ChatMessage
     return (
-      <VoteMessage
+      <ChatMessage
         key={message._id || index}
-        message={enhancedMessage} // Sử dụng tin nhắn đã được kiểm tra
-        navigation={navigation}
-        onViewVoteDetailModal={(options) => {
-          // Xử lý hiển thị chi tiết bình chọn
-          setMessageDetailProps({
-            isVisible: true,
-            message: message
-          });
-        }}
+        message={message}
         userId={currentUserId}
         isMyMessage={isMyMessage}
+        navigation={navigation}
         conversationId={conversationId}
         onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
         handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
         onPressDelete={(messageId) => handleDeleteMessage(messageId)}
+        onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
         previewImage={handlePreviewImage}
-        scrollToMessage={scrollToMessage}
-        handleVoteOption={handleVoteOption}
+        onReply={(messageId) => handleOnReplyMessagePress(messageId)}
+        onPressRecall={(messageId) => handleRecallMessage(messageId)}
       />
     );
-  }
-  
-  // Các loại tin nhắn khác sử dụng ChatMessage
-  return (
-    <ChatMessage
-      key={message._id || index}
-      message={message}
-      userId={currentUserId}
-      isMyMessage={isMyMessage}
-      navigation={navigation}
-      conversationId={conversationId}
-      onPressEmoji={(messageId, emoji) => handleAddReaction(messageId, emoji)}
-      handleShowReactDetails={(messageId) => handleShowReactDetails(messageId)}
-      onPressDelete={(messageId) => handleDeleteMessage(messageId)}
-      onPressEdit={(messageContent, messageId) => handleEditMessage(messageContent, messageId)}
-      previewImage={handlePreviewImage}
-      onReply={(messageId) => handleOnReplyMessagePress(messageId)}
-      onPressRecall={(messageId) => handleRecallMessage(messageId)}
-    />
-  );
-};
+  };
 
   // Fetch pinned messages for this conversation
   const fetchPinnedMessages = async () => {
@@ -1739,20 +1794,36 @@ const renderMessage = (message, index) => {
 // }, [participants]);
 
   // Thêm hàm xử lý chấp nhận cuộc gọi
+// Thêm hàm xử lý chấp nhận cuộc gọi
 const handleAcceptCall = () => {
   // Đóng modal
   setIncomingCall(prev => ({ ...prev, visible: false }));
   
-  // Điều hướng đến VideoCallScreen
+  // Điều hướng đến VideoCallScreen với tham số cho Agora
   navigation.navigate('VideoCallScreen', {
     conversationId,
     conversationName,
     participants,
     isGroup: actualIsGroupChat,
     isIncoming: true,
-    remotePeerId: incomingCall.peerId,
-    effectiveUserId: realUserId || user?._id, // Đảm bảo dùng ID chính xác
+    caller: incomingCall.caller,
+    effectiveUserId: realUserId || user?._id,
   });
+  
+  // Thông báo đã trả lời cuộc gọi
+  socketService.notifyCallAnswered(
+    conversationId, 
+    realUserId || user?._id, 
+    actualIsGroupChat
+  );
+  
+  // Thêm thông báo trả lời cuộc gọi video
+  socketService.notifyVideoCallAnswered(
+    conversationId, 
+    realUserId || user?._id, 
+    actualIsGroupChat,
+    realUserId || user?._id
+  );
 };
 
 // Thêm hàm xử lý từ chối cuộc gọi
@@ -1762,24 +1833,46 @@ const handleRejectCall = () => {
 };
 
 // Thêm hàm khởi tạo cuộc gọi video
+// Cập nhật hàm khởi tạo cuộc gọi video
 const handleStartVideoCall = () => {
-  console.log('📞 VIDEO CALL: Starting call from MessageScreen');
-  console.log('📞 VIDEO CALL: Route params:', {
+  // Đăng ký cuộc gọi video
+  subscribeCallVideo(
     conversationId,
-    conversationName,
-    participants: participants?.length || 0,
-    isGroup: actualIsGroupChat,
-    effectiveUserId: realUserId || user?._id,
-  });
-
-  // Điều hướng đến VideoCallScreen
+    currentUserId,
+    user?.name ,
+    user?.avatar || '',
+    actualIsGroupChat
+  );
+  
+  // Navigation vào màn hình video call
   navigation.navigate('VideoCallScreen', {
     conversationId,
     conversationName,
     participants,
     isGroup: actualIsGroupChat,
     isInitiator: true,
-    effectiveUserId: realUserId || user?._id,
+    effectiveUserId: currentUserId,
+  });
+};
+
+// Thêm hàm khởi tạo cuộc gọi thoại
+const handleStartVoiceCall = () => {
+  // Đăng ký cuộc gọi thoại
+  subscribeCallAudio(
+    conversationId,
+    currentUserId,
+    user?.name || 'Người dùng',
+    user?.avatar || ''
+  );
+  
+  // Navigation vào màn hình voice call
+  navigation.navigate('VoiceCallScreen', {
+    conversationId,
+    conversationName,
+    participants,
+    isGroup: actualIsGroupChat,
+    isInitiator: true,
+    effectiveUserId: currentUserId,
   });
 };
 

@@ -1,10 +1,9 @@
 import axiosClient from './axios';
-import { API_ENDPOINTS } from '../constants';
+import { API_ENDPOINTS , REACT_APP_API_URL } from '../constants';
 
-// Sử dụng endpoints đúng theo cấu trúc trong Talko-chat-web
-// Dựa vào cấu trúc MongoDB collections: conversations, members, messages, v.v.
-// Sử dụng IP network chính xác của người dùng: 172.30.16.1
-const BASE_URL = API_ENDPOINTS.CONVERSATIONS;
+
+const BASE_URL = REACT_APP_API_URL + API_ENDPOINTS.CONVERSATIONS;
+// const BASE_URL = REACT_APP_API_URL;
 
 // Log để debug endpoint
 console.log('Using conversation endpoint:', BASE_URL);
@@ -155,49 +154,10 @@ const conversationApi = {
   },
   
   // Lấy danh sách cuộc trò chuyện - endpoint giống với Talko-chat-web/apis/conversationApi.js
-  fetchConversations: async (params = {}) => {
-    console.log('Fetching conversations...');
-    console.log('Fetching conversations with endpoint:', BASE_URL);
-    
-    try {
-      // Gọi API tương ứng với Talko-chat-web: fetchListConversations
-      // Đồng bộ cách gọi API giống với web
-      const response = await axiosClient.get(BASE_URL, { 
-        params: {
-          name: params.search || '',
-          type: params.type,
-        },
-        timeout: 15000 // Tăng timeout lên 15 giây vì có thể server chậm
-      });
-      
-      
-      
-      // Format kết quả để phù hợp với cấu trúc dữ liệu của mobile app
-      const formattedData = Array.isArray(response.data) ? response.data : [];
-      console.log('Formatted conversations data:', formattedData.length > 0 ? 
-        `Array with ${formattedData.length} items` : 'Array with 0 items');
-      
-      return { data: formattedData };
-    } catch (error) {
-      // Log lỗi để debug chi tiết
-      console.error('API Error:', {
-        message: error.message,
-        method: 'get',
-        url: error.config?.url || BASE_URL,
-        status: error.response?.status,
-        responseData: error.response?.data
-      });
-      
-      if (error.response?.data) {
-        console.error('Server error message:', error.response.data);
-      }
-      
-      // Trả về mảng rỗng thay vì lỗi để tránh crash app
-      console.log('Returning empty conversations array to avoid app crash');
-      return { data: [] };
-    }
+  fetchConversations: params => {
+    return axiosClient.get(BASE_URL, {params});
   },
-
+  
   fetchConversation: conversationId => {
     const url = `${BASE_URL}/${conversationId}`;
     return axiosClient.get(url);
@@ -229,9 +189,9 @@ const conversationApi = {
     return axiosClient.patch(url, name);
   },
 
-  updateAvatar: (groupId, avatar) => {
-    const url = `${BASE_URL}/${groupId}/avatar`;
-    return axiosClient.patch(url, avatar);
+  updateAvatar: (groupId, imageData) => {
+    const url = `${BASE_URL}/${groupId}/avatar/base64`;
+    return axiosClient.patch(url, imageData);
   },
 
   updateNotify: (conversationId, isNotify) => {

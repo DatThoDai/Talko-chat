@@ -641,6 +641,34 @@ const chatSlice = createSlice({
       }
     },
     
+    // Thêm reducer mới cho reactions real-time từ socket
+    updateMessageReaction: (state, action) => {
+      const { messageId, reaction } = action.payload;
+      
+      // Tìm tin nhắn trong state
+      const message = state.messages.find(msg => msg._id === messageId);
+      if (message) {
+        // Nếu message tồn tại, xử lý reaction
+        const reactions = message.reactions || [];
+        
+        // Kiểm tra xem người dùng đã reaction loại này chưa
+        const existingReactionIndex = reactions.findIndex(
+          r => r.userId === reaction.userId && r.type === reaction.type
+        );
+        
+        // Nếu đã có, xóa reaction cũ
+        if (existingReactionIndex >= 0) {
+          const newReactions = [...reactions];
+          newReactions.splice(existingReactionIndex, 1);
+          message.reactions = newReactions;
+        } 
+        // Nếu chưa có, thêm reaction mới
+        else {
+          message.reactions = [...reactions, reaction];
+        }
+      }
+    },
+    
     resetChatSlice: () => initialState
   },
   extraReducers: (builder) => {
@@ -911,7 +939,8 @@ export const {
   updateNotification,
   updateAvatarConversation,
   updateManagerIds,
-  resetChatSlice
+  resetChatSlice,
+  updateMessageReaction
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

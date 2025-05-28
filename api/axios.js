@@ -8,9 +8,9 @@ import * as constants from '../constants';
 console.log('Constants module:', constants);
 console.log('REACT_APP_API_URL trong axios.js:', constants.REACT_APP_API_URL);
 
-// Sử dụng địa chỉ IP đúng theo yêu cầu của người dùng
 // Đảm bảo trỏ đến đúng địa chỉ IP và cổng của máy chủ backend
-const baseURL = 'http://192.168.101.14:3001';
+import { REACT_APP_API_URL } from '../constants';
+const baseURL = REACT_APP_API_URL ;
 console.log('Updated baseURL:', baseURL);
 
 // Tạo instance axios với các tham số cấu hình mới
@@ -43,10 +43,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     console.log('API response interceptor:', response.status, response.config?.url);
-    // Xử lý format dữ liệu để đồng bộ giữa web và mobile
-    // Từ memory: cả web và mobile đều sử dụng chung format { success: boolean, message: string, data: any }
     
-    // Nếu có response.data và đã có cấu trúc chuẩn, trả về trực tiếp
     if (response.data) {
       // Kiểm tra nếu response.data đã có format đúng chuẩn
       if (typeof response.data === 'object' && 'success' in response.data) {

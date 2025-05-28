@@ -43,7 +43,7 @@ export const loginUser = createAsyncThunk(
       // Get user data from response
       let user = response.user || (response.data && response.data.user);
       
-      console.log('Original user data:', user);
+      console.log('Original user data from login:', user);
       
       // If user data is not available, create minimal user object
       if (!user) {
@@ -55,11 +55,13 @@ export const loginUser = createAsyncThunk(
         };
       }
       
-      // Đảm bảo user có trường _id (cần thiết cho socket)
+      // Đảm bảo user có trường _id hoặc sử dụng API để lấy
+      let userId = null;
+      
       if (!user._id && user.id) {
-        user._id = user.id; // Dùng id nếu có
+        userId = user.id;
+        user._id = user.id;
       } else if (!user._id) {
-        // Nếu không có _id, sử dụng API để lấy ID thực từ email
         try {
           console.log('Fetching real user ID from email:', user.email || credentials.email);
           const email = user.email || credentials.email;
@@ -68,36 +70,59 @@ export const loginUser = createAsyncThunk(
           if (realUserId) {
             console.log('Found real user ID:', realUserId);
             user._id = realUserId;
+            userId = realUserId;
           } else {
-            // Nếu không lấy được ID thực, tạm thời sử dụng email
-            console.log('Could not get real user ID, using email as fallback');
-            
+            // Fallback using email as ID
             if (user.username && user.username.includes('@')) {
               user._id = user.username;
-              user.email = user.username;
             } else if (user.email) {
               user._id = user.email;
             } else {
               user._id = credentials.email;
-              user.email = credentials.email;
             }
-            
-            // Lưu email vào một trường riêng để sử dụng sau này
-            user.emailIdentifier = user.email;
+            userId = user._id;
           }
         } catch (idError) {
           console.error('Error getting real user ID:', idError);
-          // Fallback: sử dụng email làm ID tạm thời
-          if (user.email) {
-            user._id = user.email;
+          // Fallback using email as ID
+          userId = user.email || credentials.email;
+          user._id = userId;
+        }
+      } else {
+        userId = user._id;
+      }
+      
+      // ===== THÊM MỚI: Gọi getUserById để lấy thông tin đầy đủ =====
+      if (userId) {
+        try {
+          console.log('Fetching complete user data with ID:', userId);
+          
+          // Gọi API getUserById để lấy thông tin chi tiết
+          const userDetailResponse = await userService.getUserById(userId);
+          
+          if (userDetailResponse && userDetailResponse.data) {
+            console.log('Complete user data received:', userDetailResponse.data);
+            
+            // Merge thông tin chi tiết với dữ liệu cơ bản
+            const detailedUser = userDetailResponse.data;
+            
+            user = {
+              ...user,                 // Thông tin cơ bản từ login
+              ...detailedUser,         // Thông tin chi tiết từ getUserById
+              _id: userId,             // Đảm bảo giữ nguyên ID
+              email: user.email || detailedUser.email || credentials.email // Đảm bảo có email
+            };
+            
+            console.log('Merged user data:', user);
           } else {
-            user._id = credentials.email;
-            user.email = credentials.email;
+            console.log('getUserById API did not return user data, using basic login data');
           }
-          // Lưu email vào một trường riêng để sử dụng sau này
-          user.emailIdentifier = user.email;
+        } catch (detailError) {
+          console.error('Error fetching detailed user information:', detailError);
+          // Tiếp tục với thông tin cơ bản - không throw lỗi
         }
       }
+      // ===== KẾT THÚC PHẦN THÊM MỚI =====
       
       // Đảm bảo user có trường username và email
       if (!user.username) {
@@ -107,7 +132,7 @@ export const loginUser = createAsyncThunk(
         user.email = user.username || credentials.email;
       }
       
-      console.log('User data to be stored:', user);
+      console.log('Final user data to be stored:', user);
       
       // Lưu dữ liệu vào AsyncStorage
       await AsyncStorage.setItem('user', JSON.stringify(user));

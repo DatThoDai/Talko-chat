@@ -3,14 +3,14 @@ import { View, Text, Image, StyleSheet } from 'react-native';
 import PropTypes from 'prop-types';
 import { colors, spacing, borderRadius } from '../styles';
 
-// Thêm cache toàn cục cho avatar URLs
+// Global avatar cache
 const avatarCache = {};
 
 const CustomAvatar = ({ 
   size = 40, 
   source, 
   imageUrl,
-  avatar, // Thêm prop avatar để tương thích với nhiều component
+  avatar, // Avatar prop for compatibility
   name = '',
   color,
   avatarColor,
@@ -19,11 +19,11 @@ const CustomAvatar = ({
 }) => {
   const [imageError, setImageError] = useState(false);
   
-  // Sử dụng avatar nếu imageUrl không tồn tại
+  // Use avatar if imageUrl doesn't exist
   const actualImageUrl = imageUrl || avatar;
   
-  // Log thông tin cho debugging
-  console.log(`CustomAvatar - name: ${name}, imageUrl: ${ actualImageUrl}`);
+  // Log info for debugging
+  console.log(`CustomAvatar - name: ${name}, imageUrl: ${actualImageUrl}`);
   
   // Get initials from name (maximum 2 characters)
   const initials = name
@@ -34,7 +34,7 @@ const CustomAvatar = ({
     .toUpperCase()
     .slice(0, 2) || '?';
 
-  // Determine the background color
+  // Determine background color
   const backgroundColor = avatarColor || color || '#2196F3';
 
   // Create a safe image source
@@ -46,26 +46,44 @@ const CustomAvatar = ({
   } 
   // Then check actual image URL
   else if (typeof actualImageUrl === 'string' && actualImageUrl && !imageError) {
-    // Validate URL format
-    if (actualImageUrl.startsWith('http://') || actualImageUrl.startsWith('https://')) {
-      imageSource = { uri: actualImageUrl };
+    try {
+      // Clean up the URL
+      let cleanUrl = actualImageUrl;
       
-      // Cache valid URLs 
-      if (!avatarCache[actualImageUrl]) {
-        avatarCache[actualImageUrl] = true;
+      // Remove any double extensions
+      cleanUrl = cleanUrl.replace(/\.jpg\.jpg$/, '.jpg');
+      cleanUrl = cleanUrl.replace(/\.jpeg\.jpeg$/, '.jpeg');
+      cleanUrl = cleanUrl.replace(/\.png\.png$/, '.png');
+      
+      // Fix S3 URL if needed
+      if (cleanUrl.includes('nodejs-s3-nvdat.s3.amazonaws.com')) {
+        // Keep the original S3 URL format
+        cleanUrl = cleanUrl.replace(/\.jpg\.jpg$/, '.jpg')
+                          .replace(/\.jpeg\.jpeg$/, '.jpeg')
+                          .replace(/\.png\.png$/, '.png');
       }
-    } else {
-      // Thêm base URL nếu là URL tương đối
-      const fullUrl = actualImageUrl.startsWith('/') 
-        ? `https://talko.s3.ap-southeast-1.amazonaws.com${actualImageUrl}`
-        : actualImageUrl;
+      
+      // Validate URL format
+      if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+        // Add timestamp to URL to prevent caching
+        const timestamp = new Date().getTime();
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        cleanUrl = `${cleanUrl}${separator}t=${timestamp}`;
         
-      imageSource = { uri: fullUrl };
-      
-      // Cache full URL
-      if (!avatarCache[fullUrl]) {
-        avatarCache[fullUrl] = true;
+        imageSource = { 
+          uri: cleanUrl,
+          // Add cache control headers
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          },
+          // Force cache reload
+          cache: 'reload'
+        };
       }
+    } catch (error) {
+      console.error('Error processing image URL:', error);
+      setImageError(true);
     }
   }
   
@@ -82,6 +100,10 @@ const CustomAvatar = ({
             console.log('Avatar image error:', e.nativeEvent);
             setImageError(true); // Switch to initials on error
           }}
+          // Add default fallback
+          defaultSource={require('../assets/default-avatar.png')}
+          // Force image reload
+          key={actualImageUrl}
         />
       ) : (
         <View
@@ -112,7 +134,7 @@ CustomAvatar.propTypes = {
   size: PropTypes.number,
   source: PropTypes.oneOfType([PropTypes.object, PropTypes.number]),
   imageUrl: PropTypes.string,
-  avatar: PropTypes.string, // Thêm prop avatar vào propTypes
+  avatar: PropTypes.string,
   name: PropTypes.string,
   color: PropTypes.string,
   avatarColor: PropTypes.string,

@@ -350,30 +350,32 @@ const handleViewMedia = async () => {
 
   const handleAvatarChanged = (newAvatar) => {
     try {
-      // Cập nhật params cho màn hình hiện tại trước
-      if (route.params) {
-        navigation.setParams({
-          ...route.params,
-          avatar: newAvatar
-        });
-      }
-
       // Fetch latest conversation details before navigation
       fetchConversationDetails().then(() => {
-        // Quay về màn hình trước và cập nhật params
         if (navigation.canGoBack()) {
           const currentName = groupName || route.params?.name || '';
           
-          // Sử dụng replace thay vì navigate để đảm bảo cập nhật ngay lập tức
-          navigation.replace('MessageScreen', {
-            conversationId,
-            avatar: newAvatar,
-            name: currentName,
-            conversationName: currentName,
-            isGroup: route.params?.isGroup || type === 'group',
-            isGroupChat: route.params?.isGroupChat || type === 'group',
-            timestamp: new Date().getTime() // Thêm timestamp để force re-render
-          });
+          // Tìm màn hình MessageScreen trong stack
+          const messageScreen = navigation.getState().routes.find(
+            route => route.name === 'MessageScreen'
+          );
+
+          if (messageScreen) {
+            // Cập nhật params cho MessageScreen trước khi quay về
+            navigation.navigate('MessageScreen', {
+              ...messageScreen.params,
+              conversationId,
+              avatar: newAvatar,
+              name: currentName,
+              conversationName: currentName,
+              isGroup: route.params?.isGroup || type === 'group',
+              isGroupChat: route.params?.isGroupChat || type === 'group',
+              timestamp: new Date().getTime()
+            });
+          } else {
+            // Nếu không tìm thấy MessageScreen, chỉ đơn giản quay về
+            navigation.goBack();
+          }
         }
       });
     } catch (error) {

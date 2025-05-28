@@ -14,6 +14,7 @@ import { colors, spacing, typography, borderRadius } from '../styles';
 import { conversationApi, userService } from '../api'; // Thêm userService
 import { useSelector } from 'react-redux'; // Import để lấy user ID
 import RenameGroupModal from '../components/modal/RenameGroupModal';
+import ChangeGroupAvatarModal from '../components/modal/ChangeGroupAvatarModal';
 
 import { useDispatch } from 'react-redux';
 import { fetchFiles } from '../redux/chatSlice';
@@ -28,7 +29,7 @@ const OptionItem = ({ icon, title, onPress, color = colors.dark }) => {
 };
 
 const ConversationOptionsScreen = ({ route, navigation }) => {
-  const { conversationId, name, type = 'private' } = route.params || {};
+  const { conversationId, name, type = 'private', avatar } = route.params || {};
   const [isLoading, setIsLoading] = useState({
     notifications: false,
     leave: false,
@@ -40,6 +41,7 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const [isGroupAdmin, setIsGroupAdmin] = useState(false); // Thêm state này
   const [groupName, setGroupName] = useState(name || 'Nhóm chat');
   const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [changeAvatarModalVisible, setChangeAvatarModalVisible] = useState(false);
   
   // Thêm dòng này để khởi tạo dispatch
   const dispatch = useDispatch();
@@ -112,20 +114,11 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const handleClose = () => {
     try {
       // Chỉ đơn giản quay lại màn hình trước đó
-      navigation.goBack();
-      
-      // Nếu bạn muốn cập nhật tên nhóm, thực hiện sau khi đã quay lại
-      if (name !== groupName && navigation.canGoBack()) {
-        // Sử dụng setParams để cập nhật params cho màn hình hiện tại (MessageScreen)
-        navigation.setParams({ conversationName: groupName });
+      if (navigation.canGoBack()) {
+        navigation.goBack();
       }
     } catch (error) {
       console.error('Error navigating back:', error);
-      // Attempt direct navigation to MessageScreen as fallback
-      navigation.navigate('MessageScreen', {
-        conversationId: conversationId,
-        conversationName: groupName
-      });
     }
   };
 
@@ -332,6 +325,37 @@ const handleViewMedia = async () => {
     }
   };
 
+  const handleChangeAvatar = () => {
+    setChangeAvatarModalVisible(true);
+  };
+
+  const handleAvatarChanged = (newAvatar) => {
+    try {
+      // Cập nhật params cho màn hình hiện tại trước
+      if (route.params) {
+        navigation.setParams({
+          ...route.params,
+          avatar: newAvatar
+        });
+      }
+
+      // Quay về màn hình trước và cập nhật params
+      if (navigation.canGoBack()) {
+        navigation.navigate('MessageScreen', {
+          conversationId,
+          avatar: newAvatar,
+          // Giữ lại các params khác
+          name: route.params?.name,
+          conversationName: route.params?.conversationName || groupName,
+          isGroup: route.params?.isGroup || type === 'group',
+          isGroupChat: route.params?.isGroupChat || type === 'group'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={colors.lightGray} barStyle="dark-content" />
@@ -363,11 +387,16 @@ const handleViewMedia = async () => {
               onPress={handleCreateVote}
             />
             
-            {/* Thêm option đổi tên nhóm */}
             <OptionItem
               icon="edit"
               title="Đổi tên nhóm"
               onPress={handleRenameGroup}
+            />
+
+            <OptionItem
+              icon="photo-camera"
+              title="Đổi ảnh nhóm"
+              onPress={handleChangeAvatar}
             />
           </>
         )}
@@ -422,6 +451,13 @@ const handleViewMedia = async () => {
         conversationId={conversationId}
         currentName={groupName}
         onRenameSuccess={handleRenameSuccess}
+      />
+
+      <ChangeGroupAvatarModal
+        visible={changeAvatarModalVisible}
+        onClose={() => setChangeAvatarModalVisible(false)}
+        conversationId={conversationId}
+        onAvatarChanged={handleAvatarChanged}
       />
     </SafeAreaView>
   );

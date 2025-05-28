@@ -21,12 +21,12 @@ let storeInstance = null;
 export const registerStore = (store) => {
   storeInstance = store;
 };
-
+import { REACT_APP_SOCKET_URL } from '../constants';
 // Gán cứng URL trực tiếp thay vì dùng constants để đảm bảo kết nối socket đúng
 // import { REACT_APP_SOCKET_URL } from '../constants';
 
 // Sử dụng trực tiếp địa chỉ IP của người dùng
-let SOCKET_URL = 'http://172.29.135.43:3001';
+let SOCKET_URL = REACT_APP_SOCKET_URL;
 let MAX_RECONNECT_ATTEMPTS = 10;
 let RECONNECT_DELAY = 3000; // 3 seconds
 let MAX_RECONNECT_DELAY = 30000; // 30 seconds
@@ -310,6 +310,44 @@ const setupSocketEventHandlers = () => {
       }));
     }
   });
+
+  // THÊM XỬ LÝ AGORA VIDEO CALL
+  
+  // Xử lý khi có người tham gia kênh Agora
+  socket.on('group-call-participants-updated', (data) => {
+    console.log('👥 GROUP CALL PARTICIPANTS UPDATED:', data);
+    // Thông báo cập nhật danh sách người tham gia cuộc gọi nhóm
+  });
+
+  // Xử lý khi cuộc gọi được trả lời
+  socket.on('call-answered-notification', (data) => {
+    console.log('📞 CALL ANSWERED NOTIFICATION:', data);
+    // Xử lý khi cuộc gọi được trả lời
+  });
+  
+  // Xử lý khi cuộc gọi thoại bị từ chối
+  socket.on('voice-call-rejected', (data) => {
+    console.log('❌ VOICE CALL REJECTED:', data);
+    // Xử lý khi cuộc gọi thoại bị từ chối
+  });
+  
+  // Xử lý khi cuộc gọi video bị từ chối
+  socket.on('video-call-rejected', (data) => {
+    console.log('❌ VIDEO CALL REJECTED:', data);
+    // Xử lý khi cuộc gọi video bị từ chối
+  });
+  
+  // Xử lý khi cuộc gọi thoại bị hủy
+  socket.on('voice-call-cancelled', (data) => {
+    console.log('🚫 VOICE CALL CANCELLED:', data);
+    // Xử lý khi cuộc gọi thoại bị hủy
+  });
+  
+  // Xử lý khi cuộc gọi video bị hủy
+  socket.on('video-call-cancelled', (data) => {
+    console.log('🚫 VIDEO CALL CANCELLED:', data);
+    // Xử lý khi cuộc gọi video bị hủy
+  });
   
   // Handle error events
   socket.on('error', (error) => {
@@ -350,6 +388,85 @@ const setupSocketEventHandlers = () => {
           lastView: data.lastView
         }));
       }
+    }
+  });
+  
+  // Xử lý khi có cuộc gọi thoại đến
+  socket.on('incoming-voice-call', (data) => {
+    console.log('📞 INCOMING VOICE CALL:', data);
+    // Thông báo cuộc gọi đến - bạn có thể gửi thông báo đến Redux store hoặc sử dụng callback
+    if (storeInstance) {
+      storeInstance.dispatch({
+        type: 'INCOMING_VOICE_CALL',
+        payload: {
+          conversationId: data.conversationId,
+          caller: data.caller
+        }
+      });
+    }
+  });
+
+  // Xử lý khi có cuộc gọi video đến
+  socket.on('incoming-video-call', (data) => {
+    console.log('📹 INCOMING VIDEO CALL:', data);
+    // Thông báo cuộc gọi đến - bạn có thể gửi thông báo đến Redux store hoặc sử dụng callback
+    if (storeInstance) {
+      storeInstance.dispatch({
+        type: 'INCOMING_VIDEO_CALL',
+        payload: {
+          conversationId: data.conversationId,
+          caller: data.caller,
+          isGroupCall: data.isGroupCall || false
+        }
+      });
+    }
+  });
+
+  // Xử lý khi người dùng tham gia cuộc gọi
+  socket.on('user-joined-call', (data) => {
+    console.log('👤 USER JOINED CALL:', data);
+    // Thông báo có người tham gia cuộc gọi
+  });
+
+  // Xử lý khi người dùng kết thúc cuộc gọi
+  socket.on('user-ended-call', (data) => {
+    console.log('👋 USER ENDED CALL:', data);
+    // Thông báo có người kết thúc cuộc gọi
+  });
+
+  // Xử lý thông báo trả lời cuộc gọi video
+  socket.on('video-call-answered-notification', (data) => {
+    console.log('📹 VIDEO CALL ANSWERED NOTIFICATION:', data);
+    // Xử lý khi cuộc gọi video được trả lời
+  });
+
+  // Xử lý cập nhật danh sách người tham gia cuộc gọi video
+  socket.on('video-call-participants-updated', (data) => {
+    console.log('👥 VIDEO CALL PARTICIPANTS UPDATED:', data);
+    // Thông báo cập nhật danh sách người tham gia cuộc gọi video
+  });
+  
+  // Trong phần setupSocketEventHandlers, thêm listener cho add-reaction
+  socket.on('add-reaction', (data) => {
+    console.log('📢 SOCKET: Reaction event received:', data);
+    if (storeInstance) {
+      const { messageId, user, type, conversationId } = data;
+      
+      // Tạo đối tượng reaction đầy đủ để cập nhật UI
+      const reaction = {
+        userId: user._id,
+        userName: user.name || user.username || 'Người dùng',
+        userAvatar: user.avatar || '',
+        userAvatarColor: user.avatarColor || '#1194ff',
+        type: type,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Gửi action để cập nhật Redux store
+      storeInstance.dispatch({
+        type: 'chat/updateMessageReaction',
+        payload: { messageId, reaction }
+      });
     }
   });
 };
@@ -557,59 +674,271 @@ export const off = (event, callback) => {
   return true;
 };
 
-// Hàm để tham gia cuộc gọi video
-export const subscribeCallVideo = (conversationId, userId, peerId) => {
+// Người dùng tham gia kênh Agora
+export const notifyUserJoinedAgoraChannel = (conversationId, userId, agoraUid, userName, userAvatar) => {
   if (!socket || !socket.connected) {
-    console.log('Cannot subscribe to video call: Socket not connected');
+    console.log('Cannot notify join Agora channel: Socket not connected');
     return false;
   }
   
-  console.log('Subscribing to video call:', { conversationId, userId, peerId });
-  socket.emit('subscribe-call-video', {
-    conversationId,
-    newUserId: userId,
-    peerId,
+  socket.emit('user-joined-agora-channel', { 
+    conversationId, 
+    userId, 
+    agoraUid,
+    userName,
+    userAvatar
   });
-  
+  console.log('👤 Emitted user-joined-agora-channel:', { conversationId, userId, agoraUid });
   return true;
 };
 
-// Đăng ký lắng nghe sự kiện có người tham gia cuộc gọi
-export const onNewUserCall = (callback) => {
-  if (!socket) {
-    console.log('Cannot listen for new-user-call: Socket not connected');
+// Người dùng rời kênh Agora
+export const notifyUserLeftAgoraChannel = (conversationId, userId, agoraUid) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot notify left Agora channel: Socket not connected');
     return false;
   }
   
-  socket.on('new-user-call', (data) => {
-    console.log('New user joined call:', data);
-    if (typeof callback === 'function') {
-      callback(data);
-    }
-  });
-  
+  socket.emit('user-left-agora-channel', { conversationId, userId, agoraUid });
+  console.log('👋 Emitted user-left-agora-channel:', { conversationId, userId, agoraUid });
   return true;
 };
 
-// Thêm vào socketService.js
+// Thông báo cuộc gọi đã được trả lời
+export const notifyCallAnswered = (conversationId, answeredBy, isGroupCall) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot notify call answered: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('call-answered', { conversationId, answeredBy, isGroupCall });
+  console.log('📞 Emitted call-answered:', { conversationId, answeredBy, isGroupCall });
+  return true;
+};
+
+// Thông báo notification về trả lời cuộc gọi
+export const notifyCallAnsweredNotification = (conversationId, answeredBy, isGroupCall, userId) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot send call answered notification: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('call-answered-notification', { conversationId, answeredBy, isGroupCall, userId });
+  console.log('📢 Emitted call-answered-notification:', { conversationId, answeredBy, isGroupCall, userId });
+  return true;
+};
+
+// Đánh dấu cuộc trò chuyện đã được xem
 export const markConversationAsViewed = (conversationId, channelId = null) => {
   if (!socket || !socket.connected) {
     console.log('Cannot mark conversation as viewed: Socket not connected');
     return false;
   }
   
-  if (channelId) {
-    console.log(`Marking channel ${channelId} in conversation ${conversationId} as viewed`);
-    socket.emit('conversation-last-view', conversationId, channelId);
-  } else {
-    console.log(`Marking conversation ${conversationId} as viewed`);
-    socket.emit('conversation-last-view', conversationId);
+  const user = storeInstance ? storeInstance.getState().auth.user : null;
+  
+  if (!user || !user._id) {
+    console.log('Cannot mark conversation as viewed: User not found');
+    return false;
   }
+  
+  console.log('Marking conversation as viewed:', {
+    conversationId, 
+    userId: user._id,
+    channelId
+  });
+  
+  socket.emit('mark-conversation-viewed', {
+    conversationId,
+    userId: user._id,
+    channelId,
+    timestamp: new Date().toISOString()
+  });
   
   return true;
 };
 
-// Cập nhật export default để bao gồm các phương thức mới
+// Từ chối cuộc gọi thoại
+export const rejectVoiceCall = (conversationId, rejectedBy) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot reject voice call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('reject-voice-call', { conversationId, rejectedBy });
+  console.log('❌ Emitted reject-voice-call:', { conversationId, rejectedBy });
+  return true;
+};
+
+// Từ chối cuộc gọi video
+export const rejectVideoCall = (conversationId, rejectedBy) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot reject video call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('reject-video-call', { conversationId, rejectedBy });
+  console.log('❌ Emitted reject-video-call:', { conversationId, rejectedBy });
+  return true;
+};
+
+// Tham gia cuộc gọi
+export const joinCall = (conversationId, userId) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot join call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('join-call', { conversationId, userId });
+  console.log('👤 Emitted join-call:', { conversationId, userId });
+  return true;
+};
+
+// Kết thúc cuộc gọi
+export const endCall = (conversationId, userId) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot end call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('end-call', { conversationId, userId });
+  console.log('👋 Emitted end-call:', { conversationId, userId });
+  return true;
+};
+
+// Hủy cuộc gọi thoại
+export const cancelVoiceCall = (conversationId, callerInfo, reason = 'cancelled') => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot cancel voice call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('cancel-voice-call', { conversationId, callerInfo, reason });
+  console.log('🚫 Emitted cancel-voice-call:', { conversationId, callerInfo, reason });
+  return true;
+};
+
+// Hủy cuộc gọi video
+export const cancelVideoCall = (conversationId, callerInfo, reason = 'cancelled') => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot cancel video call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('cancel-video-call', { conversationId, callerInfo, reason });
+  console.log('🚫 Emitted cancel-video-call:', { conversationId, callerInfo, reason });
+  return true;
+};
+
+// Đăng ký cuộc gọi thoại
+export const subscribeCallAudio = (conversationId, userId, userName, userAvatar) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot subscribe to audio call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('subscribe-call-audio', { 
+    conversationId, 
+    newUserId: userId,
+    userName, 
+    userAvatar 
+  });
+  console.log('📞 Emitted subscribe-call-audio:', { 
+    conversationId, 
+    userId,
+    userName
+  });
+  return true;
+};
+
+// Đăng ký cuộc gọi video
+export const subscribeCallVideo = (conversationId, userId, userName, userAvatar, isGroupCall = false) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot subscribe to video call: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('subscribe-call-video', { 
+    conversationId, 
+    newUserId: userId,
+    userName, 
+    userAvatar,
+    isGroupCall
+  });
+  console.log('📹 Emitted subscribe-call-video:', { 
+    conversationId, 
+    userId,
+    userName,
+    isGroupCall
+  });
+  return true;
+};
+
+// Thông báo cuộc gọi video đã được trả lời
+export const notifyVideoCallAnswered = (conversationId, answeredBy, isGroupCall, userId) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot send video call answered notification: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('video-call-answered-notification', { 
+    conversationId, 
+    answeredBy, 
+    isGroupCall,
+    userId 
+  });
+  console.log('📹 Emitted video-call-answered-notification:', { 
+    conversationId, 
+    answeredBy, 
+    isGroupCall,
+    userId 
+  });
+  return true;
+};
+
+// Người dùng tham gia kênh video
+export const notifyUserJoinedVideoChannel = (conversationId, userId, agoraUid, userName, userAvatar) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot notify join video channel: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('user-joined-video-channel', { 
+    conversationId, 
+    userId, 
+    agoraUid,
+    userName,
+    userAvatar
+  });
+  console.log('👤 Emitted user-joined-video-channel:', { 
+    conversationId, 
+    userId, 
+    agoraUid 
+  });
+  return true;
+};
+
+// Người dùng rời kênh video
+export const notifyUserLeftVideoChannel = (conversationId, userId, agoraUid) => {
+  if (!socket || !socket.connected) {
+    console.log('Cannot notify left video channel: Socket not connected');
+    return false;
+  }
+  
+  socket.emit('user-left-video-channel', { 
+    conversationId, 
+    userId, 
+    agoraUid 
+  });
+  console.log('👋 Emitted user-left-video-channel:', { 
+    conversationId, 
+    userId, 
+    agoraUid 
+  });
+  return true;
+};
+
+// Cập nhật export default bên dưới để thêm các hàm mới
 export default {
   initiateSocket,
   joinConversation,
@@ -618,11 +947,27 @@ export default {
   emitTyping,
   disconnectSocket,
   isSocketConnected,
-  getSocket, // Thêm phương thức này
-  on,        // Thêm phương thức này
-  off,       // Thêm phương thức này
-  emitNotTyping, // Thêm phương thức này
-  subscribeCallVideo, // Thêm phương thức này
-  onNewUserCall, // Thêm phương thức này
-  markConversationAsViewed, // Thêm phương thức này
+  getSocket,
+  on,
+  off,
+  emitNotTyping,
+  markConversationAsViewed,
+  // Các hàm video call hiện tại
+  notifyUserJoinedAgoraChannel,
+  notifyUserLeftAgoraChannel,
+  notifyCallAnswered,
+  notifyCallAnsweredNotification,
+  rejectVoiceCall,
+  rejectVideoCall,
+  joinCall,
+  endCall,
+  cancelVoiceCall,
+  cancelVideoCall,
+  
+  // Thêm các hàm mới
+  subscribeCallAudio,
+  subscribeCallVideo,
+  notifyVideoCallAnswered,
+  notifyUserJoinedVideoChannel,
+  notifyUserLeftVideoChannel,
 };

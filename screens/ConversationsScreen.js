@@ -290,7 +290,7 @@ const ConversationsScreen = ({ navigation }) => {
           conversationId,
           messageId: message?._id,
           content: message?.content?.substring(0, 20) || '[non-text]',
-          sender: message?.sender?._id
+          sender: message.user._id
         });
         
         // Tránh xử lý trùng lặp
@@ -306,20 +306,20 @@ const ConversationsScreen = ({ navigation }) => {
         
         // Kiểm tra xem tin nhắn có phải của mình hay không
         const isOwnMessage = 
-          (message.sender && message.sender._id === user?._id) ||
-          (realUserId && message.sender && message.sender._id === realUserId) ||
+          (message.user && message.user._id === user?._id) ||
+          (realUserId && message.user && message.user._id === realUserId) ||
           message.isMyMessage === true ||
           message.forceMyMessage === true;
         
         console.log('📩 CONV: Message ownership check:', {
           isOwnMessage,
-          senderId: message.sender?._id,
+          senderId: message.user._id,
           currentId: user?._id,
           realId: realUserId
         });
         
         // Nếu không phải tin nhắn từ mình và màn hình hiện tại không phải MessageScreen
-        if (!isOwnMessage && !navigation.isFocused('MessageScreen')) {
+        if (!isOwnMessage) {
           console.log('📩 CONV: Message from other user, showing notification');
           
           // Cập nhật UI

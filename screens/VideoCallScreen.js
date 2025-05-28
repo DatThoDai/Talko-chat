@@ -9,29 +9,44 @@ import {
   Alert,
   BackHandler,
   Dimensions,
+  PermissionsAndroid,
 } from 'react-native';
-import { RTCPeerConnection, RTCView, mediaDevices } from 'react-native-webrtc';
-import Peer from 'react-native-peerjs';
+import {
+  createAgoraRtcEngine,
+  RtcSurfaceView,
+  RenderModeType,  // Thay thế VideoRenderMode
+  ChannelProfileType,
+  ClientRoleType,
+  VideoRemoteState,
+} from 'react-native-agora';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useSelector } from 'react-redux';
 import {
-  subscribeCallVideo,
-  onNewUserCall,
   getSocket,
-  initiateSocket
+  initiateSocket,
+  notifyUserJoinedAgoraChannel,
+  notifyUserLeftAgoraChannel,
+  notifyCallAnswered,
+  notifyVideoCallAnswered,  // Thêm hàm mới
+  notifyUserJoinedVideoChannel, // Thêm hàm mới
+  notifyUserLeftVideoChannel   // Thêm hàm mới
 } from '../utils/socketService';
 import InCallManager from 'react-native-incall-manager';
 
 const { width, height } = Dimensions.get('window');
+
+// Tạo App ID Agora (không dùng token)
+const appId = '5bc3cba5648449c189ca3b5b726d1c12';
 
 const VideoCallScreen = ({ navigation, route }) => {
   const { conversationId, participants, conversationName, isGroup } = route.params || {};
   const { user } = useSelector(state => state.auth);
 
   // State để quản lý cuộc gọi
-  const [localStream, setLocalStream] = useState(null);
-  const [remoteStreams, setRemoteStreams] = useState({});
+  const [engine, setEngine] = useState(null);
+  const [localUid, setLocalUid] = useState(null);
+  const [remoteUsers, setRemoteUsers] = useState({});
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isCallActive, setIsCallActive] = useState(false);
@@ -39,66 +54,71 @@ const VideoCallScreen = ({ navigation, route }) => {
   const [callEndReason, setCallEndReason] = useState(''); // 'rejected', 'ended', 'error'
   const [waitingForAnswer, setWaitingForAnswer] = useState(false);
   const [hasRemoteParticipants, setHasRemoteParticipants] = useState(false);
-
-  // Đối tượng PeerJS
-  const peerServer = useRef(null);
-  const peerId = useRef(null);
-  const peerConnections = useRef({});
+  const [joinSucceed, setJoinSucceed] = useState(false);
 
   // Thêm tham số mới từ route.params
   const {
     isInitiator = false,
     isIncoming = false,
     caller,
-    pendingCallData, // Thêm dòng này
+    pendingCallData,
     effectiveUserId
   } = route.params || {};
 
   // Sử dụng userIdForCall khi gọi các hàm liên quan đến socket
   const userIdForCall = effectiveUserId || user._id;
 
+  // Refs để lưu trữ thông tin
+  const channelRef = useRef(conversationId);
+
   // Khởi tạo khi component được mount
   useEffect(() => {
     console.log('📞 VIDEO CALL: VideoCallScreen mounted');
     
-    // Thêm đoạn này để chuyển đổi sang loa ngoài
-    InCallManager.start({media: 'video'});
+    // Cải thiện cấu hình âm thanh
+    InCallManager.start({
+      media: 'video',
+      auto: true,
+      ringback: '',
+    });
+    
+    // Đảm bảo loa ngoài được bật
     InCallManager.setForceSpeakerphoneOn(true);
+    
+    // Tăng âm lượng tối đa
+    InCallManager.setKeepScreenOn(true);
+    
+    // Trên Android, có thể cần thiết lập thêm
+    if (Platform.OS === 'android') {
+      InCallManager.setSpeakerphoneOn(true);
+    }
     
     console.log('📞 VIDEO CALL: Route params received:', JSON.stringify({
       conversationId,
       isInitiator,
       isIncoming,
-      remotePeerId: route.params?.remotePeerId,
       participantsCount: participants?.length || 0,
     }));
+
     // Xử lý nút back
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       handleEndCall
     );
 
-    initializeCall();
-
-    // Nếu có remotePeerId (người nhận cuộc gọi đã kết nối)
-    const { remotePeerId } = route.params || {};
-    if (remotePeerId && peerId.current && localStream) {
-      // Gọi trực tiếp đến peer này
-      callPeer(remotePeerId, localStream);
-    }
+    // Khởi tạo Agora và xin quyền
+    initializeAgoraEngine();
 
     return () => {
-      // Thêm dòng này để dọn dẹp
-      InCallManager.stop();
-      
       // Dọn dẹp khi unmount
+      InCallManager.stop();
       backHandler.remove();
       endCall();
     };
   }, []);
 
+  // Kiểm tra kết nối socket
   useEffect(() => {
-    // Kiểm tra kết nối socket
     const socket = getSocket();
     if (socket) {
       console.log('📞 SOCKET CHECK: Socket exists in VideoCallScreen');
@@ -120,381 +140,355 @@ const VideoCallScreen = ({ navigation, route }) => {
           console.error('📞 SOCKET ERROR: Failed to initialize socket:', error);
         });
     }
-
-    // ...existing code...
   }, []);
 
-  // Khởi tạo WebRTC
-  const initializeCall = async () => {
-    try {
-      console.log('📞 VIDEO CALL: Initializing media stream');
-      // 1. Khởi tạo stream media local
-      const getUserMediaPromise = mediaDevices.getUserMedia({
-        audio: true,
-        video: true
-      });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('getUserMedia timeout')), 10000)
-      );
-      const stream = await Promise.race([getUserMediaPromise, timeoutPromise]);
-
-      console.log('📞 VIDEO CALL: Media stream initialized successfully');
-      console.log('📞 VIDEO CALL: Video tracks:', stream.getVideoTracks().length);
-      console.log('📞 VIDEO CALL: Audio tracks:', stream.getAudioTracks().length);
-      setLocalStream(stream);
-
-      // 2. Khởi tạo client PeerJS
-      console.log('📞 VIDEO CALL: Initializing PeerJS');
-
-      initializePeer(stream);
-
-    } catch (error) {
-      console.error('Không thể truy cập camera/microphone:', error);
-      Alert.alert(
-        'Không thể truy cập camera/microphone',
-        'Vui lòng kiểm tra quyền truy cập và thử lại.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
-    }
-  };
-
-  // Khởi tạo PeerJS đơn giản
-  const initializePeer = (stream) => {
-    try {
-      console.log('📞 VIDEO CALL: Creating PeerJS instance');
-      
-      // ⭐️ THÊM: Giám sát kết nối PeerJS với timeout
-      const connectTimeout = setTimeout(() => {
-        console.error('📞 VIDEO CALL ERROR: PeerJS connection timeout after 15 seconds');
-        Alert.alert(
-          'Không thể kết nối',
-          'Máy chủ không phản hồi sau 15 giây. Vui lòng kiểm tra kết nối mạng và thử lại.',
+  // Xin quyền truy cập camera và microphone
+  const requestCameraAndAudioPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+        if (
+          granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED &&
+          granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
+        ) {
+          console.log('Đã được cấp quyền camera và microphone');
+        } else {
+          console.log('Không được cấp quyền camera và microphone');
+          Alert.alert(
+            'Cần cấp quyền',
+            'Vui lòng cấp quyền truy cập camera và microphone để thực hiện cuộc gọi video',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        }
+      } catch (err) {
+        console.warn('Lỗi khi xin quyền:', err);
+        Alert.alert('Lỗi', 'Không thể xin quyền truy cập camera và microphone', 
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
-      }, 15000);
+      }
+    }
+  };
+
+  // Khởi tạo Agora Engine - PHƯƠNG THỨC CẬP NHẬT CHO PHIÊN BẢN 4.5.3
+  const initializeAgoraEngine = async () => {
+    try {
+      // Xin quyền trước tiên
+      await requestCameraAndAudioPermission();
       
-      // ⭐️ SỬA: Cấu hình PeerJS chi tiết hơn
-      peerServer.current = new Peer(); // Không tham số, dùng PeerJS cloud
+      // Tạo UID ngẫu nhiên trong khoảng 1 đến 999999
+      const uid = Math.floor(Math.random() * 999999) + 1;
+      setLocalUid(uid);
+
+      console.log('📞 VIDEO CALL: Creating Agora Engine với createAgoraRtcEngine()');
       
-      console.log('📞 VIDEO CALL: PeerJS instance created, waiting for open event');
+      // Cách khởi tạo mới cho phiên bản 4.x
+      const rtcEngine = createAgoraRtcEngine();
       
-      // ⭐️ THÊM: Log toàn bộ sự kiện
-      peerServer.current.on('connection', () => {
-        console.log('📞 VIDEO CALL: PeerJS connection event received');
+      // Khởi tạo engine với appId
+      rtcEngine.initialize({
+        appId: appId,
+        channelProfile: ChannelProfileType.ChannelProfileLiveBroadcasting,
       });
       
-      peerServer.current.on('open', (id) => {
-        console.log('📞 VIDEO CALL: PeerJS connected with ID:', id);
-        clearTimeout(connectTimeout);
-        peerId.current = id;
-        
-        // Chỉ gọi subscribeCallVideo nếu là người khởi tạo cuộc gọi
-        if (isInitiator) {
-          console.log('📞 VIDEO CALL: Subscribing to call room as initiator');
-          console.log('📞 VIDEO CALL: Using user ID for call:', userIdForCall);
-          
-          const subscribeResult = subscribeCallVideo(conversationId, userIdForCall, id);
-          console.log('📞 VIDEO CALL: Subscribe result:', subscribeResult);
-        } else {
-          console.log('📞 VIDEO CALL: Joining call as receiver, not sending subscribe event');
-        }
-
-        setIsCallActive(true);
-
-        // Chỉ set waitingForAnswer nếu là người khởi tạo cuộc gọi
-        if (isInitiator) {
-          setWaitingForAnswer(true);
-          console.log('📞 VIDEO CALL: Waiting for someone to join the call...');
-        }
-
-        // Xử lý người dùng mới tham gia cuộc gọi
-        console.log('📞 VIDEO CALL: Setting up new-user-call event listener');
-        onNewUserCall((data) => {
-          console.log('📞 VIDEO CALL: Received new-user-call event:', {
-            peerId: data.peerId,
-            newUserId: data.newUserId,
-            myPeerId: id
-          });
-
-          // Nếu người mới vào không phải là mình
-          if (data.peerId && data.peerId !== id) {
-            console.log('📞 VIDEO CALL: New user is not me, calling their peer:', data.peerId);
-            // Cập nhật trạng thái
-            setHasRemoteParticipants(true);
-            setWaitingForAnswer(false);
-            setCallStatus('connected');
-
-            // Gọi đến peer mới
-            callPeer(data.peerId, stream);
-          } else {
-            console.log('📞 VIDEO CALL: Ignoring my own peer ID in new-user-call event');
-          }
-        });
-      });
+      // Thiết lập thông số cho engine
+      rtcEngine.enableVideo();
+      rtcEngine.enableAudio();
+      rtcEngine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
       
-      // Các xử lý khác giữ nguyên
-      // Xử lý cuộc gọi đến
-      peerServer.current.on('call', (call) => {
-        console.log('📞 VIDEO CALL: Received incoming call from peer:', call.peer);
-
-        // Trả lời cuộc gọi với stream của chúng ta
-        console.log('📞 VIDEO CALL: Answering call with local stream');
-        call.answer(stream);
-
-        // Xử lý stream từ người gọi
-        call.on('stream', (remoteStream) => {
-          console.log('📞 VIDEO CALL: Received remote stream from:', call.peer);
-          console.log('📞 VIDEO CALL: Remote stream video tracks:', remoteStream.getVideoTracks().length);
-          console.log('📞 VIDEO CALL: Remote stream audio tracks:', remoteStream.getAudioTracks().length);
-
-          setRemoteStreams(prev => ({
-            ...prev,
-            [call.peer]: remoteStream
-          }));
-        });
-
-        // Lưu kết nối
-        peerConnections.current[call.peer] = call;
-      });
-
-      // ⭐️ SỬA: Cải thiện xử lý lỗi
-      peerServer.current.on('error', (err) => {
-        console.error('📞 VIDEO CALL ERROR: PeerJS error:', err.type, err.message);
-        
-        // Phân loại lỗi để hiển thị thông báo phù hợp
-        let errorMessage = 'Không thể kết nối. Vui lòng thử lại.';
-        if (err.type === 'network') {
-          errorMessage = 'Lỗi kết nối mạng. Kiểm tra lại kết nối internet.';
-        } else if (err.type === 'server-error') {
-          errorMessage = 'Máy chủ PeerJS không phản hồi. Thử lại sau.';
-        } else if (err.type === 'browser-incompatible') {
-          errorMessage = 'Thiết bị không hỗ trợ WebRTC.';
-        }
-        
-        Alert.alert('Lỗi kết nối', errorMessage, [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      });
-
-      // Thêm sự kiện disconnected
-      peerServer.current.on('disconnected', () => {
-        console.log('📞 VIDEO CALL: PeerJS disconnected, attempting to reconnect');
-        peerServer.current.reconnect();
-      });
-
+      // Tối ưu hóa xử lý âm thanh
+      rtcEngine.setAudioProfile(0, 3); // Nhạc chất lượng cao + loa ngoài + giảm ồn
+      
+      // Tăng âm lượng phát lại tối đa (giá trị từ 0-400, mặc định là 100)
+      rtcEngine.adjustPlaybackSignalVolume(400);
+      
+      // Tăng âm lượng thu âm để người khác nghe rõ hơn
+      rtcEngine.adjustRecordingSignalVolume(200);
+      
+      // Lưu engine vào state
+      setEngine(rtcEngine);
+      
+      // Thiết lập các callback cho engine
+      setupAgoraCallbacks(rtcEngine);
+      
+      // Tham gia kênh
+      joinChannel(rtcEngine, uid);
+      
     } catch (error) {
-      console.error('📞 VIDEO CALL ERROR: Failed to initialize peer:', error);
+      console.error('📞 VIDEO CALL ERROR: Failed to initialize Agora:', error);
       Alert.alert(
         'Lỗi kết nối',
-        'Không thể khởi tạo kết nối gọi video.',
+        'Không thể khởi tạo cuộc gọi video. Vui lòng thử lại sau.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     }
   };
 
-  // Gọi đến một peer cụ thể
-  const callPeer = (remotePeerId, stream) => {
-    try {
-      console.log('📞 VIDEO CALL: Calling peer:', remotePeerId);
+  // Thêm state để theo dõi trạng thái camera local
+  const [localCameraReady, setLocalCameraReady] = useState(false);
 
-      // Kiểm tra xem đã có kết nối với peer này chưa
-      if (peerConnections.current[remotePeerId]) {
-        console.log('📞 VIDEO CALL: Already connected to this peer, closing old connection');
-        try {
-          peerConnections.current[remotePeerId].close();
-          // Xóa khỏi remoteStreams nếu tồn tại
-          if (remoteStreams[remotePeerId]) {
-            const oldStream = remoteStreams[remotePeerId];
-            oldStream.getTracks().forEach(track => track.stop());
-            setRemoteStreams(prev => {
-              const updated = {...prev};
-              delete updated[remotePeerId];
-              return updated;
-            });
-          }
-        } catch (e) {
-          console.error('Error closing existing peer connection:', e);
-        }
-      }
-
-      const call = peerServer.current.call(remotePeerId, stream);
-      console.log('📞 VIDEO CALL: Call initiated, waiting for stream');
-
-      // Thêm timeout để phát hiện nếu không nhận được stream
-      const streamTimeout = setTimeout(() => {
-        console.log('📞 VIDEO CALL: No stream received after 10 seconds');
-        // Chỉ xóa timeout, KHÔNG xóa kết nối
-      }, 10000);
-
-      // Xử lý khi nhận được stream từ xa
-      call.on('stream', (remoteStream) => {
-        clearTimeout(streamTimeout);
-        console.log('📞 VIDEO CALL: Received stream from called peer:', remotePeerId);
+  // Thiết lập callbacks cho Agora Engine
+  const setupAgoraCallbacks = (rtcEngine) => {
+    if (!rtcEngine) return;
+    
+    rtcEngine.registerEventHandler({
+      // Khi tham gia kênh thành công
+      onJoinChannelSuccess: (connection, uid) => {
+        console.log('📞 VIDEO CALL: Joined channel successfully:', connection.channelId, uid);
+        setJoinSucceed(true);
+        setCallStatus('connected');
+        setIsCallActive(true);
         
-        // Kiểm tra xem stream có tracks không
-        if (!remoteStream.getTracks().length) {
-          console.log('📞 VIDEO CALL: Remote stream has no tracks, ignoring');
-          return;
+        // Nếu là người nhận cuộc gọi, thông báo đã trả lời
+        if (isIncoming) {
+          // Sử dụng hàm thông báo phù hợp với loại cuộc gọi
+          notifyCallAnswered(
+            conversationId,
+            userIdForCall,
+            isGroup || false
+          );
+          
+          // Thêm thông báo cho cuộc gọi video
+          notifyVideoCallAnswered(
+            conversationId,
+            userIdForCall,
+            isGroup || false,
+            userIdForCall
+          );
         }
         
-        // Thêm vào state
-        setRemoteStreams(prev => ({
+        // Thông báo tham gia kênh qua socket
+        notifyUserJoinedAgoraChannel(
+          conversationId,
+          userIdForCall,
+          uid,
+          user?.name || 'Người dùng',
+          user?.avatar || ''
+        );
+        
+        // Thêm thông báo tham gia kênh video
+        notifyUserJoinedVideoChannel(
+          conversationId,
+          userIdForCall,
+          uid,
+          user?.name || 'Người dùng',
+          user?.avatar || ''
+        );
+        
+        // Nếu là người khởi tạo, đặt trạng thái chờ đợi
+        if (isInitiator) {
+          setWaitingForAnswer(true);
+        }
+      },
+
+      // Khi có người dùng mới tham gia
+      onUserJoined: (connection, uid, elapsed) => {
+        console.log('📞 VIDEO CALL: Remote user joined:', uid);
+        
+        // Cập nhật danh sách người dùng
+        setRemoteUsers(prev => ({
           ...prev,
-          [remotePeerId]: remoteStream
+          [uid]: { uid }
         }));
         
         // Cập nhật trạng thái UI
         setHasRemoteParticipants(true);
         setWaitingForAnswer(false);
-        setCallStatus('connected');
-      });
+      },
 
-      // Xử lý sự kiện close
-      call.on('close', () => {
-        console.log('📞 VIDEO CALL: Call closed with peer:', remotePeerId);
+      // Khi người dùng rời đi
+      onUserOffline: (connection, uid, reason) => {
+        console.log('📞 VIDEO CALL: Remote user left:', uid, reason);
         
-        // Dừng stream nếu có
-        if (remoteStreams[remotePeerId]) {
-          try {
-            remoteStreams[remotePeerId].getTracks().forEach(track => track.stop());
-          } catch (e) {
-            console.error('Error stopping tracks on close:', e);
-          }
-        }
-        
-        // Xóa khỏi state
-        setRemoteStreams(prev => {
-          const updated = {...prev};
-          delete updated[remotePeerId];
-          return updated;
+        // Xóa người dùng khỏi danh sách
+        setRemoteUsers(prev => {
+          const newUsers = { ...prev };
+          delete newUsers[uid];
+          return newUsers;
         });
         
-        // Xóa khỏi peerConnections
-        delete peerConnections.current[remotePeerId];
+        // Kiểm tra nếu không còn ai trong cuộc gọi
+        setTimeout(() => {
+          setRemoteUsers(current => {
+            const remainingUsers = Object.keys(current).length;
+            if (remainingUsers === 0) {
+              setHasRemoteParticipants(false);
+            }
+            return current;
+          });
+        }, 500);
+      },
+
+      // Khi có lỗi xảy ra
+      onError: (err, msg) => {
+        console.error('📞 VIDEO CALL ERROR: Agora error:', err, msg);
+        // Hiển thị lỗi tùy thuộc vào mã lỗi
+        let errorMessage = 'Đã xảy ra lỗi. Vui lòng thử lại.';
         
-        // Kiểm tra xem còn kết nối nào không
-        const remainingPeers = Object.keys(peerConnections.current).length;
-        if (remainingPeers === 0) {
-          setHasRemoteParticipants(false);
+        Alert.alert('Lỗi cuộc gọi', errorMessage, [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      },
+      
+      // Khi kết nối thay đổi trạng thái
+      onConnectionStateChanged: (connection, state, reason) => {
+        console.log('📞 VIDEO CALL: Connection state changed:', state, reason);
+      },
+
+      // Khi trạng thái video của người dùng từ xa thay đổi
+      onRemoteVideoStateChanged: (connection, uid, state, reason, elapsed) => {
+        console.log('📞 VIDEO CALL: Remote video state changed:', uid, state, reason);
+        
+        // Cập nhật trạng thái video của người dùng
+        if (state === 2) { // Decoding
+          // Video đang phát
+          setRemoteUsers(prev => ({
+            ...prev,
+            [uid]: { ...prev[uid], hasVideo: true }
+          }));
+        } else if (state === 0) { // Stopped
+          // Video đã dừng
+          setRemoteUsers(prev => ({
+            ...prev,
+            [uid]: { ...prev[uid], hasVideo: false }
+          }));
         }
-      });
+      },
 
-      // Lưu trữ kết nối
-      peerConnections.current[remotePeerId] = call;
+      // Thêm callback để theo dõi trạng thái local video
+      onLocalVideoStateChanged: (source, state, error) => {
+        console.log('📞 VIDEO CALL: Local video state changed:', state, error);
+        
+        // state 2 = LocalVideoStreamStateCapturing (camera đang hoạt động)
+        if (state === 2) {
+          setLocalCameraReady(true);
+        } else {
+          setLocalCameraReady(false);
+        }
+      },
+      
+      // Thêm sự kiện kết nối thất bại
+      onConnectionLost: (connection) => {
+        console.log('📞 VIDEO CALL: Connection lost');
+        Alert.alert(
+          'Mất kết nối',
+          'Kết nối đến máy chủ cuộc gọi đã bị mất. Vui lòng thử lại sau.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      },
+    });
+  };
 
+  // Tham gia kênh Agora
+  const joinChannel = async (rtcEngine, uid) => {
+    if (!rtcEngine) return;
+    
+    try {
+      const channelName = `conversation_channel_${conversationId}`;
+      console.log('📞 VIDEO CALL: Joining channel:', channelName, 'with UID:', uid);
+      
+      // Cập nhật phương thức joinChannel cho phiên bản 4.x
+      await rtcEngine.joinChannel(
+        '', // token (null hoặc empty string cho không sử dụng token)
+        channelName, // channelId
+        uid, // uid
+        {
+          clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+          publishCameraTrack: true,
+          publishMicrophoneTrack: true
+        }
+      );
     } catch (error) {
-      console.error('📞 VIDEO CALL ERROR: Error calling peer:', error);
+      console.error('📞 VIDEO CALL ERROR: Failed to join channel:', error);
+      Alert.alert(
+        'Lỗi kết nối',
+        'Không thể tham gia cuộc gọi. Vui lòng thử lại sau.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     }
   };
 
   // Bật/tắt âm thanh
-  const toggleMute = () => {
-    if (localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = !track.enabled;
-      });
+  const toggleMute = async () => {
+    if (!engine) return;
+    
+    try {
+      if (isMuted) {
+        await engine.enableAudio();
+      } else {
+        await engine.disableAudio();
+      }
       setIsMuted(!isMuted);
+    } catch (error) {
+      console.error('📞 VIDEO CALL ERROR: Failed to toggle audio:', error);
     }
   };
 
   // Bật/tắt camera
-  const toggleCamera = () => {
-    if (localStream) {
-      const videoTracks = localStream.getVideoTracks();
-      videoTracks.forEach(track => {
-        track.enabled = !track.enabled;
-      });
+  const toggleCamera = async () => {
+    if (!engine) return;
+    
+    try {
+      if (isCameraOff) {
+        await engine.enableVideo();
+      } else {
+        await engine.disableVideo();
+      }
       setIsCameraOff(!isCameraOff);
+    } catch (error) {
+      console.error('📞 VIDEO CALL ERROR: Failed to toggle video:', error);
     }
   };
 
   // Chuyển đổi camera (trước/sau)
-  const switchCamera = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack._switchCamera();
-      }
+  const switchCamera = async () => {
+    if (!engine) return;
+    
+    try {
+      await engine.switchCamera();
+    } catch (error) {
+      console.error('📞 VIDEO CALL ERROR: Failed to switch camera:', error);
     }
   };
 
   // Kết thúc cuộc gọi và dọn dẹp
-  const endCall = () => {
+  const endCall = async () => {
     console.log('📞 VIDEO CALL: Ending call, cleaning up resources');
     
-    // 1. Dừng và dọn dẹp remote streams
-    Object.entries(remoteStreams).forEach(([peerId, stream]) => {
-      console.log(`📞 VIDEO CALL: Cleaning up remote stream for peer: ${peerId}`);
-      try {
-        if (stream && stream.getTracks) {
-          stream.getTracks().forEach(track => {
-            track.stop();
-            console.log(`📞 VIDEO CALL: Stopped remote track: ${track.kind}`);
-          });
-        }
-      } catch (err) {
-        console.error('Error stopping remote stream tracks:', err);
-      }
-    });
-
-    // 2. Đóng tất cả kết nối peer
-    Object.entries(peerConnections.current).forEach(([peerId, call]) => {
-      try {
-        console.log(`📞 VIDEO CALL: Closing peer connection: ${peerId}`);
-        if (call) {
-          if (typeof call.close === 'function') {
-            call.close();
-          }
-          
-          // Nếu có peerConnection - đóng nó
-          if (call.peerConnection) {
-            call.peerConnection.close();
-          }
-        }
-      } catch (err) {
-        console.error(`Error closing peer connection ${peerId}:`, err);
-      }
-    });
-
-    // 3. Đóng peer server
-    if (peerServer.current) {
-      try {
-        peerServer.current.destroy();
-        console.log('📞 VIDEO CALL: Destroyed peer server');
-      } catch (err) {
-        console.error('Error destroying peer server:', err);
-      }
-      peerServer.current = null;
-    }
-
-    // 4. Dừng local stream
     try {
-      if (localStream) {
-        localStream.getTracks().forEach(track => {
-          track.stop();
-          console.log(`📞 VIDEO CALL: Stopped local ${track.kind} track`);
-        });
+      if (engine) {
+        // Thông báo rời kênh qua socket
+        if (localUid) {
+          notifyUserLeftAgoraChannel(conversationId, userIdForCall, localUid);
+          notifyUserLeftVideoChannel(conversationId, userIdForCall, localUid);
+        }
+        
+        // Rời kênh Agora - cập nhật cho phiên bản 4.x
+        await engine.leaveChannel();
+        
+        // Xóa event handler và dừng các luồng
+        engine.unregisterEventHandler();
+        
+        // Destroy engine khi không cần nữa
+        engine.release();
+        
+        setEngine(null);
       }
-    } catch (err) {
-      console.error('Error stopping local stream:', err);
-    }
-    
-    // 5. Reset tất cả state và refs
-    peerConnections.current = {};
-    peerId.current = null;
-
-    // 6. Reset state trong setTimeout để tránh race condition
-    setTimeout(() => {
-      setRemoteStreams({});
-      setLocalStream(null);
-      setHasRemoteParticipants(false);
+      
+      // Reset state
+      setRemoteUsers({});
+      setLocalUid(null);
       setIsCallActive(false);
       setWaitingForAnswer(false);
       setCallStatus('ended');
-    }, 100);
-    
-    console.log('📞 VIDEO CALL: Call cleanup completed');
+      setHasRemoteParticipants(false);
+      
+      console.log('📞 VIDEO CALL: Call cleanup completed');
+    } catch (error) {
+      console.error('📞 VIDEO CALL ERROR: Failed to clean up:', error);
+    }
   };
 
   // Xử lý kết thúc cuộc gọi và di chuyển
@@ -504,11 +498,11 @@ const VideoCallScreen = ({ navigation, route }) => {
     return true;
   };
 
-  // Hiển thị remote streams
+  // Hiển thị remote streams - cập nhật cho phiên bản 4.x
   const renderRemoteStreams = () => {
-    const remoteStreamArray = Object.entries(remoteStreams);
-
-    if (remoteStreamArray.length === 0) {
+    const remoteUserIds = Object.keys(remoteUsers);
+    
+    if (remoteUserIds.length === 0) {
       if (waitingForAnswer) {
         return (
           <View style={styles.waitingContainer}>
@@ -530,14 +524,17 @@ const VideoCallScreen = ({ navigation, route }) => {
       );
     }
 
-    if (remoteStreamArray.length === 1) {
+    if (remoteUserIds.length === 1) {
       // Hiển thị một stream lớn
-      const [peerId, stream] = remoteStreamArray[0];
+      const uid = parseInt(remoteUserIds[0]);
       return (
-        <RTCView
-          streamURL={stream.toURL()}
+        <RtcSurfaceView
+          canvas={{
+            uid: uid,
+            renderMode: RenderModeType.RenderModeFit, // Thay thế VideoRenderMode.Hidden
+            zOrderMediaOverlay: true
+          }}
           style={styles.fullScreenRemoteStream}
-          objectFit="cover"
         />
       );
     }
@@ -545,98 +542,129 @@ const VideoCallScreen = ({ navigation, route }) => {
     // Hiển thị lưới cho nhiều streams
     return (
       <View style={styles.remoteStreamsGrid}>
-        {remoteStreamArray.map(([peerId, stream]) => (
-          <RTCView
-            key={peerId}
-            streamURL={stream.toURL()}
+        {remoteUserIds.map(uid => (
+          <RtcSurfaceView
+            key={uid}
+            canvas={{
+              uid: parseInt(uid),
+              renderMode: RenderModeType.RenderModeFit, // Thay thế VideoRenderMode.Hidden
+              zOrderMediaOverlay: true
+            }}
             style={styles.remoteStream}
-            objectFit="cover"
           />
         ))}
       </View>
     );
   };
 
-  // Thêm useEffect mới để theo dõi khi có thể gọi peer
-  useEffect(() => {
-    // Khi tất cả điều kiện cần thiết đã sẵn sàng
-    const { remotePeerId } = route.params || {};
-    if (remotePeerId && localStream && isCallActive && isIncoming) {
-      console.log('📞 VIDEO CALL: Ready to call remote peer:', remotePeerId);
-      if (peerId.current) {
-        console.log('📞 VIDEO CALL: Calling remote peer now:', remotePeerId);
-        callPeer(remotePeerId, localStream);
-      }
+  // Thêm hàm để đảm bảo camera local hoạt động
+  const ensureLocalVideoWorks = async () => {
+    if (!engine) return;
+    
+    try {
+      // Cố gắng khởi động lại camera
+      await engine.disableVideo();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await engine.enableVideo();
+      
+      console.log('📞 VIDEO CALL: Restarting local video');
+      
+      // Kiểm tra sau 1 giây nếu camera vẫn không hoạt động
+      setTimeout(() => {
+        if (!localCameraReady) {
+          console.log('📞 VIDEO CALL WARNING: Local camera still not working');
+          Alert.alert(
+            'Cảnh báo camera',
+            'Camera của bạn có thể không hoạt động đúng. Vui lòng kiểm tra quyền camera hoặc khởi động lại ứng dụng.',
+            [{ text: 'OK' }]
+          );
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('📞 VIDEO CALL ERROR: Failed to restart camera:', error);
     }
-  }, [localStream, isCallActive, route.params?.remotePeerId, isIncoming]);
+  };
 
-  // Thêm useEffect mới
+  // Cập nhật useEffect để thử lại nếu camera không hoạt động
+  useEffect(() => {
+    if (joinSucceed && !localCameraReady && !isCameraOff) {
+      // Thử lại khi camera không hoạt động trong 3 giây sau khi join
+      const timer = setTimeout(() => {
+        ensureLocalVideoWorks();
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [joinSucceed, localCameraReady, isCameraOff]);
+
+  // Cập nhật phương thức renderLocalVideo hoàn toàn
+  const renderLocalVideo = () => {
+    // Thêm log để debug
+    console.log('Rendering local video, camera state:', {
+      joinSucceed: joinSucceed,
+      localCameraReady: localCameraReady,
+      isCameraOff: isCameraOff
+    });
+    
+    // Nếu camera tắt, hiển thị icon
+    if (isCameraOff) {
+      return (
+        <View style={styles.localStreamContainer}>
+          <View style={[styles.localStream, {backgroundColor: '#444', justifyContent: 'center', alignItems: 'center'}]}>
+            <Icon name="videocam-off" size={30} color="#fff" />
+          </View>
+        </View>
+      );
+    }
+    
+    // Đảm bảo chỉ render khi đã join thành công
+    if (joinSucceed && engine) {
+      return (
+        <View style={styles.localStreamContainer}>
+          {/* Force re-render với key ngẫu nhiên */}
+          <RtcSurfaceView
+            key={`local-view-${Date.now()}`}
+            canvas={{
+              uid: 0,
+              renderMode: RenderModeType.RenderModeFit,
+              mirrorMode: 1,
+              zOrderMediaOverlay: true
+            }}
+            style={[styles.localStream, { backgroundColor: '#222' }]}
+          />
+        </View>
+      );
+    }
+    
+    // Hiển thị placeholder khi chưa sẵn sàng
+    return (
+      <View style={styles.localStreamContainer}>
+        <View style={[styles.localStream, {backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'}]}>
+          <Text style={{color: 'white'}}>Đang khởi động camera...</Text>
+        </View>
+      </View>
+    );
+  };
+
+  // Kiểm tra kết nối định kỳ
   useEffect(() => {
     if (!isCallActive) return;
     
-    // Kiểm tra trạng thái kết nối của từng peer định kỳ
+    // Kiểm tra trạng thái kết nối của tất cả người dùng
     const checkConnectionsInterval = setInterval(() => {
-      console.log('📞 VIDEO CALL: Checking peer connections');
+      console.log('📞 VIDEO CALL: Checking connections');
       
-      Object.entries(peerConnections.current).forEach(([peerId, call]) => {
-        if (!call || !call.peerConnection) return;
-        
-        const connectionState = call.peerConnection.connectionState;
-        const iceConnectionState = call.peerConnection.iceConnectionState;
-        
-        console.log(`📞 VIDEO CALL: Peer ${peerId} state: ${connectionState}, ice: ${iceConnectionState}`);
-        
-        // Kiểm tra nếu kết nối đã mất
-        if (connectionState === 'disconnected' || 
-            connectionState === 'failed' || 
-            connectionState === 'closed' ||
-            iceConnectionState === 'disconnected' ||
-            iceConnectionState === 'failed' ||
-            iceConnectionState === 'closed') {
-          
-          console.log(`📞 VIDEO CALL: Removing disconnected peer: ${peerId}`);
-          
-          // Dừng stream
-          const stream = remoteStreams[peerId];
-          if (stream) {
-            try {
-              stream.getTracks().forEach(track => {
-                track.stop();
-              });
-            } catch (e) {
-              console.error(`Error stopping tracks for peer ${peerId}:`, e);
-            }
-          }
-          
-          // Xóa khỏi remoteStreams
-          setRemoteStreams(prev => {
-            const updated = {...prev};
-            delete updated[peerId];
-            return updated;
-          });
-          
-          // Xóa khỏi peerConnections
-          delete peerConnections.current[peerId];
-        }
-      });
+      // Kiểm tra số lượng người dùng
+      const userCount = Object.keys(remoteUsers).length;
+      console.log('📞 VIDEO CALL: Remote users count:', userCount);
       
-      // Kiểm tra nếu tất cả các peer đã ngắt kết nối
-      const activePeers = Object.values(peerConnections.current).filter(call => {
-        return call && 
-               call.peerConnection && 
-               call.peerConnection.connectionState !== 'closed' &&
-               call.peerConnection.connectionState !== 'failed';
-      });
-      
-      if (activePeers.length === 0 && isCallActive) {
-        console.log('📞 VIDEO CALL: No active peers remaining');
-        setHasRemoteParticipants(false);
-      }
+      // Cập nhật trạng thái có người tham gia hay không
+      setHasRemoteParticipants(userCount > 0);
       
     }, 5000); // Kiểm tra mỗi 5 giây
     
     return () => clearInterval(checkConnectionsInterval);
-  }, [isCallActive]);
+  }, [isCallActive, remoteUsers]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -668,17 +696,10 @@ const VideoCallScreen = ({ navigation, route }) => {
         {renderRemoteStreams()}
       </View>
 
-      {/* Local stream (xem trước nhỏ) */}
-      {localStream && (
-        <View style={styles.localStreamContainer}>
-          <RTCView
-            streamURL={localStream.toURL()}
-            style={styles.localStream}
-            objectFit="cover"
-            zOrder={1}
-          />
-        </View>
-      )}
+      {/* Tạo một lớp overlay riêng cho local stream để đảm bảo hiển thị trên cùng */}
+      <View style={styles.localVideoOverlay}>
+        {renderLocalVideo()}
+      </View>
 
       {/* Điều khiển cuộc gọi */}
       <View style={styles.controlsContainer}>
@@ -793,6 +814,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#fff',
+    backgroundColor: '#333', // Thêm màu nền
+    zIndex: 10,              // Thêm zIndex cao
+    elevation: 10,           // Thêm elevation cho Android
+    shadowColor: "#000",     // Thêm shadow cho iOS
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   localStream: {
     flex: 1,
@@ -835,6 +866,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  localVideoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'none', // Cho phép các sự kiện chạm xuyên qua đến remote view
+    zIndex: 5,
   },
 });
 

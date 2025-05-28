@@ -4,9 +4,9 @@
 // Real device - use actual server IP
 
 // Sử dụng địa chỉ IP của máy chủ theo yêu cầu của người dùng
-export const API_BASE_URL = 'http://172.29.135.43:3001';
-export const REACT_APP_SOCKET_URL = 'http://172.29.135.43:3001';
-export const REACT_APP_API_URL = 'http://172.29.135.43:3001';
+export const API_BASE_URL = 'https://cnm-chat-0t33.onrender.com';
+export const REACT_APP_SOCKET_URL = 'https://cnm-chat-0t33.onrender.com';
+export const REACT_APP_API_URL = 'https://cnm-chat-0t33.onrender.com';
 
 // Các tùy chọn khác (không sử dụng):
 // export const API_BASE_URL = 'http://10.0.2.2:3001'; // Android emulator

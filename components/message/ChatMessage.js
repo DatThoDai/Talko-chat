@@ -1,12 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import {View, Text} from 'react-native';
+import {View, Text, Pressable, TouchableOpacity, StyleSheet} from 'react-native';
 import {messageType} from '../../constants';
 import commonFuc from '../../utils/commonFuc';
 import { formatMessageTime } from '../../utils/dateUtils';
 import ReceiverMessage from './ReceiverMessage';
 import SenderMessage from './SenderMessage';
 import SystemNotificationMessage from './SystemNotificationMessage';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import MessageReactionModal from '../modal/MessageReactionModal';
+import { REACTIONS } from '../../constants/index';
+
 // Định nghĩa MESSAGE_STATUS để tránh lỗi
 const MESSAGE_STATUS = {
   recalled: 'recalled',
@@ -18,29 +22,49 @@ const MESSAGE_STATUS = {
 const ChatMessage = ({
   message = {},
   userId = '',
-  isMyMessage = undefined, // Default là undefined để không ảnh hưởng đến logic cũ
+  isMyMessage = undefined,
   onPressEmoji = null,
   handleShowReactDetails = null,
   onPressDelete = null,
   onPressEdit = null,
   onReply = null,
   onPressRecall = null,
-  //onRetry = null, // Default là null
   loading = false,
   previewImage = null,
-  navigation,  // QUAN TRỌNG: Thêm prop navigation để chuyển tiếp tin nhắn
-  conversationId, // Thêm conversationId hiện tại
-  scrollToMessage = null, // Thêm scrollToMessage prop
+  navigation,
+  conversationId,
+  scrollToMessage = null,
 }) => {
-  // Thêm log để kiểm tra onReply đã được truyền đúng chưa
-  console.log('ChatMessage received onReply:', typeof onReply);
+  // Thêm state để hiển thị nút reaction nhanh
+  const [showQuickReactions, setShowQuickReactions] = useState(false);
   
+  // Thêm state và logic cho modal thả reaction
+  const [reactionModalVisible, setReactionModalVisible] = useState(false);
+  const [touchPosition, setTouchPosition] = useState(null);
+
+  // Hàm xử lý nhấn vào tin nhắn
+  const handleMessagePress = () => {
+    setShowQuickReactions(!showQuickReactions);
+    // Tự động ẩn sau 3 giây nếu không có tương tác
+    if (!showQuickReactions) {
+      setTimeout(() => setShowQuickReactions(false), 3000);
+    }
+  };
+  
+  // Hàm xử lý nhấn giữ tin nhắn để hiển thị modal reaction
+  const handleLongPress = (event) => {
+    // Lấy tọa độ nhấn giữ để định vị modal
+    setTouchPosition({
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY
+    });
+    setReactionModalVisible(true);
+  };
+
   // Skip rendering completely if the message is deleted (but NOT if it's recalled)
   if (message?.isDeleted && !message?.isRecalled) {
     return null;
   }
-
-  // Thêm vào trong hàm ChatMessage, trước đoạn code xác định sender/receiver
 
   // Nếu là tin nhắn thông báo từ hệ thống, sử dụng SystemNotificationMessage
   if (message.type === 'NOTIFY') {
@@ -96,44 +120,118 @@ const ChatMessage = ({
 
   // Xác định trước khi render để log
   const messageIsSender = isSender();
-  
+
   // Log kết quả cuối cùng
   console.log(`Message ${message?._id?.substr(0, 8)} is ${messageIsSender ? 'SENDER' : 'RECEIVER'}`);
 
   // Determine if the message is from the current user
   if (messageIsSender) {
     return (
-      <SenderMessage
-        message={message}
-        isMessageRecalled={isMessageRecalled}
-        onPressEmoji={onPressEmoji}
-        handleShowReactDetails={handleShowReactDetails}
-        onPressDelete={onPressDelete}
-        onPressEdit={onPressEdit}
-        onReply={onReply}
-        onPressRecall={onPressRecall}
-        //onRetry={onRetry} // Thêm prop này
-        loading={loading}
-        previewImage={previewImage}
-        navigation={navigation}
-        conversationId={conversationId}
-        scrollToMessage={scrollToMessage}
-      />
+      <>
+        <Pressable 
+          onPress={handleMessagePress} 
+          onLongPress={handleLongPress} 
+          delayLongPress={300}
+        >
+          <View>
+            <SenderMessage
+              message={message}
+              isMessageRecalled={isMessageRecalled}
+              onPressEmoji={onPressEmoji}
+              handleShowReactDetails={handleShowReactDetails}
+              onPressDelete={onPressDelete}
+              onPressEdit={onPressEdit}
+              onReply={onReply}
+              onPressRecall={onPressRecall}
+              loading={loading}
+              previewImage={previewImage}
+              navigation={navigation}
+              conversationId={conversationId}
+              scrollToMessage={scrollToMessage}
+            />
+            
+            {/* Quick reaction buttons */}
+            {showQuickReactions && (
+              <View style={styles.quickReactions}>
+                {REACTIONS.map((emoji, index) => (
+                  <TouchableOpacity 
+                    key={`quick-reaction-${index}`}
+                    style={styles.quickReactionButton}
+                    onPress={() => {
+                      onPressEmoji && onPressEmoji(message._id, emoji);
+                      setShowQuickReactions(false);
+                    }}
+                  >
+                    <Text style={styles.reactionEmoji}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </Pressable>
+        
+        {/* Modal thả reaction */}
+        <MessageReactionModal
+          visible={reactionModalVisible}
+          position={touchPosition}
+          onClose={() => setReactionModalVisible(false)}
+          onReactionSelected={(emoji) => {
+            onPressEmoji && onPressEmoji(message._id, emoji);
+          }}
+        />
+      </>
     );
   } else {
     return (
-      <ReceiverMessage
-        message={message}
-        isMessageRecalled={isMessageRecalled}
-        onPressEmoji={onPressEmoji}
-        handleShowReactDetails={handleShowReactDetails}
-        onReply={onReply}
-        onPressRecall={null}
-        previewImage={previewImage}
-        navigation={navigation}
-        conversationId={conversationId}
-        scrollToMessage={scrollToMessage}
-      />
+      <>
+        <Pressable 
+          onPress={handleMessagePress} 
+          onLongPress={handleLongPress} 
+          delayLongPress={300}
+        >
+          <View>
+            <ReceiverMessage
+              message={message}
+              isMessageRecalled={isMessageRecalled}
+              onPressEmoji={onPressEmoji}
+              handleShowReactDetails={handleShowReactDetails}
+              onReply={onReply}
+              previewImage={previewImage}
+              navigation={navigation}
+              conversationId={conversationId}
+              scrollToMessage={scrollToMessage}
+            />
+            
+            {/* Quick reaction buttons */}
+            {showQuickReactions && (
+              <View style={styles.quickReactions}>
+                {reactions.map((emoji, index) => (
+                  <TouchableOpacity 
+                    key={`quick-reaction-${index}`}
+                    style={styles.quickReactionButton}
+                    onPress={() => {
+                      onPressEmoji && onPressEmoji(message._id, emoji);
+                      setShowQuickReactions(false);
+                    }}
+                  >
+                    <Text style={styles.reactionEmoji}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </Pressable>
+        
+        {/* Modal thả reaction */}
+        <MessageReactionModal
+          visible={reactionModalVisible}
+          position={touchPosition}
+          onClose={() => setReactionModalVisible(false)}
+          onReactionSelected={(emoji) => {
+            onPressEmoji && onPressEmoji(message._id, emoji);
+          }}
+        />
+      </>
     );
   }
 };
@@ -158,5 +256,30 @@ ChatMessage.propTypes = {
 };
 
 // Đã xóa ChatMessage.defaultProps
+
+// Thêm styles mới
+const styles = StyleSheet.create({
+  quickReactions: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 4,
+    marginTop: 8,
+    marginHorizontal: 16,
+    justifyContent: 'space-around',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  quickReactionButton: {
+    padding: 6,
+    marginHorizontal: 4,
+  },
+  reactionEmoji: {
+    fontSize: 20,
+  }
+});
 
 export default ChatMessage;

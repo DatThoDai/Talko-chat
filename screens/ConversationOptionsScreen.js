@@ -38,8 +38,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const { user } = useSelector(state => state.auth);
   const userId = user?._id;
-  const [isGroupAdmin, setIsGroupAdmin] = useState(false); // Thêm state này
-  const [groupName, setGroupName] = useState(name || 'Nhóm chat');
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false);
+  const [groupName, setGroupName] = useState(name || '');
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [changeAvatarModalVisible, setChangeAvatarModalVisible] = useState(false);
   
@@ -61,6 +61,8 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     // Thêm kiểm tra vai trò nếu là nhóm
     if (type === 'group' || route.params?.isGroupChat) {
       checkUserRole();
+      // Fetch conversation details to get the correct name
+      fetchConversationDetails();
     }
     
   }, [conversationId]);
@@ -111,10 +113,27 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
     }
   };
 
+  // Add new function to fetch conversation details
+  const fetchConversationDetails = async () => {
+    try {
+      const response = await conversationApi.fetchConversation(conversationId);
+      if (response?.data) {
+        setGroupName(response.data.name || name);
+      }
+    } catch (error) {
+      console.error('Error fetching conversation details:', error);
+    }
+  };
+
   const handleClose = () => {
     try {
-      // Chỉ đơn giản quay lại màn hình trước đó
-      if (navigation.canGoBack()) {
+      // Cập nhật params trước khi quay lại
+      if (route.params && route.params.avatar) {
+        navigation.navigate('MessageScreen', {
+          ...route.params,
+          timestamp: new Date().getTime() // Thêm timestamp để force re-render
+        });
+      } else {
         navigation.goBack();
       }
     } catch (error) {
@@ -339,18 +358,24 @@ const handleViewMedia = async () => {
         });
       }
 
-      // Quay về màn hình trước và cập nhật params
-      if (navigation.canGoBack()) {
-        navigation.navigate('MessageScreen', {
-          conversationId,
-          avatar: newAvatar,
-          // Giữ lại các params khác
-          name: route.params?.name,
-          conversationName: route.params?.conversationName || groupName,
-          isGroup: route.params?.isGroup || type === 'group',
-          isGroupChat: route.params?.isGroupChat || type === 'group'
-        });
-      }
+      // Fetch latest conversation details before navigation
+      fetchConversationDetails().then(() => {
+        // Quay về màn hình trước và cập nhật params
+        if (navigation.canGoBack()) {
+          const currentName = groupName || route.params?.name || '';
+          
+          // Sử dụng replace thay vì navigate để đảm bảo cập nhật ngay lập tức
+          navigation.replace('MessageScreen', {
+            conversationId,
+            avatar: newAvatar,
+            name: currentName,
+            conversationName: currentName,
+            isGroup: route.params?.isGroup || type === 'group',
+            isGroupChat: route.params?.isGroupChat || type === 'group',
+            timestamp: new Date().getTime() // Thêm timestamp để force re-render
+          });
+        }
+      });
     } catch (error) {
       console.error('Error updating avatar:', error);
     }

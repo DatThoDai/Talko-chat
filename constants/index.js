@@ -58,7 +58,7 @@ export const DEFAULT_MESSAGE_PARAMS = {
 };
 
 // Emoji reactions
-export const REACTIONS = ['👍', '♥️', '😄', '😲', '😭', '😡'];
+export const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
 // Hình ảnh mặc định
 export const DEFAULT_AVATAR = 'https://via.placeholder.com/150';

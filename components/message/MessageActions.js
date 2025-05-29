@@ -34,6 +34,7 @@ const MessageActions = ({
   position = null,
   showCopyOption = true,
   showRecallOption = true,
+  onShowReactions, // Thêm mới
 }) => {
   const [loading, setLoading] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
@@ -401,6 +402,20 @@ const MessageActions = ({
               </TouchableOpacity>
             </View>
             
+            {/* New row for reactions - always visible */}
+            <View style={styles.actionsRow}>
+              <TouchableOpacity onPress={() => {
+                if (onShowReactions) {
+                  onShowReactions();
+                }
+              }} style={styles.actionButton}>
+                <View style={[styles.iconContainer, styles.reactionIcon]}>
+                  <FontAwesome name="smile-o" size={16} color="#ffffff" />
+                </View>
+                <Text style={styles.actionText}>Thêm biểu cảm</Text>
+              </TouchableOpacity>
+            </View>
+            
             {/* Bottom row - exact 3 buttons */}
             <View style={styles.actionsRow}>
               {!isDeleted && !isRecalled && (
@@ -525,6 +540,9 @@ const styles = StyleSheet.create({
   },
   deleteIcon: {
     backgroundColor: '#F44336',
+  },
+  reactionIcon: {
+    backgroundColor: '#FFC107',
   },
   actionText: {
     fontSize: 10,

@@ -20,6 +20,7 @@ import CustomAvatar from '../CustomAvatar';
 import { downloadFile, openFile } from '../../utils/downloadUtils';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import MessageReactionModal from '../modal/MessageReactionModal';
 
 function ReceiverMessage({
   message = {},
@@ -30,18 +31,20 @@ function ReceiverMessage({
   previewImage = null,
   onPressRecall = () => {},
   scrollToMessage = null,
+  navigation,
+  conversationId, // Tham số này đã tồn tại
 }) {
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const content = message?.content || '';
   const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
   const reactLength = message?.reactions?.length || 0;
   const reactVisibleInfo = reactLength > 0 ? `${reactLength}` : '';
-  const conversationId = message?.conversationId;
+  // Xóa hoặc đổi tên dòng này để tránh trùng lặp
+  const msgConversationId = message?.conversationId; // Đổi tên từ conversationId thành msgConversationId
   const currentUserId = message?.sender?._id;
   const isLastMessage = false; // Giả định không phải tin nhắn cuối
   const onLastView = null;
   const handleViewImage = previewImage || (() => {});
-  const navigation = {};
   
   // Make sure we have message
   if (!message) {
@@ -49,7 +52,8 @@ function ReceiverMessage({
     return null;
   }
   
-  // State for message actions modal and position
+  // State cho modal
+  const [reactionModalVisible, setReactionModalVisible] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
 
@@ -307,31 +311,12 @@ function ReceiverMessage({
     }
   };
 
-  // Handle long press to open message actions
-  const handleLongPress = (event) => {
-    // Trích xuất tọa độ từ sự kiện press
-    const { pageX, pageY } = event.nativeEvent;
-    
-    // Lưu vị trí tin nhắn để hiển thị menu gần đó
-    const position = {
-      x: pageX,
-      y: pageY
-    };
-    
-    // Vibrate để feedback
-    if (Platform.OS === 'android' && typeof Vibration !== 'undefined') {
-      Vibration.vibrate(50); // Rung nhẹ 50ms
-    }
-    
-    // Cập nhật vị trí và hiển thị modal
-    setMenuPosition(position);
-    setShowActions(true);
-  };
-
   // Close the message actions
   const handleCloseActions = () => {
+    console.log('Closing only action modal');
     setShowActions(false);
-    setMenuPosition(null);
+    // Chú ý: KHÔNG thiết lập setMenuPosition(null) ở đây
+    // vì ReactionModal có thể vẫn đang sử dụng menuPosition
   };
 
   // Handle text selection for copy
@@ -470,22 +455,100 @@ function ReceiverMessage({
     );
   };
 
+  // Hàm xử lý nhấn giữ để hiển thị modal
+  const handleLongPress = (event) => {
+    console.log('Long press detected on message:', message._id);
+    
+    if (Platform.OS === 'android') {
+      Vibration.vibrate(50);
+    }
+    
+    // Lấy tọa độ nhấn giữ
+    const position = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY
+    };
+    
+    console.log('Touch position:', position);
+    
+    // Chỉ hiển thị MessageActions trước, không hiển thị ReactionModal
+    setMenuPosition(position);
+    setShowActions(true);
+    // Không mở ReactionModal ngay - setReactionModalVisible(false);
+  };
+
+  // Hàm đóng modal
+  const handleCloseModals = () => {
+    console.log('Closing all modals');
+    setReactionModalVisible(false);
+    setShowActions(false);
+    setMenuPosition(null); // Chỉ reset position khi đóng cả hai modal
+  };
+
+  // Hàm hiển thị modal biểu cảm
+  const handleShowReactions = () => {
+    console.log('Show reactions button pressed');
+    
+    // Đóng MessageActions trước khi hiển thị ReactionModal
+    setShowActions(false);
+    
+    // Đợi một chút để MessageActions biến mất, sau đó mới hiển thị ReactionModal
+    setTimeout(() => {
+      setReactionModalVisible(true);
+    }, 150);
+  };
+
+  // Hàm xử lý khi chọn reaction
+  const handleReactionSelected = (emoji) => {
+    console.log('Reaction selected:', emoji, 'for message:', message._id);
+    if (onPressEmoji) {
+      onPressEmoji(message._id, emoji);
+    }
+    // Chỉ đóng reaction modal
+    setReactionModalVisible(false);
+    // Sau khi chọn reaction, nên đóng tất cả để UX tốt hơn
+    setTimeout(() => setMenuPosition(null), 200);
+  };
+
+  // Thêm hàm groupReactions tương tự như trong SenderMessage.js
+
+  // Hàm nhóm các reactions theo loại emoji
+  const groupReactions = () => {
+    if (!message.reactions || message.reactions.length === 0) {
+      return [];
+    }
+    
+    const grouped = {};
+    message.reactions.forEach(reaction => {
+      const type = reaction.type || '👍';
+      if (!grouped[type]) {
+        grouped[type] = {
+          type,
+          count: 0
+        };
+      }
+      grouped[type].count++;
+    });
+    
+    return Object.values(grouped);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.avatarContainer}>
         <CustomAvatar
-  size={36}
-  name={senderName}
-  avatar={sender?.avatar}
-  imageUrl={sender?.avatar} // Thêm imageUrl để đảm bảo hoạt động
-  color={sender?.avatarColor}
-/>
+          size={36}
+          name={senderName}
+          avatar={sender?.avatar}
+          imageUrl={sender?.avatar}
+          color={sender?.avatarColor}
+        />
       </View>
 
       <View style={styles.messageContainer}>
         <Text style={styles.senderName}>{senderName}</Text>
         
-        <TouchableWithoutFeedback onLongPress={handleLongPress}>
+        <TouchableWithoutFeedback onLongPress={handleLongPress} delayLongPress={500}>
           <View style={messageStyle}>
             {isRecalled ? (
               <Text style={styles.recalledText}>{MESSAGE_RECALL_TEXT}</Text>
@@ -502,14 +565,6 @@ function ReceiverMessage({
             )}
             <View style={styles.timeContainer}>
               <Text style={styles.time}>{time}</Text>
-              
-              {isLastMessage && !isDeleted && !isRecalled && (
-                <TouchableOpacity
-                  onPress={() => onLastView && onLastView(_id)}
-                  style={styles.seenButton}>
-                  <Text style={styles.seenText}>Đã xem</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         </TouchableWithoutFeedback>
@@ -518,31 +573,56 @@ function ReceiverMessage({
           <TouchableOpacity
             style={styles.reactContainer}
             onPress={handleShowReactDetails}>
-            <Text style={styles.reactText}>{reactVisibleInfo}</Text>
+            <View style={styles.reactionsRow}>
+              {groupReactions().map((reaction, index) => (
+                <View key={`reaction-${index}`} style={styles.reactionItem}>
+                  <Text style={styles.reactionEmoji}>{reaction.type}</Text>
+                  {reaction.count > 1 && (
+                    <Text style={styles.reactionCount}>{reaction.count}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
           </TouchableOpacity>
         )}
       </View>
       
+      {/* MessageActions */}
       <MessageActions
         visible={showActions}
         onClose={handleCloseActions}
         message={message}
         currentUserId={currentUserId}
         onReply={(msg) => {
-          console.log('ReceiverMessage - onReply được gọi với message:', msg?._id);
           if (typeof onReply === 'function') {
+            // Thực hiện hành động trước
             onReply(msg);
-          } else {
-            console.error('ReceiverMessage - onReply không phải là hàm');
+            // Trì hoãn đóng modal để hành động hoàn thành
+            setTimeout(() => handleCloseActions(), 300);
           }
         }}
-        onSelect={handleCopyText}
-        onPressRecall={null}
+        onSelect={(text) => {
+          handleCopyText(text);
+          // Trì hoãn đóng modal
+          setTimeout(() => handleCloseActions(), 300);
+        }}
         navigation={navigation}
         conversationId={conversationId}
         position={menuPosition}
         showCopyOption={true}
         showRecallOption={false}
+        onShowReactions={handleShowReactions} // Thêm prop này để xử lý nút thêm biểu cảm
+      />
+      
+      {/* MessageReactionModal */}
+      <MessageReactionModal
+        visible={reactionModalVisible}
+        position={{
+          x: menuPosition?.x || 0,
+          y: (menuPosition?.y || 0) + 90 // Hiển thị bên dưới menu actions
+        }}
+        onClose={() => setReactionModalVisible(false)} // Chỉ đóng reaction modal
+        onReactionSelected={handleReactionSelected}
       />
     </View>
   );
@@ -607,16 +687,36 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   reactContainer: {
-    backgroundColor: '#F0F2F5',
-    borderRadius: 10,
-    padding: 4,
+    backgroundColor: 'white',
+    borderRadius: 16,
     paddingHorizontal: 8,
+    paddingVertical: 4,
     alignSelf: 'flex-start',
     marginTop: 4,
     marginLeft: 8,
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
   },
-  reactText: {
+  reactionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 2,
+  },
+  reactionEmoji: {
+    fontSize: 16,
+  },
+  reactionCount: {
     fontSize: 12,
+    color: '#666',
+    marginLeft: 2,
   },
   image: {
     width: 200,

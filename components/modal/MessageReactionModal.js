@@ -1,73 +1,87 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Modal,
   View,
   Text,
-  TouchableWithoutFeedback,
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Dimensions
+  Dimensions,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { REACTIONS } from '../../constants/index';
-import { colors } from '../../styles';
+
+// Import REACTIONS từ constants
+let REACTIONS;
+try {
+  const constants = require('../../constants/index');
+  REACTIONS = constants.REACTIONS;
+} catch (error) {
+  console.warn('Could not import REACTIONS from constants, using fallback');
+  REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+}
 
 const MessageReactionModal = ({ visible, position, onClose, onReactionSelected }) => {
-  const scaleAnim = React.useRef(new Animated.Value(0)).current;
-  const opacityAnim = React.useRef(new Animated.Value(0)).current;
-  
-  React.useEffect(() => {
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
     if (visible) {
-      // Reset animation values first
-      scaleAnim.setValue(0);
-      opacityAnim.setValue(0);
-      
-      // Start animations
+      // Animation khi hiển thị
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
-          friction: 6,
+          friction: 7,
           tension: 40,
-          useNativeDriver: true
+          useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true
-        })
+          useNativeDriver: true,
+        }),
       ]).start();
+    } else {
+      // Reset animations khi đóng
+      scaleAnim.setValue(0);
+      opacityAnim.setValue(0);
     }
   }, [visible, scaleAnim, opacityAnim]);
 
-  // Calculate position based on where the message was pressed
+  // Tính toán vị trí dựa vào điểm nhấn
   const getContainerStyle = () => {
-    if (!position) return { top: 100, left: 20 };
+    if (!position) {
+      return { top: 150, left: 20 };
+    }
     
     const { x, y } = position;
     const { width } = Dimensions.get('window');
     
-    // Đặt reaction bar phía trên vị trí nhấn, cách xa hơn để không che menu chính
-    const top = y - 80;
+    // Cố định kích thước giống với MessageActions
+    const reactionWidth = 210; 
     
-    // Căn giữa theo chiều ngang
-    const reactionBarWidth = REACTIONS.length * 40 + 24; // Ước tính chiều rộng
-    let left = x - (reactionBarWidth / 2);
+    // Đặt ở giữa theo chiều ngang
+    let left = x - (reactionWidth / 2);
     
-    // Điều chỉnh nếu sẽ bị tràn ra ngoài màn hình
+    // Đảm bảo không vượt quá màn hình
     if (left < 10) left = 10;
-    if (left + reactionBarWidth > width - 10) left = width - 10 - reactionBarWidth;
+    if (left + reactionWidth > width - 10) left = width - 10 - reactionWidth;
     
-    return { top, left };
+    return {
+      top: y,
+      left,
+      width: reactionWidth, // Cùng kích thước với MessageActions
+    };
   };
 
   if (!visible) return null;
 
   return (
     <Modal
-      transparent={true}
+      transparent
       visible={visible}
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.modalOverlay}>
@@ -76,21 +90,18 @@ const MessageReactionModal = ({ visible, position, onClose, onReactionSelected }
               styles.reactionsContainer,
               getContainerStyle(),
               {
+                transform: [{ scale: scaleAnim }],
                 opacity: opacityAnim,
-                transform: [{ scale: scaleAnim }]
-              }
+              },
             ]}
           >
-            {REACTIONS.map((reaction, index) => (
+            {REACTIONS.map((emoji, index) => (
               <TouchableOpacity
-                key={index}
+                key={`reaction-${index}`}
                 style={styles.reactionButton}
-                onPress={() => {
-                  onReactionSelected(reaction);
-                  onClose();
-                }}
+                onPress={() => onReactionSelected(emoji)}
               >
-                <Text style={styles.reactionEmoji}>{reaction}</Text>
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
               </TouchableOpacity>
             ))}
           </Animated.View>
@@ -104,29 +115,39 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
-    position: 'relative',
   },
   reactionsContainer: {
     position: 'absolute',
     backgroundColor: 'white',
-    borderRadius: 25,
+    borderRadius: 16, // Cùng bo góc với MessageActions
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6, // Giảm padding để nhỏ gọn hơn
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-    zIndex: 1001, // Đảm bảo hiển thị trên MessageActions
+    height: 46, // Chiều cao cố định để cân đối với MessageActions
   },
   reactionButton: {
-    marginHorizontal: 8,
-    padding: 5,
+    padding: 4,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    minWidth: 30, // Giảm kích thước nút
+    minHeight: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   reactionEmoji: {
-    fontSize: 24,
-  }
+    fontSize: 16, // Giảm kích thước emoji
+    textAlign: 'center',
+  },
 });
 
 export default MessageReactionModal;

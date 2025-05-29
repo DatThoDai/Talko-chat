@@ -445,30 +445,29 @@ const setupSocketEventHandlers = () => {
     console.log('👥 VIDEO CALL PARTICIPANTS UPDATED:', data);
     // Thông báo cập nhật danh sách người tham gia cuộc gọi video
   });
-  
-  // Trong phần setupSocketEventHandlers, thêm listener cho add-reaction
-  socket.on('add-reaction', (data) => {
-    console.log('📢 SOCKET: Reaction event received:', data);
-    if (storeInstance) {
-      const { messageId, user, type, conversationId } = data;
+    // COMMENTED OUT: Duplicate listener - handled in MessageScreen.js instead
+  // socket.on('add-reaction', (data) => {
+  //   console.log('📢 SOCKET: Reaction event received:', data);
+  //   if (storeInstance) {
+  //     const { messageId, user, type, conversationId } = data;
       
-      // Tạo đối tượng reaction đầy đủ để cập nhật UI
-      const reaction = {
-        userId: user._id,
-        userName: user.name || user.username || 'Người dùng',
-        userAvatar: user.avatar || '',
-        userAvatarColor: user.avatarColor || '#1194ff',
-        type: type,
-        createdAt: new Date().toISOString()
-      };
+  //     // Tạo đối tượng reaction đầy đủ để cập nhật UI
+  //     const reaction = {
+  //       userId: user._id,
+  //       userName: user.name || user.username || 'Người dùng',
+  //       userAvatar: user.avatar || '',
+  //       userAvatarColor: user.avatarColor || '#1194ff',
+  //       type: type,
+  //       createdAt: new Date().toISOString()
+  //     };
       
-      // Gửi action để cập nhật Redux store
-      storeInstance.dispatch({
-        type: 'chat/updateMessageReaction',
-        payload: { messageId, reaction }
-      });
-    }
-  });
+  //     // Gửi action để cập nhật Redux store
+  //     storeInstance.dispatch({
+  //       type: 'chat/updateMessageReaction',
+  //       payload: { messageId, reaction }
+  //     });
+  //   }
+  // });
 };
 
 // Try to reconnect to socket server with exponential backoff

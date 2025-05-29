@@ -569,7 +569,7 @@ const conversationApi = {
           createdAt: message.createdAt || message.created_at || message.timestamp || new Date().toISOString(),
           sender: sender,
           isDeleted: message.isDeleted || message.is_deleted || false,
-          reactions: message.reactions || [],
+          reactions: message.reacts || [],
           isMyMessage: isMyMessage,
         };
         

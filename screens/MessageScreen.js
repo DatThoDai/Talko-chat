@@ -447,12 +447,106 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
           });
         }
       };
-      
+        // Define the EMOJI_MAP for reaction conversion
+      const EMOJI_MAP = {
+        1: '👍',
+        2: '❤️',
+        3: '😂',
+        4: '😮',
+        5: '😢',
+        6: '😡'
+      };
+
+      // Handle incoming reaction from socket
+      const handleAddReactionFromSocket = (data) => {
+        console.log('📢 Socket add-reaction received in MessageScreen:', data);
+        
+        const { messageId, user: reactionUser, type, conversationId: reactionConversationId } = data;
+        
+        // Kiểm tra để tránh xử lý reaction của chính mình
+        if (reactionUser._id === (realUserId || user._id)) {
+          console.log('🚫 Skipping own reaction from socket to avoid duplication');
+          return;
+        }
+        
+        // Kiểm tra xem reaction có phải cho cuộc trò chuyện hiện tại không
+        if (reactionConversationId !== conversationId) {
+          console.log('Bỏ qua reaction từ cuộc trò chuyện khác');
+          return;
+        }
+        
+        // Convert numeric type to emoji
+        const emoji = typeof type === 'number' ? EMOJI_MAP[type] || '👍' : type;
+        
+        console.log('🔄 Converting reaction type:', {
+          originalType: type,
+          typeOfType: typeof type,
+          convertedEmoji: emoji
+        });
+        
+        setMessages(prevMessages => {
+          return prevMessages.map(msg => {
+            if (msg._id === messageId) {
+              // Update both reactions and reacts arrays for compatibility
+              const updatedReactions = [...(msg.reactions || [])];
+              const updatedReacts = [...(msg.reacts || [])];
+              
+              // Check if user already has a reaction on this message
+              const existingReactionIndex = updatedReactions.findIndex(
+                r => r.userId === reactionUser._id || (r.user && r.user._id === reactionUser._id)
+              );
+              
+              const newReaction = {
+                user: reactionUser,
+                userId: reactionUser._id,
+                userName: reactionUser.name || reactionUser.username || 'Người dùng',
+                userAvatar: reactionUser.avatar || '',
+                userAvatarColor: reactionUser.avatarColor || '#1194ff',
+                type: emoji,
+                createdAt: new Date().toISOString()
+              };
+              
+              const newReact = {
+                user: reactionUser,
+                type: type,
+                createdAt: new Date().toISOString()
+              };
+              
+              if (existingReactionIndex >= 0) {
+                // Replace existing reaction
+                updatedReactions[existingReactionIndex] = newReaction;
+                updatedReacts[existingReactionIndex] = newReact;
+                console.log('🔄 Updated existing reaction via socket');
+              } else {
+                // Add new reaction
+                updatedReactions.push(newReaction);
+                updatedReacts.push(newReact);
+                console.log('➕ Added new reaction via socket');
+              }
+              
+              console.log('📊 Final reactions for message:', {
+                messageId: msg._id?.substring(0, 8),
+                totalReactions: updatedReactions.length,
+                reactionTypes: updatedReactions.map(r => r.type)
+              });
+              
+              return {
+                ...msg,
+                reactions: updatedReactions,
+                reacts: updatedReacts
+              };
+            }
+            return msg;
+          });
+        });
+      };
+
       const socketInstance = getSocket();
       if (socketInstance) {
         socketInstance.on('delete-message', handleMessageDeleted);
         socketInstance.on('message-deleted', handleMessageDeleted);
         socketInstance.on('new-message', handleNewMessage);
+        socketInstance.on('add-reaction', handleAddReactionFromSocket);
         
         // Chỉ lắng nghe sự kiện ghim/bỏ ghim nếu đây là nhóm trò chuyện
         if (actualIsGroupChat) {
@@ -631,13 +725,13 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       if (socket) {
         socket.on('rename-conversation', handleRenameConversation);
       }
-      
-      // Cleanup socket when unmounting
+        // Cleanup socket when unmounting
       return () => {
         if (socketInstance) {
           socketInstance.off('delete-message', handleMessageDeleted);
           socketInstance.off('message-deleted', handleMessageDeleted);
           socketInstance.off('new-message', handleNewMessage);
+          socketInstance.off('add-reaction', handleAddReactionFromSocket);
           
           // Chỉ hủy lắng nghe các sự kiện ghim nếu đây là nhóm trò chuyện
           if (actualIsGroupChat) {

@@ -510,26 +510,76 @@ function ReceiverMessage({
     setTimeout(() => setMenuPosition(null), 200);
   };
 
-  // Thêm hàm groupReactions tương tự như trong SenderMessage.js
-
-  // Hàm nhóm các reactions theo loại emoji
+  // Thay thế hàm groupReactions hiện tại
   const groupReactions = () => {
-    if (!message.reactions || message.reactions.length === 0) {
-      return [];
-    }
+    // Ưu tiên sử dụng reactions đã được chuẩn hóa, fallback về reacts
+    const reactsArray = message.reactions || message.reacts || [];
+    if (reactsArray.length === 0) return [];
     
-    const grouped = {};
-    message.reactions.forEach(reaction => {
-      const type = reaction.type || '👍';
-      if (!grouped[type]) {
-        grouped[type] = {
-          type,
-          count: 0
-        };
-      }
-      grouped[type].count++;
+    // ✅ BẢNG ÁNH XẠ từ số sang emoji - GIỐNG NHAU KHẮP NƠI
+    const EMOJI_MAP = {
+      1: '👍', // Like
+      2: '❤️', // Love
+      3: '😂', // Laugh
+      4: '😮', // Wow
+      5: '😢', // Sad
+      6: '😡'  // Angry
+    };
+    
+    console.log('🔍 ReceiverMessage - Processing reactions:', {
+      messageId: message._id?.substring(0, 8),
+      hasReactions: !!message.reactions,
+      hasReacts: !!message.reacts,
+      reactsLength: reactsArray.length,
+      firstReactType: reactsArray[0]?.type,
+      firstReactTypeOf: typeof reactsArray[0]?.type
     });
     
+    const grouped = {};
+    reactsArray.forEach((reaction, index) => {
+      let emojiType;
+      
+      // ✅ CHUYỂN ĐỔI từ type số sang emoji
+      if (reaction.type !== undefined && typeof reaction.type === 'number') {
+        emojiType = EMOJI_MAP[reaction.type] || '👍';
+        console.log(`🔄 ReceiverMessage - Converting reaction ${index}: number ${reaction.type} → emoji ${emojiType}`);
+      } else if (reaction.type && typeof reaction.type === 'string') {
+        // ✅ KIỂM TRA nếu type là số dưới dạng string
+        const numericType = parseInt(reaction.type);
+        if (!isNaN(numericType) && EMOJI_MAP[numericType]) {
+          emojiType = EMOJI_MAP[numericType];
+          console.log(`🔄 ReceiverMessage - Converting reaction ${index}: string number "${reaction.type}" → emoji ${emojiType}`);
+        } else {
+          // Nếu đã là emoji string
+          emojiType = reaction.type;
+          console.log(`✅ ReceiverMessage - Using existing emoji ${index}: ${emojiType}`);
+        }
+      } else {
+        // Fallback
+        emojiType = '👍';
+        console.log(`⚠️ ReceiverMessage - Fallback emoji for reaction ${index}: ${emojiType}`);
+      }
+      
+      if (!grouped[emojiType]) {
+        grouped[emojiType] = {
+          type: emojiType,
+          count: 0,
+          users: []
+        };
+      }
+      
+      grouped[emojiType].count++;
+      
+      // Thêm thông tin user
+      const user = reaction.user || {};
+      grouped[emojiType].users.push({
+        id: user._id || reaction.userId,
+        name: user.name || reaction.userName || 'Người dùng',
+        avatar: user.avatar || reaction.userAvatar
+      });
+    });
+    
+    console.log('✅ ReceiverMessage - Final grouped reactions:', Object.keys(grouped));
     return Object.values(grouped);
   };
 

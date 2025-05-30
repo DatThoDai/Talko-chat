@@ -1272,7 +1272,116 @@ const loadVoteDetails = async () => {
       );
     }
   };
-
+const handleSendSticker = async (stickerUrl) => {
+  if (!stickerUrl) {
+    console.error('Invalid sticker URL');
+    return;
+  }
+  
+  console.log('Sending sticker as image:', stickerUrl);
+  
+  // Tạo ID tạm thời cho tin nhắn sticker
+  const tempId = `temp-sticker-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
+  
+  try {
+    // Tạo tin nhắn tạm để hiển thị ngay - GIỐNG NHƯ GỬI ẢNH
+    const tempMessage = {
+      _id: tempId,
+      conversationId: conversationId,
+      type: 'IMAGE', // Đặt type là IMAGE để hiển thị như ảnh
+      fileUrl: stickerUrl, // Sử dụng fileUrl như ảnh
+      content: '', // Để trống content
+      sender: {
+        _id: user._id,
+        name: user.name,
+        avatar: user.avatar
+      },
+      createdAt: new Date().toISOString(),
+      isTemp: true,
+      status: 'sending',
+      isMyMessage: true,
+      forceMyMessage: true,
+    };
+    
+    // Thêm tin nhắn tạm vào danh sách
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    
+    // Cuộn xuống dưới cùng
+    setTimeout(() => scrollToBottom(), 50);
+    
+    // Import messageApi để gửi như file ảnh
+    const messageApiModule = await import('../api/messageApi');
+    const { messageApi } = messageApiModule;
+    
+    // Tạo object file giả từ URL sticker
+    const stickerFile = {
+      uri: stickerUrl,
+      type: 'image/png', // Giả định sticker là PNG
+      name: `sticker_${Date.now()}.png`,
+      isImage: true,
+      size: 0 // Không biết size chính xác
+    };
+    
+    // Gửi sticker như một file ảnh
+    const response = await messageApi.sendFileMessage({
+      file: stickerFile,
+      conversationId: conversationId,
+      type: 'IMAGE'
+    });
+    
+    console.log('Sticker sent successfully:', response);
+    
+    if (response && response.data) {
+      // Đánh dấu ID này là đã xử lý
+      processedMessageIds.add(response.data._id);
+      
+      // Đánh dấu cả fileUrl để tránh trùng lặp
+      const fileUrl = response.data.fileUrl || response.data.url || response.data.mediaUrl;
+      if (fileUrl) {
+        processedMessageIds.add(fileUrl);
+      }
+      
+      // Cập nhật tin nhắn tạm thành tin nhắn chính thức
+      const updatedMessage = {
+        ...response.data,
+        type: 'IMAGE', // Đảm bảo type vẫn là IMAGE
+        fileUrl: response.data.fileUrl || response.data.url || response.data.mediaUrl || stickerUrl,
+        sender: {
+          _id: user._id,
+          name: user.name,
+          avatar: user.avatar
+        },
+        isMyMessage: true,
+        forceMyMessage: true,
+        status: 'sent'
+      };
+      
+      console.log('Updated sticker message:', {
+        id: updatedMessage._id,
+        type: updatedMessage.type,
+        fileUrl: updatedMessage.fileUrl
+      });
+      
+      // Cập nhật tin nhắn trong state
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg._id === tempId ? updatedMessage : msg
+        )
+      );
+    }
+  } catch (error) {
+    console.error('Error sending sticker:', error);
+    
+    // Cập nhật trạng thái tin nhắn thành lỗi
+    setMessages(prevMessages => 
+      prevMessages.map(msg => 
+        msg._id === tempId ? { ...msg, status: 'failed' } : msg
+      )
+    );
+    
+    Alert.alert('Lỗi', 'Không thể gửi sticker. Vui lòng thử lại sau.');
+  }
+};
   // Sửa lại hàm handleSendFileMessage
 const handleSendFileMessage = async (file) => {
   if (!file) return;
@@ -1358,7 +1467,7 @@ const handleSendFileMessage = async (file) => {
       // Đánh dấu ID này là đã xử lý để tránh socket thêm lại
       processedMessageIds.add(response.data._id);
       
-      // Đánh dấu cả fileUrl để tránh trùng lặp
+      // Đánh dấu cả URL để tránh trùng lặp
       const fileUrl = response.data.fileUrl || response.data.url || response.data.mediaUrl;
       if (fileUrl) {
         processedMessageIds.add(fileUrl); // Đánh dấu cả URL
@@ -1936,6 +2045,7 @@ const handleStartVideoCall = () => {
     user?.name ,
     user?.avatar || '',
     actualIsGroupChat
+
   );
   
   // Navigation vào màn hình video call
@@ -2088,6 +2198,7 @@ useEffect(() => {
           <MessageInput 
             conversationId={conversationId}
             onSendMessage={handleSendMessage}
+            onSendSticker={handleSendSticker}
             onSendFile={handleSendFileMessage}
             replyTo={replyMessage.isReply ? replyMessage.message : null}
             onCancelReply={() => setReplyMessage(DEFAULT_REPLY_MESSAGE)}

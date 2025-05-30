@@ -294,6 +294,32 @@ function ReceiverMessage({
     );
   };
 
+  // Thêm hàm renderSticker()
+  const renderSticker = () => {
+    const stickerUrl = message.stickerUrl || message.fileUrl || message.content;
+    
+    if (!stickerUrl) {
+      return <Text style={styles.content}>Sticker không khả dụng</Text>;
+    }
+    
+    return (
+      <TouchableWithoutFeedback
+        onPress={() => {
+          // Có thể thêm xem sticker full size nếu cần
+          console.log('Sticker pressed:', stickerUrl);
+        }}
+      >
+        <Image
+          source={{ uri: stickerUrl }}
+          style={styles.stickerImage}
+          resizeMode="contain"
+          onError={(e) => console.log('Sticker load error:', e.nativeEvent.error)}
+          onLoad={() => console.log('Sticker loaded successfully:', stickerUrl)}
+        />
+      </TouchableWithoutFeedback>
+    );
+  };
+
   // Render appropriate message content based on type
   const renderContent = () => {
     switch (type) {
@@ -305,6 +331,9 @@ function ReceiverMessage({
       
       case messageType.VIDEO:
         return renderVideo();
+      
+      case 'STICKER':
+        return renderSticker();
       
       default:
         return <Text style={styles.content}>{content}</Text>;
@@ -872,6 +901,12 @@ const styles = StyleSheet.create({
     color: '#666',
     flexWrap: 'wrap',
     flexShrink: 1,
+  },
+  stickerImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    marginVertical: 4,
   },
 });
 

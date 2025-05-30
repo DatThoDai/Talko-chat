@@ -23,6 +23,7 @@ const MessageInput = ({
   conversationId, 
   onSendMessage, 
   onSendFile,
+  onSendSticker, // Thêm prop này
   onCancelUpload = () => {},
   replyTo = null,
   onCancelReply = () => {},
@@ -139,6 +140,21 @@ const MessageInput = ({
     onSendFile(file);
   };
 
+  // Thêm hàm xử lý sticker
+  const handleStickerSelected = (stickerUrl) => {
+    console.log('Sticker selected in MessageInput:', stickerUrl);
+    
+    // Đóng emoji picker
+    setShowEmojiPicker(false);
+    
+    // Gửi sticker như một file ảnh
+    if (onSendSticker && typeof onSendSticker === 'function') {
+      onSendSticker(stickerUrl);
+    } else {
+      console.warn('onSendSticker function is not provided to MessageInput');
+    }
+  };
+
   const toggleEmojiPicker = () => {
     Keyboard.dismiss();
     setShowEmojiPicker(prev => !prev);
@@ -178,6 +194,7 @@ const MessageInput = ({
             visible={true} 
             onClose={toggleEmojiPicker}
             onEmojiSelected={handleEmojiSelected}
+            onStickerSelected={handleStickerSelected} // Thêm dòng này
           />
         </View>
       )}

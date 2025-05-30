@@ -13,6 +13,7 @@ import {
   Alert,
   Vibration,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { messageType, MESSAGE_RECALL_TEXT, MESSAGE_DELETE_TEXT } from '../../constants';
 import CustomAvatar from '../CustomAvatar';
@@ -43,7 +44,7 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     currentUserId = '',
     scrollToMessage = null
   } = rest;
-  
+  const {user} = useSelector((state) => state.auth);
   // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const messageContent = message?.content || content;
   const messageTime = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : time;
@@ -218,6 +219,9 @@ const messageReactLength = message?.reacts?.length || message?.reactions?.length
       case messageType.VIDEO:
         // Xử lý video
         return renderVideo();
+      case 'STICKER':
+        // Xử lý sticker
+        return renderSticker();
       default:
         // Kiểm tra nếu là tin nhắn emoji đơn lẻ
         if (message.isOnlyEmoji === true) {
@@ -658,10 +662,10 @@ const messageReactLength = message?.reacts?.length || message?.reactions?.length
       <View style={styles.avatarContainer}>
         <CustomAvatar
           size={36}
-          name={sender?.name || 'Bạn'}
-          avatar={sender?.avatar}
-          imageUrl={sender?.avatar}
-          color={sender?.avatarColor}
+          name={user.name || 'Bạn'}
+          avatar={user.avatar}
+          imageUrl={user.avatar}
+          color={user.avatarColor}
         />
       </View>
       
@@ -1001,6 +1005,12 @@ const styles = StyleSheet.create({
     color: '#666',
     flexWrap: 'wrap',
     flexShrink: 1,
+  },
+  stickerImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    marginVertical: 4,
   },
 });
 

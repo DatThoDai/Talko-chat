@@ -17,15 +17,16 @@ A modern mobile chat application built with React Native, providing a comprehens
 ## 📱 App Interface
 
 ### Login & Registration
-
+<img width="825" height="644" alt="image" src="https://github.com/user-attachments/assets/4ad8ea4f-e53a-4219-9400-0f7c4042573b" />
 
 ### Chat Interface
-
+<img width="721" height="578" alt="image" src="https://github.com/user-attachments/assets/76adcffb-60fd-4813-a480-c3096818f459" />
 
 ### Friends & Profile
-
+<img width="691" height="573" alt="image" src="https://github.com/user-attachments/assets/7d1ea382-d573-4e02-82fd-e5dd3873e6ee" />
 
 ### Video Call
+<img width="787" height="568" alt="image" src="https://github.com/user-attachments/assets/986d452b-ab89-4e1e-8662-fbe4dc344d4d" />
 
 
 ## 🛠️ Technologies Used

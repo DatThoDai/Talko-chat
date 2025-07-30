@@ -1,34 +1,34 @@
 # Talko Chat
 
-Ứng dụng chat di động được phát triển bằng React Native, cung cấp trải nghiệm nhắn tin hiện đại và đầy đủ tính năng.
+A modern mobile chat application built with React Native, providing a comprehensive and feature-rich messaging experience.
 
-## 🚀 Tính năng chính
+## 🚀 Key Features
 
-- **Xác thực người dùng**: Đăng ký, đăng nhập an toàn
-- **Nhắn tin real-time**: Chat trực tiếp với bạn bè
-- **Quản lý bạn bè**: Thêm bạn, gửi lời mời kết bạn
-- **Video call**: Gọi video chất lượng cao
-- **Chia sẻ file**: Gửi hình ảnh, video và tài liệu
-- **Tin nhắn ghim**: Ghim những tin nhắn quan trọng
-- **Emoji và sticker**: Thể hiện cảm xúc phong phú
-- **Voting**: Tạo và tham gia bình chọn
-- **Profile cá nhân**: Quản lý thông tin cá nhân
+- **User Authentication**: Secure registration and login
+- **Real-time Messaging**: Direct chat with friends
+- **Friend Management**: Add friends, send friend requests
+- **Video Calling**: High-quality video calls
+- **File Sharing**: Send images, videos and documents
+- **Pinned Messages**: Pin important messages
+- **Emoji & Stickers**: Express emotions richly
+- **Voting**: Create and participate in polls
+- **Personal Profile**: Manage personal information
 
-## 📱 Giao diện ứng dụng
+## 📱 App Interface
 
-### Đăng nhập & Đăng ký
-
-
-### Giao diện Chat
+### Login & Registration
 
 
-### Bạn bè & Cá nhân
+### Chat Interface
+
+
+### Friends & Profile
 
 
 ### Video Call
 
 
-## 🛠️ Công nghệ sử dụng
+## 🛠️ Technologies Used
 
 - **Frontend**: React Native
 - **State Management**: Redux Toolkit
@@ -37,15 +37,15 @@
 - **Socket**: Socket.io (real-time communication)
 - **Build Tool**: Expo
 
-## 📋 Yêu cầu hệ thống
+## 📋 System Requirements
 
 - Node.js >= 14.x
-- npm hoặc yarn
-- Android Studio (cho Android)
-- Xcode (cho iOS - chỉ trên macOS)
+- npm or yarn
+- Android Studio (for Android)
+- Xcode (for iOS - macOS only)
 - Expo CLI
 
-## 🚀 Cài đặt và chạy
+## 🚀 Installation & Setup
 
 1. **Clone repository**
    ```bash
@@ -53,51 +53,51 @@
    cd Talko-chat
    ```
 
-2. **Cài đặt dependencies**
+2. **Install dependencies**
    ```bash
    npm install
-   # hoặc
+   # or
    yarn install
    ```
 
-3. **Chạy ứng dụng**
+3. **Run the application**
    ```bash
    npm start
-   # hoặc
+   # or
    yarn start
    ```
 
-4. **Chạy trên thiết bị**
-   - **Android**: `npm run android` hoặc `yarn android`
-   - **iOS**: `npm run ios` hoặc `yarn ios`
+4. **Run on device**
+   - **Android**: `npm run android` or `yarn android`
+   - **iOS**: `npm run ios` or `yarn ios`
 
-## 📁 Cấu trúc thư mục
+## 📁 Project Structure
 
 ```
 Talko-chat/
 ├── api/                    # API services
-├── assets/                 # Hình ảnh, âm thanh
-├── components/            # Components tái sử dụng
-├── constants/             # Hằng số
-├── navigations/           # Cấu hình navigation
-├── redux/                 # Redux store và slices
-├── screens/               # Các màn hình
-├── styles/                # Styles chung
+├── assets/                 # Images, sounds
+├── components/            # Reusable components
+├── constants/             # Constants
+├── navigations/           # Navigation configuration
+├── redux/                 # Redux store and slices
+├── screens/               # App screens
+├── styles/                # Global styles
 ├── utils/                 # Utility functions
-├── App.js                 # Component gốc
+├── App.js                 # Root component
 └── package.json           # Dependencies
 ```
 
-## 🔧 Cấu hình
+## 🔧 Configuration
 
 1. **Environment Variables**
-   - Tạo file `.env` trong thư mục gốc
-   - Thêm các biến môi trường cần thiết:
+   - Create `.env` file in root directory
+   - Add necessary environment variables:
    ```env
    API_BASE_URL=your_api_url
    SOCKET_URL=your_socket_url
    ```
 
 2. **API Configuration**
-   - Cấu hình base URL trong `api/axios.js`
-   - Thiết lập authentication headers
+   - Configure base URL in `api/axios.js`
+   - Set up authentication headers

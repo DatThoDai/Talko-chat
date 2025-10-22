@@ -4,7 +4,6 @@ import { colors, spacing } from '../../styles';
 import { messageType } from '../../constants';
 
 const SystemNotificationMessage = ({ message }) => {
-  // Format thông báo từ backend thành thông báo thân thiện
   const formattedContent = formatSystemNotification(message);
 
   return (
@@ -16,21 +15,16 @@ const SystemNotificationMessage = ({ message }) => {
   );
 };
 
-// Hàm formatSystemNotification xử lý các mã thông báo từ server
 const formatSystemNotification = (message) => {
-  // Nếu message không hợp lệ hoặc không có content
   if (!message || !message.content) return 'Thông báo hệ thống';
   
-  // Thông tin cơ bản
   const messageContent = message.content;
   const isNotifyDivider = message.isNotifyDivider || false;
   
-  // Lấy dữ liệu người dùng từ message
   const metadata = message.metadata || {};
   const userId = metadata.currentUserId || '';
   const manipulatedUsers = message.manipulatedUsers || metadata.manipulatedUsers || [];
   
-  // Xử lý theo switch case như trong mẫu
   let content = messageContent;
 
   switch (messageContent) {
@@ -169,12 +163,10 @@ const formatSystemNotification = (message) => {
       break;
   }
 
-  // Điều chỉnh định dạng dựa trên isNotifyDivider
   if (isNotifyDivider) {
     return content.charAt(0).toLocaleLowerCase() + content.slice(1);
   }
 
-  // Loại bỏ các thẻ HTML nếu có
   return content.replace(/<b>/g, '').replace(/<\/b>/g, '');
 };
 

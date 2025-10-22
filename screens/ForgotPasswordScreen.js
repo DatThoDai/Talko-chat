@@ -22,7 +22,6 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Xác thực đầu vào
   const validateEmail = () => {
     if (!email.trim()) {
       setEmailError('Vui lòng nhập email');

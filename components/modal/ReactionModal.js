@@ -16,7 +16,6 @@ import {REACTIONS} from '../../constants/index';
 
 const ReactionModal = ({reactProps, setReactProps}) => {
   const dispatch = useDispatch();
-  // Sửa tên trường từ 'reacts' thành 'reactions' để khớp với MessageScreen
   const {isVisible, messageId, reactions = []} = reactProps || {}; // Thêm fallback khi reactProps là undefined
 
   // Function to close the modal

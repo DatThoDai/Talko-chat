@@ -23,7 +23,6 @@ const ImageViewer = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Xử lý tải xuống ảnh
   const handleDownload = async () => {
     try {
       // Kiểm tra quyền truy cập media library
@@ -56,7 +55,6 @@ const ImageViewer = ({ route, navigation }) => {
     }
   };
 
-  // Xử lý chia sẻ ảnh
   const handleShare = async () => {
     try {
       // Tạo tên file random

@@ -27,41 +27,31 @@ import userService from '../api/userService'; // Đảm bảo import userService
 const ConversationItem = ({ conversation, onPress }) => {
   const { user } = useSelector(state => state.auth);
   
-  // Get the name and avatar for display
   let name = conversation.name;
   let avatarColor = conversation.avatarColor;
   
-  // Xử lý avatar để đảm bảo nó là một chuỗi hợp lệ
   let avatar = "";
   if (conversation.avatar) {
-    // Nếu avatar là mảng, lấy phần tử đầu tiên (nếu có)
     if (Array.isArray(conversation.avatar) && conversation.avatar.length > 0) {
       avatar = typeof conversation.avatar[0] === 'string' ? conversation.avatar[0] : "";
     } 
-    // Nếu avatar là string
     else if (typeof conversation.avatar === 'string') {
       avatar = conversation.avatar;
     }
     
-    // Log để debug
     console.log(`Avatar for ${name}:`, typeof avatar === 'string' ? 'Valid string URL' : 'Invalid format');
   }
   
-  // For individual chats, show the other person's info
   if (!conversation.type && conversation.members && conversation.members.length > 0) {
-    // Find the other member (not current user)
     const otherMember = conversation.members.find(member => member._id !== user._id);
     if (otherMember) {
       name = otherMember.name || 'User';
       avatarColor = otherMember.avatarColor;
       
-      // Xử lý avatar của member
       if (otherMember.avatar) {
-        // Kiểm tra nếu là mảng
         if (Array.isArray(otherMember.avatar) && otherMember.avatar.length > 0) {
           avatar = typeof otherMember.avatar[0] === 'string' ? otherMember.avatar[0] : "";
         } 
-        // Nếu là string
         else if (typeof otherMember.avatar === 'string') {
           avatar = otherMember.avatar;
         }
@@ -69,7 +59,6 @@ const ConversationItem = ({ conversation, onPress }) => {
     }
   }
   
-  // Format the last message
   const getLastMessageText = () => {
     const lastMessage = conversation.lastMessage;
     
@@ -102,7 +91,6 @@ const ConversationItem = ({ conversation, onPress }) => {
     return 'Tin nhắn mới';
   };
   
-  // Format timestamp
   const timestamp = conversation.updatedAt ? formatConversationDate(conversation.updatedAt) : '';
   
   return (
@@ -144,13 +132,11 @@ const ConversationItem = ({ conversation, onPress }) => {
 };
 
 const ConversationsScreen = ({ navigation }) => {
-  // States hiện tại...
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   
-  // Thêm states mới
   const [hasNewMessage, setHasNewMessage] = useState(false);
-  const [processedMessageIds] = useState(new Set());  // Để tránh xử lý trùng lặp
+  const [processedMessageIds] = useState(new Set());
   const [socketConnected, setSocketConnected] = useState(false);
   const [realUserId, setRealUserId] = useState(null);
   
@@ -160,25 +146,14 @@ const ConversationsScreen = ({ navigation }) => {
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // Function to load conversations
-  // Dữ liệu mẫu để phát triển UI trong khi API chưa sẵn sàng
   
   const loadConversations = useCallback(async () => {
     setIsLoading(true);
     try {
       console.log('Fetching conversations...');
       
-      // Trực tiếp xử lý axios fetch bên trong component thay vì qua service
       const response = await conversationApi.fetchConversations({search: searchText});
       
-      /* 
-       * Lưu ý: Dựa vào memory, chúng ta cần hết sức cẩn thận với việc extract response.data
-       * Vì axios.js đã có interceptor trả về response.data,
-       * nên ở đây response chính là data mặc dù API trả về { success, message, data }
-       */
-      
-      // Kiểm tra nếu response là array hoặc object có data property
       const conversationsData = Array.isArray(response) ? response : 
                                (response && response.data ? response.data : []);
       
@@ -192,10 +167,6 @@ const ConversationsScreen = ({ navigation }) => {
     } catch (err) {
       console.error('Error fetching conversations:', err);
       
-      // Luôn sử dụng dữ liệu mẫu cho tất cả các lỗi mạng (404, Network Error, CORS, v.v.)
-      // Điều này giúp phát triển UI/UX khi backend chưa hoàn thiện
-      
-      // Chỉ sử dụng dữ liệu mẫu trong môi trường dev, đặt false khi release
       const useMockData = true;
       
       if (err.response && err.response.status === 404) {
@@ -208,12 +179,10 @@ const ConversationsScreen = ({ navigation }) => {
       }
       
       if (useMockData) {
-        // Sử dụng dữ liệu mẫu để phát triển UI
         setConversations(mockConversations);
         console.log('Using mock data:', mockConversations.length, 'conversations');
-        setError(null); // Không hiển thị lỗi cho người dùng khi dùng mock data
+        setError(null);
       } else {
-        // Trong production mà không dùng mock data, hiển thị lỗi cho người dùng
         console.warn('Production mode - Showing error to user');
         setConversations([]);
         setError(err.message === 'Network Error' 
@@ -226,7 +195,6 @@ const ConversationsScreen = ({ navigation }) => {
     }
   }, [searchText]);
 
-  // Effect to initialize socket - cải thiện từ hiện tại
   useEffect(() => {
     // Cài đặt âm thanh thông báo
     notificationService.setupSound();
@@ -276,7 +244,6 @@ const ConversationsScreen = ({ navigation }) => {
     };
   }, [user?._id]);
 
-  // Đăng ký sự kiện socket cho tin nhắn mới - cải thiện từ hiện tại
   useEffect(() => {
     const socketInstance = getSocket();
     const currentUserId = realUserId || user?._id;
@@ -374,7 +341,6 @@ const ConversationsScreen = ({ navigation }) => {
     }
   }, [realUserId, user?._id, socketConnected]);
   
-  // Thêm useEffect để join vào các conversation khi danh sách thay đổi
   useEffect(() => {
     const socket = getSocket();
     if (socket && socket.connected && conversations?.length > 0) {
@@ -396,31 +362,26 @@ const ConversationsScreen = ({ navigation }) => {
     }, [loadConversations])
   );
   
-  // Handler for refreshing the list
   const handleRefresh = () => {
     setRefreshing(true);
     loadConversations();
   };
   
-  // Handler for conversation item press
   const handleConversationPress = (conversation) => {
-    // Reset thông báo tin nhắn mới khi vào cuộc hội thoại
     setHasNewMessage(false);
     
-    // Reset số lượng tin nhắn chưa đọc cho cuộc trò chuyện này
     setConversations(prevConversations => {
       return prevConversations.map(conv => {
         if (conv._id === conversation._id) {
           return {
             ...conv,
-            unreadCount: 0 // Reset unreadCount
+            unreadCount: 0
           };
         }
         return conv;
       });
     });
     
-    // Điều hướng đến MessageScreen
     navigation.navigate('MessageScreen', {
       conversationId: conversation._id,
       name: conversation.name,
@@ -430,7 +391,6 @@ const ConversationsScreen = ({ navigation }) => {
     });
   };
   
-  // Handler for new conversation button
   const handleNewConversation = () => {
     // Sử dụng đúng tên màn hình đã được đăng ký trong MainStackNavigator
     navigation.navigate('NewConversationScreen');
@@ -443,12 +403,10 @@ const ConversationsScreen = ({ navigation }) => {
         conversation.name.toLowerCase().includes(searchText.toLowerCase())
       );
   
-  // Thêm useEffect để lấy realUserId
   useEffect(() => {
     const fetchRealUserId = async () => {
       if (user && user._id && user._id.includes('@')) {
         try {
-          // Đảm bảo import userService từ '../api/userService'
           const userId = await userService.getUserIdByEmail(user._id);
           if (userId) {
             console.log('🔑 CONV: Found real user ID:', userId);
@@ -463,7 +421,6 @@ const ConversationsScreen = ({ navigation }) => {
     fetchRealUserId();
   }, [user]);
   
-  // Cập nhật phần return trong component để hiển thị thông báo
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

@@ -23,7 +23,6 @@ let fileSelectedCallback = null;
 const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   
-  // Show notification based on platform
   const showNotification = (message) => {
     if (Platform.OS === 'android') {
       ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -32,7 +31,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Check file size
   const checkFileSize = async (uri) => {
     try {
       const fileInfo = await FileSystem.getInfoAsync(uri);
@@ -47,10 +45,8 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Sửa hàm handlePickImage
   const handlePickImage = async () => {
     try {
-      // Xin quyền truy cập thư viện ảnh
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
@@ -109,10 +105,8 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Sửa lại hàm handlePickDocument
   const handlePickDocument = async () => {
     try {
-      // Mở picker để chọn file
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
@@ -222,14 +216,13 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
             fileType = 'FILE';
         }
         
-        // Chuẩn bị thông tin file VỚI FILETYPE
         const fileInfo = {
           uri: result.uri,
           name: result.name,
           type: result.mimeType || 'application/octet-stream',
           size: result.size,
           isFile: true,
-          fileType: fileType  // QUAN TRỌNG: Thêm fileType
+          fileType: fileType
         };
         
         console.log('File được chọn:', fileInfo);
@@ -243,7 +236,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Thêm helper function để xác định MIME type
   const getMimeType = (extension) => {
     const mimeTypes = {
       'pdf': 'application/pdf',
@@ -260,10 +252,8 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
   };
 
-  // Sửa lại hàm handleTakePhoto
   const handleTakePhoto = async () => {
     try {
-      // Xin quyền truy cập camera
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       
       if (status !== 'granted') {
@@ -271,7 +261,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
         return;
       }
       
-      // Mở camera để chụp ảnh
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         quality: 0.8,
@@ -306,7 +295,6 @@ const FileUpload = ({ onFileSelected, isUploading = false, uploadProgress = 0 })
     }
   };
   
-  // Cuối cùng, sửa lại phần return để luôn hiển thị optionsContainer
   return (
     <View style={styles.container}>
       {isUploading ? (

@@ -30,11 +30,9 @@ const LoginScreen = ({ navigation }) => {
   const [loginError, setLoginError] = useState('');
   const dispatch = useDispatch();
 
-  // Xác thực đầu vào
   const validateInputs = () => {
     let isValid = true;
     
-    // Xác thực username (email)
     if (!username.trim()) {
       setUsernameError('Tên đăng nhập là bắt buộc');
       isValid = false;

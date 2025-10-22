@@ -58,7 +58,6 @@ const EmojiPicker = ({ visible, onClose, onEmojiSelected, title = 'Chọn emoji'
     </TouchableOpacity>
   );
   
-  // Để vừa với giao diện nhập tin nhắn, không cần modal
   if (!visible) return null;
   
   return (
@@ -173,7 +172,6 @@ const styles = StyleSheet.create({
   reactionEmoji: {
     fontSize: 18,
   },
-  // Thêm styles mới
   inlineContainer: {
     backgroundColor: colors.white,
     height: 250,

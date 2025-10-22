@@ -8,26 +8,21 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 
 const FileScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('image'); // 'image', 'video', 'file'
+  const [activeTab, setActiveTab] = useState('image');
   
-  // Thêm code debug để xem cấu trúc Redux store
   const store = useStore();
   useEffect(() => {
     const state = store.getState();
     console.log('Redux state keys:', Object.keys(state));
   }, []);
   
-  // Sửa selector để truy cập đúng đường dẫn và xử lý an toàn
   const files = useSelector(state => {
-    // Kiểm tra từng cấp của state để tránh lỗi
     if (!state) return [];
     
-    // Trường hợp 1: files nằm trực tiếp trong state.chat
     if (state.chat?.files) {
       return Array.isArray(state.chat.files) ? state.chat.files : [];
     }
     
-    // Trường hợp 2: files nằm trong state.message
     if (state.message?.files) {
       return Array.isArray(state.message.files) ? state.message.files : [];
     }
@@ -36,17 +31,14 @@ const FileScreen = ({ navigation }) => {
     return [];
   });
   
-  // Tương tự cho loading
   const loading = useSelector(state => 
     state?.chat?.loading || state?.message?.loading || false
   );
   
-  // Cập nhật phương thức lọc files
   const imageFiles = files.filter(file => file.type === 'IMAGE');
   const videoFiles = files.filter(file => file.type === 'VIDEO');
   const docFiles = files.filter(file => file.type === 'FILE');
 
-  // Debug để xác nhận số lượng files trong từng loại
   useEffect(() => {
     console.log('Total files:', files.length);
     console.log('Images:', imageFiles.length);
@@ -65,7 +57,6 @@ const FileScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
   
-  // Cập nhật renderImageItem
   const renderImageItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.imageContainer}
@@ -81,7 +72,6 @@ const FileScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
   
-  // Cập nhật renderVideoItem
   const renderVideoItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.videoContainer}
@@ -187,7 +177,6 @@ const FileScreen = ({ navigation }) => {
     );
   };
   
-  // Sửa renderContent để thêm key cho mỗi FlatList
   const renderContent = () => {
     if (loading) {
       return (

@@ -54,19 +54,15 @@ const FriendSuggestionsScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [sentRequests, setSentRequests] = useState([]);
   
-  // Load gợi ý kết bạn và danh sách lời mời đã gửi
   const loadSuggestions = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Lấy gợi ý kết bạn
       const suggestionResponse = await friendApi.fetchFriendSuggests();
       setSuggestedUsers(suggestionResponse.data || []);
       
-      // Lấy danh sách lời mời đã gửi
       const sentResponse = await friendApi.fetchMyFriendRequests();
       
-      // Lưu ID của người dùng đã nhận lời mời
       const requestIds = sentResponse.data.map(request => request.receiver._id);
       setSentRequests(requestIds);
     } catch (error) {
@@ -77,17 +73,14 @@ const FriendSuggestionsScreen = ({ navigation }) => {
     }
   }, []);
   
-  // Load gợi ý khi mở màn hình
   useEffect(() => {
     loadSuggestions();
   }, [loadSuggestions]);
   
-  // Kiểm tra xem đã gửi lời mời cho người dùng nào chưa
   const isRequestSentToUser = useCallback((userId) => {
     return sentRequests.includes(userId);
   }, [sentRequests]);
   
-  // Tìm kiếm người dùng
   const handleSearch = useCallback(async () => {
     if (!searchText.trim()) {
       return;
@@ -96,7 +89,6 @@ const FriendSuggestionsScreen = ({ navigation }) => {
     setIsSearching(true);
     
     try {
-      // Sử dụng userService thay vì userApi để tìm kiếm người dùng
       const response = await userService.searchUsers(searchText);
       console.log('Kết quả tìm kiếm:', response);
       
@@ -114,10 +106,8 @@ const FriendSuggestionsScreen = ({ navigation }) => {
     }
   }, [searchText]);
   
-  // Gửi lời mời kết bạn
   const handleSendRequest = useCallback(async (user) => {
     try {
-      // Đảm bảo user có _id
       if (!user || !user._id) {
         console.error('User object invalid:', user);
         Alert.alert('Lỗi', 'Thông tin người dùng không hợp lệ');

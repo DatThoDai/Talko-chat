@@ -21,15 +21,11 @@ export const conversationApi = conversation;
 // Dùng để không phải sửa hết tất cả các imports trong các file khác
 export const conversationService = conversation;
 export const friendService = {
-  // Thay thế các functions của friendService bằng các hàm tương ứng trong userService
   getFriends: userService.getFriends,
   getFriendRequests: userService.getFriendRequests,
   addFriend: userService.addFriend,
   acceptFriend: userService.acceptFriend
 };
-
-// Thêm lối tắt để sử dụng trong các file khác
-// Đảm bảo các biến đã được định nghĩa trước khi tạo object
 export default {
   auth: auth,
   user: user,

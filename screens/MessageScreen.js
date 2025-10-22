@@ -45,24 +45,15 @@ import { conversationApi, conversationService } from '../api';
 import userUtils from '../utils/userUtils';
 import { userService } from '../api/userService';
 import { messageApi } from '../api/messageApi';
-// Thêm import VoteMessage vào đầu file
 import VoteMessage from '../components/message/VoteMessage';
-// Thêm import này vào đầu file
 import voteApi from '../api/voteApi';
 import socketService from '../utils/socketService';
 import pinMessagesApi from '../api/pinMessagesApi';
-// Thêm vào đầu file
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { REACTIONS } from '../constants/index';
 import SystemNotificationMessage from '../components/message/SystemNotificationMessage';
-// Thêm imports
-// import { 
-//   bulkCacheNotificationUsers,
-//   cacheNotificationUser
-// } from '../redux/chatSlice';
-// Thêm import
 import IncomingCallModal from '../components/modal/IncomingCallModal';
-// Constants for default values - matching zelo_mobile implementation
+
 const DEFAULT_MESSAGE_MODAL_VISIBLE = {
   isVisible: false,
   isRecall: false,
@@ -101,26 +92,21 @@ const DEFAULT_STICKER_BOARD = {
 const DEFAULT_PAGE = 0;
 const DEFAULT_PAGE_SIZE = 30;
 
-// Add message recall text constant
 const MESSAGE_RECALL_TEXT = 'Tin nhắn đã được thu hồi';
 
 const MessageScreen = ({navigation, route}) => {
-  // Props and Redux state
   const {conversationId, conversationName: initialConversationName, participants, avatar, avatarColor, isGroupChat} = route.params || {};
   const {user} = useSelector((state) => state.auth);
   const {keyboardHeight} = useSelector((state) => state.global || {keyboardHeight: 0});
 
-  // Thêm đoạn này để hiện debug log
   useEffect(() => {
     console.log('MessageScreen route params:', route.params);
     console.log('isGroup from route:', route.params?.isGroup);
     console.log('isGroupChat from route:', isGroupChat);
   }, []);
 
-  // Tạo biến để xác định đúng loại cuộc trò chuyện
   const actualIsGroupChat = isGroupChat || route.params?.isGroup || false;
 
-  // State variables
   const [page, setPage] = useState(DEFAULT_PAGE);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [modalVisible, setModalVisible] = useState(DEFAULT_MESSAGE_MODAL_VISIBLE);
@@ -135,20 +121,16 @@ const MessageScreen = ({navigation, route}) => {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [typingUsers, setTypingUsers] = useState({});
   
-  // State để kiểm soát việc cuộn tin nhắn tự động
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [userScrolled, setUserScrolled] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   
-  // State cho việc upload file
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUploadingFile, setCurrentUploadingFile] = useState(null);
 
-  // Thêm state mới để lưu trữ userId thực
   const [realUserId, setRealUserId] = useState(null);
 
-  // Thêm vào đầu component MessageScreen trong phần khai báo state
   const [incomingCall, setIncomingCall] = useState({
     visible: false,
     caller: null,
@@ -156,14 +138,10 @@ const MessageScreen = ({navigation, route}) => {
 
   const dispatch = useDispatch(); 
 
-
-  // References
   const flatListRef = useRef(null);
 
-  // Tạo một Set để theo dõi ID tin nhắn đã xử lý
   const [processedMessageIds] = useState(new Set());
 
-  // Add state for conversation name
   const [conversationName, setConversationName] = useState(initialConversationName);
   const isFocused = useIsFocused();
 
@@ -172,13 +150,11 @@ const MessageScreen = ({navigation, route}) => {
       setConversationName(route.params.conversationName);
     }
   }, [route.params?.conversationName, isFocused]);
-  // Thêm vào sau phần khai báo state, trước các useEffect
+
   const currentUserId = realUserId || user?._id;
 
-  // Phương thức cuộn đến tin nhắn mới nhất ở dưới cùng - cải tiến để không tự động nhảy
   const scrollToBottom = (animated = false, force = false) => {
     if (flatListRef.current && messages.length > 0) {
-      // Chỉ cuộn xuống nếu có force=true hoặc người dùng chưa scroll lên trên
       if (force || shouldAutoScroll) {
         requestAnimationFrame(() => {
           flatListRef.current.scrollToEnd({animated});
@@ -190,21 +166,16 @@ const MessageScreen = ({navigation, route}) => {
     }
   };
   
-  // Xử lý sự kiện scroll của người dùng
   const handleScroll = (event) => {
-    // Lấy thông tin vị trí scroll hiện tại
     const offsetY = event.nativeEvent.contentOffset.y;
     const contentHeight = event.nativeEvent.contentSize.height;
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
     
-    // Tính toán xem có đang ở cuối cùng hay không (với ngưỡng 20px)
     const atBottom = contentHeight <= layoutHeight || 
                    offsetY + layoutHeight >= contentHeight - 20;
                     
-    // Đánh dấu là người dùng đã scroll
     setUserScrolled(true);
     
-    // Nếu đang ở cuối cùng, bật lại auto-scroll
     if (atBottom) {
       setShouldAutoScroll(true);
       setIsAtBottom(true);
@@ -214,16 +185,13 @@ const MessageScreen = ({navigation, route}) => {
     }
   };
   
-  // Hàm thử lại gửi tin nhắn khi gặp lỗi
   const handleRetryMessage = (failedMessage) => {
     if (!failedMessage || !failedMessage.isTemp) return;
     
-    // Cập nhật trạng thái tin nhắn thành đang gửi lại
     setMessages(prev => 
       prev.map(msg => msg._id === failedMessage._id ? {...msg, status: 'sending'} : msg)
     );
     
-    // Tạo dữ liệu gửi lại
     const messageData = {
       conversationId,
       content: failedMessage.content,
@@ -231,13 +199,11 @@ const MessageScreen = ({navigation, route}) => {
       tempId: failedMessage._id
     };
     
-    // Gửi lại tin nhắn
     console.log('Gửi lại tin nhắn:', failedMessage.content);
     conversationService.sendTextMessage(messageData)
       .then(response => {
         console.log('Gửi lại tin nhắn thành công:', response);
         if (response && response.data) {
-          // Cập nhật tin nhắn trong danh sách
           setMessages(prev => 
             prev.map(msg => 
               msg._id === failedMessage._id 
@@ -249,41 +215,31 @@ const MessageScreen = ({navigation, route}) => {
       })
       .catch(error => {
         console.error('Lỗi khi gửi lại tin nhắn:', error);
-        // Đổi trạng thái lại thành lỗi
         setMessages(prev => 
           prev.map(msg => msg._id === failedMessage._id ? {...msg, status: 'failed'} : msg)
         );
       });
   };
 
-  // Setup socket connection when conversation changes
   useEffect(() => {
     if (conversationId && user?._id) {
-      // Initialize socket connection
-      
       initiateSocket(user?._id, conversationId);
       
-      // Load initial messages
       loadMessages();
       
-      // Chỉ tải tin nhắn ghim nếu là nhóm trò chuyện
-      // Xác định loại cuộc trò chuyện từ actualIsGroupChat đã được thiết lập ở trên
       if (actualIsGroupChat) {
         console.log('Loading pinned messages for group chat');
         fetchPinnedMessages();
       } else {
         console.log('Skipping pinned messages for private chat');
-        // Đặt pinnedMessages thành mảng rỗng cho cuộc trò chuyện đơn
         setPinnedMessages([]);
       }
       
-      // Setup socket event listener for real-time message deletion
       const handleMessageDeleted = (data) => {
         const messageId = data.messageId || data.id;
         
         console.log('Socket delete event received in MessageScreen:', messageId);
         if (messageId) {
-          // Filter out the deleted message from state
           setMessages(prevMessages => 
             prevMessages.filter(msg => msg._id !== messageId)
           );
@@ -295,32 +251,25 @@ const MessageScreen = ({navigation, route}) => {
         
         if (msgConversationId === conversationId) {
           setMessages(prevMessages => {
-            // 1. Kiểm tra ID đã xử lý
             if (processedMessageIds.has(message._id)) {
               console.log('Message already in processedIds, skipping:', message._id);
               return prevMessages;
             }
             
-            // 2. THÊM: Kiểm tra nếu tin nhắn này là của chính người dùng hiện tại
             const isOwnMessage = message.sender?._id === user?._id || 
                                 message.sender?._id === realUserId;
             
-            // 3. Kiểm tra tin nhắn tạm thời đã được gửi thành công
 const matchingTempMessage = prevMessages.find(msg => {
-  // Nếu là tin nhắn văn bản, so sánh content
   if (message.type === 'TEXT' && msg.content === message.content) {
     return Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 30000;
   }
   
-  // NẾU TIN NHẮN DẠNG FILE - so sánh URL hoặc mediaUrl
   if ((message.type === 'IMAGE' || message.type === 'FILE' || message.type === 'VIDEO') && 
       (msg.type === message.type)) {
     
-    // So sánh fileUrl/url/mediaUrl từ cả hai phía
     const msgUrl = msg.fileUrl || msg.url || msg.mediaUrl || '';
     const newMsgUrl = message.fileUrl || message.url || message.mediaUrl || '';
     
-    // So sánh phần cuối của URL (vì đôi khi URL đầy đủ sẽ khác nhau)
     const msgUrlEnd = msgUrl.split('/').pop();
     const newMsgUrlEnd = newMsgUrl.split('/').pop();
     
@@ -330,7 +279,6 @@ const matchingTempMessage = prevMessages.find(msg => {
       match: msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== ''
     });
     
-    // Nếu tên file giống nhau hoặc thời gian gửi gần nhau -> đây là tin nhắn trùng lặp
     return (msgUrlEnd === newMsgUrlEnd && msgUrlEnd !== '') || 
            (Math.abs(new Date(msg.createdAt) - new Date(message.createdAt)) < 20000);
   }
@@ -340,16 +288,12 @@ const matchingTempMessage = prevMessages.find(msg => {
             
             if (matchingTempMessage) {
               console.log('Found matching temp message, skipping socket message');
-              // Đánh dấu ID này để không xử lý nữa
               processedMessageIds.add(message._id);
               return prevMessages;
             }
             
-            // Kiểm tra tin nhắn trùng lặp như cũ
             const exists = prevMessages.some(msg => {
-              // Logic hiện tại của bạn
               if (msg._id === message._id) return true;
-              // ...
             });
             
             if (exists) {
@@ -357,19 +301,14 @@ const matchingTempMessage = prevMessages.find(msg => {
               return prevMessages;
             }
             
-            // Xử lý thông tin người gửi
             let enhancedMessage = {...message};
             
-            // 4. QUAN TRỌNG: Đảm bảo tin nhắn từ socket luôn có sender đầy đủ
-if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.sender.name) {
-  // Xác định ID người gửi từ nhiều nguồn có thể
-  const senderId = enhancedMessage.sender?._id || enhancedMessage.userId || enhancedMessage.user?._id;
+            if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.sender.name) {
+              const senderId = enhancedMessage.sender?._id || enhancedMessage.userId || enhancedMessage.user?._id;
   
-  // Tìm thông tin người gửi từ danh sách participants
   const senderInfo = participants?.find(p => p._id === senderId);
   
   if (senderInfo) {
-    // Nếu tìm thấy trong participants, sử dụng thông tin từ đó
     console.log(`Found sender info for ${senderId} in participants:`, senderInfo.name);
     enhancedMessage.sender = {
       _id: senderId,
@@ -378,7 +317,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       avatarColor: senderInfo.avatarColor || '#1194ff'
     };
   } else if (isOwnMessage) {
-    // Nếu là tin nhắn của người dùng hiện tại
     enhancedMessage.sender = {
       _id: user._id,
       name: user.name || user.username || 'Bạn',
@@ -386,27 +324,22 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       avatarColor: user.avatarColor || '#1194ff'
     };
   } else if (senderId && senderId !== 'unknown') {
-    // Set temporary name
     enhancedMessage.sender = {
       _id: senderId,
-      name: 'Đang tải...',  // Thay vì "Người dùng khác"
+      name: 'Đang tải...',
       avatar: '',
     };
     
-    // Fetch real user info without blocking (async)
     setTimeout(async () => {
       try {
-        // Sử dụng searchByUsername thay vì getUserById
         const userResponse = await userService.getUserById(senderId);
         
         if (userResponse && userResponse.data) {
-          // Trích xuất dữ liệu người dùng
           const userData = Array.isArray(userResponse.data) ? userResponse.data[0] : userResponse.data;
           
           if (userData) {
             console.log(`Found user info for ${senderId}:`, userData.name);
             
-            // Cập nhật tin nhắn với thông tin đầy đủ từ API
             setMessages(prevMsgs => 
               prevMsgs.map(msg => 
                 msg._id === enhancedMessage._id ? {
@@ -464,19 +397,15 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         }
       }
       
-      // Thêm lắng nghe sự kiện new-user-call
       const handleIncomingCall = async (data) => {
         console.log('Có người gọi vào với peerId:', data.peerId);
         
-        // Kiểm tra xem cuộc gọi này có phải cho đoạn chat hiện tại không
         if (data.conversationId !== conversationId) {
           console.log('Bỏ qua thông báo cuộc gọi từ đoạn chat khác:', data.conversationId);
           return;
         }
         
-        // Nếu người gọi không phải là mình
         if (data.newUserId !== user._id && data.newUserId !== realUserId) {
-          // Tạo thông tin người gọi tạm thời để hiển thị ngay
           let callerInfo = {
             _id: data.newUserId,
             name: 'Đang tải...',
@@ -484,7 +413,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             avatarColor: colors.primary
           };
           
-          // Hiển thị modal cuộc gọi đến với thông tin tạm thời trước
           setIncomingCall({
             visible: true,
             caller: callerInfo,
@@ -492,11 +420,9 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             conversationId: data.conversationId
           });
           
-          // Tìm thông tin người gọi từ danh sách participants
           const participantInfo = participants?.find(p => p._id === data.newUserId);
           
           if (participantInfo) {
-            // Nếu tìm thấy trong participants, cập nhật ngay
             callerInfo = {
               _id: data.newUserId,
               name: participantInfo.name || 'Người dùng',
@@ -504,13 +430,11 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
               avatarColor: participantInfo.avatarColor || colors.primary
             };
             
-            // Cập nhật lại modal với thông tin đầy đủ
             setIncomingCall(prev => ({
               ...prev,
               caller: callerInfo
             }));
           } else {
-            // Nếu không tìm thấy trong participants, gọi API
             try {
               const response = await userService.getUserById(data.newUserId);
               
@@ -523,7 +447,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
                   avatarColor: userData.avatarColor || colors.primary
                 };
                 
-                // Cập nhật lại modal với thông tin từ API
                 setIncomingCall(prev => ({
                   ...prev,
                   caller: callerInfo
@@ -536,19 +459,15 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         }
       };
       
-      // Đăng ký lắng nghe sự kiện cuộc gọi đến
       socketService.on('incoming-video-call', (data) => {
         console.log('📹 INCOMING VIDEO CALL:', data);
         
-        // Kiểm tra xem cuộc gọi này có phải cho đoạn chat hiện tại không
         if (data.conversationId !== conversationId) {
           console.log('Bỏ qua thông báo cuộc gọi từ đoạn chat khác:', data.conversationId);
           return;
         }
         
-        // Nếu người gọi không phải là mình
         if (data.caller && data.caller.userId !== user._id && data.caller.userId !== realUserId) {
-          // Tạo thông tin người gọi từ dữ liệu nhận được
           let callerInfo = {
             _id: data.caller.userId,
             name: data.caller.name || 'Người gọi',
@@ -556,7 +475,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             avatarColor: colors.primary
           };
           
-          // Hiển thị modal cuộc gọi đến
           setIncomingCall({
             visible: true,
             caller: callerInfo,
@@ -587,10 +505,10 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             conversationName={actualName}
             avatar={actualAvatar}
             avatarColor={actualAvatarColor}
-            isGroup={isGroupConversation} // Thêm prop này
+            isGroup={isGroupConversation}
             onBack={() => navigation.goBack()}
             onPress={() => handleGoToOptionScreen()}
-            onVideoCall={handleStartVideoCall} // Thêm dòng này
+            onVideoCall={handleStartVideoCall}
           />
         ),
         headerTitle: () => null,
@@ -601,13 +519,10 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       const handleRenameConversation = (conversationId, newName, message) => {
         console.log(`Conversation ${conversationId} renamed to ${newName}`);
         if (conversationId === route.params.conversationId) {
-          // Update the conversation name in state
           setConversationName(newName);
           
-          // Update the navigation parameters
           navigation.setParams({ conversationName: newName });
           
-          // Add the notification message to the messages list if provided
           if (message) {
             const newNotifyMessage = {
               ...message,
@@ -616,7 +531,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
             };
             
             setMessages(prevMessages => {
-              // Check if the message already exists to avoid duplicates
               if (!prevMessages.some(msg => msg._id === message._id)) {
                 return [newNotifyMessage, ...prevMessages];
               }
@@ -626,20 +540,17 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         }
       };
       
-      // Subscribe to rename-conversation event
       const socket = getSocket();
       if (socket) {
         socket.on('rename-conversation', handleRenameConversation);
       }
       
-      // Cleanup socket when unmounting
       return () => {
         if (socketInstance) {
           socketInstance.off('delete-message', handleMessageDeleted);
           socketInstance.off('message-deleted', handleMessageDeleted);
           socketInstance.off('new-message', handleNewMessage);
           
-          // Chỉ hủy lắng nghe các sự kiện ghim nếu đây là nhóm trò chuyện
           if (actualIsGroupChat) {
             socketInstance.off('action-pin-message');
           }
@@ -650,25 +561,20 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
           leaveConversation(conversationId);
         }
         
-        // Remove the rename-conversation event listener
         if (socket) {
           socket.off('rename-conversation', handleRenameConversation);
         }
         
-        // Clean up
         socketService.off('new-user-call', handleIncomingCall);
-        socketService.off('incoming-video-call'); // Thêm dòng này
+        socketService.off('incoming-video-call');
       };
     }
   }, [conversationId, user?._id, route.params.conversationId]);
 
-  // Thêm useEffect để fetch userId thực từ email khi component mount
   useEffect(() => {
     const fetchRealUserId = async () => {
-      // Kiểm tra xem user._id có phải là email không
       if (user && user._id && user._id.includes('@')) {
         try {
-          // Gọi API để lấy userId thực từ email
           const userId = await userService.getUserIdByEmail(user._id);
           
           if (userId) {
@@ -684,7 +590,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     fetchRealUserId();
   }, [user]);
 
-  // Handle back button
   useEffect(() => {
     const backAction = () => {
       handleGoBack();
@@ -699,7 +604,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     return () => backHandler.remove();
   }, []);
 
-  // Handle go back
   const handleGoBack = () => {
     try {
       if (navigation.canGoBack()) {
@@ -711,9 +615,7 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     return true;
   };
 
-  // Handle navigation to conversation details
   const handleGoToOptionScreen = () => {
-    // Kiểm tra xem có là nhóm không bằng nhiều nguồn
     const isGroup = isGroupChat || route.params?.isGroup || actualIsGroupChat || false;
     
     console.log('Navigating to options with params:', {
@@ -723,7 +625,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       isGroupChat: isGroup
     });
     
-    // Sử dụng navigate thay vì push để tránh stack navigation
     navigation.navigate('ConversationOptionsScreen', {
       conversationId,
       name: conversationName,
@@ -734,19 +635,14 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     });
   };
 
-  // Handle reply to message - hỗ trợ cả ID và đối tượng tin nhắn đầy đủ
   const handleOnReplyMessagePress = messageParam => {
     console.log('handleOnReplyMessagePress called with param type:', typeof messageParam);
     
-    // Xử lý trường hợp messageParam là một đối tượng tin nhắn đầy đủ
     if (typeof messageParam === 'object' && messageParam !== null && messageParam._id) {
       console.log('Message object passed directly:', messageParam._id);
       
-      // Kiểm tra xem tin nhắn này đã có trong state messages chưa
       const existingMessage = messages.find(msg => msg._id === messageParam._id);
       
-      // Nếu tin nhắn đã có trong state, sử dụng phiên bản từ state
-      // Nếu không, sử dụng đối tượng được truyền vào
       const finalMessage = existingMessage || messageParam;
       
       console.log('Setting reply message with content:', finalMessage.content?.substring(0, 20));
@@ -756,7 +652,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       });
       console.log('Reply message set from object, isReply:', true);
     } 
-    // Xử lý trường hợp messageParam là ID (chuỗi)
     else {
       const messageId = messageParam;
       console.log('Looking for message with ID:', messageId);
@@ -769,7 +664,6 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
           isReply: true,
           message: messageToReply,
         });
-        // Thêm log để xác nhận replyMessage đã được cập nhật
         console.log('Reply message set from ID, isReply:', true);
       } else {
         console.error('Could not find message with ID:', messageId);
@@ -777,24 +671,19 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     }
   };
 
-  // Load messages with improved scrolling
   const loadMessages = async (refresh = false) => {
     if (loading && !refresh) return;
     
     try {
-      // Show loading indicator
       setLoading(true);
       
-      // Reset messages if refreshing
       if (refresh) {
         setPage(0);
         setMessages([]);
       }
       
-      // Set user ID for message API request
       const currentUserId = user?._id;
       
-      // Fetch messages from API
       console.log(`Loading messages for conversation ${conversationId}, page ${page}, size ${DEFAULT_PAGE_SIZE}`);
       const response = await conversationService.getMessages(
         conversationId,
@@ -804,9 +693,7 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
       );
       
       if (response && response.data) {
-        // Process message data after fetching
         let messageData = response.data.map(msg => {
-          // Convert replyMessage from backend to replyToMessage for frontend if needed
           if (msg.replyMessage && 
               msg.replyMessage._id && 
               typeof msg.replyMessage._id === 'string' && 
@@ -859,27 +746,20 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
         );
         
         if (refresh) {
-          // Xóa tin nhắn cũ và tải mới
           setMessages(messageData);
         } else if (Array.isArray(messages)) {
-          // Thêm tin nhắn mới vào cuối danh sách hiện tại
           setMessages(prevMessages => [...prevMessages, ...messageData]);
         } else {
-          // Nếu messages hiện tại không phải là một mảng
           console.warn('Current messages is not an array, resetting to new data');
           setMessages(messageData);
         }
         
-        // Chỉ cho tải thêm nếu có đủ tin nhắn theo kích thước trang
         const hasMore = Array.isArray(messageData) && messageData.length === DEFAULT_PAGE_SIZE;
         setHasMoreMessages(hasMore);
-        setPage(page + 1); // Tăng page lên 1 để lần sau load tin nhắn tiếp theo
+        setPage(page + 1);
         
-        // Force scroll to bottom on initial load only
         if (page === 0) {
-          // Use a slightly longer delay to ensure rendering is complete
           setTimeout(() => {
-            // Reset user scroll state since this is a fresh load
             setUserScrolled(false);
             setShouldAutoScroll(true);
             scrollToBottom(true, true);
@@ -899,38 +779,30 @@ if (!enhancedMessage.sender || !enhancedMessage.sender._id || !enhancedMessage.s
     }
   };
 
-  // Sửa hàm loadVoteDetails trong MessageScreen.js
 const loadVoteDetails = async () => {
   try {
-    // Lọc ra các tin nhắn kiểu VOTE
     const voteMessages = messages.filter(msg => msg.type === 'VOTE');
     
     if (voteMessages.length === 0) return;
     
     console.log(`Loading details for ${voteMessages.length} vote messages`);
     
-    // Gọi API để lấy thông tin chi tiết của các vote
     const response = await voteApi.getVotesByConversationId(conversationId);
     
-    // In ra để debug cấu trúc dữ liệu
     console.log('Vote API response structure:', 
       response ? 
       `data: ${typeof response.data}, isArray: ${Array.isArray(response.data)}` : 
       'undefined');
     
-    // Xử lý nhiều kiểu cấu trúc dữ liệu có thể có
     let voteDetailsArray = [];
     
     if (response && response.data) {
-      // Kiểm tra xem response.data có phải là mảng không
       if (Array.isArray(response.data)) {
         voteDetailsArray = response.data;
       }
-      // Kiểm tra xem response.data.data có phải là mảng không
       else if (response.data.data && Array.isArray(response.data.data)) {
         voteDetailsArray = response.data.data;
       }
-      // Nếu response.data là object với thuộc tính _id, đó có thể là một vote duy nhất
       else if (typeof response.data === 'object' && response.data._id) {
         voteDetailsArray = [response.data];
       }
@@ -938,11 +810,9 @@ const loadVoteDetails = async () => {
       console.log('Vote details processed:', voteDetailsArray.length || 0);
       
       if (voteDetailsArray.length > 0) {
-        // Cập nhật tin nhắn vote trong state với thông tin chi tiết
         setMessages(prevMessages => 
           prevMessages.map(msg => {
             if (msg.type === 'VOTE') {
-              // Tìm thông tin chi tiết cho vote này
               const voteDetail = voteDetailsArray.find(v => v._id === msg._id);
               
               if (voteDetail) {
@@ -964,17 +834,14 @@ const loadVoteDetails = async () => {
   }
 };
 
-  // Load more messages khi kéo lên trên cùng (lịch sử tin nhắn cũ hơn)
   const goToNextPage = () => {
     if (loading || !hasMoreMessages) return;
     
     console.log('Loading older messages...');
-    // Không tự động cuộn sau khi load tin nhắn cũ hơn
     const nextPage = page + 1;
     loadMessages();
   };
 
-  // Handle showing last viewers
   const handleShowLastView = async messageId => {
     try {
       const response = await conversationService.getLastViewers(conversationId, messageId);
@@ -984,12 +851,10 @@ const loadVoteDetails = async () => {
     }
   };
 
-  // Handle sending a message
   const handleSendMessage = async (content) => {
     if (!content || !content.trim()) return;
 
     try {
-      // Create unique temporary ID for the message
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
       
       // Format display name from email if needed
@@ -1022,56 +887,46 @@ const loadVoteDetails = async () => {
         conversationId: conversationId,
         createdAt: new Date().toISOString(),
         sender: {
-          _id: user?._id,  // Đảm bảo có _id
+          _id: user?._id,
           name: user?.name || user?.username || 'Bạn',
           avatar: user?.avatar || ''
         },
         isTemp: true,
         isMyMessage: true,
-        forceMyMessage: true, // Đảm bảo flag này được thiết lập
+        forceMyMessage: true,
         status: 'sending',
       };
 
-      // Add reply information if this is a reply message
       if (replyMessage.isReply && replyMessage.message) {
         tempMessage.replyToMessage = replyMessage.message;
         tempMessage.replyToId = replyMessage.message._id;
       }
       
-      // Add temporary message to the messages list for immediate display
       setMessages((prevMessages) => [...prevMessages, tempMessage]);
       
-      // Reset reply state if needed
       if (replyMessage.isReply) {
         setReplyMessage(DEFAULT_REPLY_MESSAGE);
       }
       
-      // Cuộn xuống dưới cùng ngay lập tức
       setTimeout(() => scrollToBottom(), 50);
       
-      // Send the actual message to the server
       const messageData = {
         conversationId: conversationId,
         content: content.trim(),
-        type: 'TEXT', // Explicitly set the type for the server
-        tempId: tempId, // Include the temp ID for tracking
+        type: 'TEXT',
+        tempId: tempId,
         replyToId: replyMessage.isReply ? replyMessage.message._id : null,
       };
       
-      // Call the API to send the message
       console.log(`Sending message (tempId: ${tempId}):`, content.trim());
       const response = await conversationService.sendTextMessage(messageData);
       
-      // Handle successful response
       if (response && response.data) {
-        // Đánh dấu ID này là đã xử lý để tránh socket thêm lại lần nữa
         processedMessageIds.add(response.data._id);
         
-        // Đánh dấu cả nội dung tin nhắn để tránh socket trả lại trùng lặp
         const messageKey = `${user._id}-${content.trim()}`;
         processedMessageIds.add(messageKey);
         
-        // Đảm bảo thông tin người gửi đầy đủ
         const responseData = {
           ...response.data,
           sender: {
@@ -1083,7 +938,6 @@ const loadVoteDetails = async () => {
           forceMyMessage: true
         };
         
-        // Convert replyMessage from backend to replyToMessage for frontend if needed
         if (responseData.replyMessage && 
             responseData.replyMessage._id && 
             typeof responseData.replyMessage._id === 'string' && 
@@ -1091,21 +945,18 @@ const loadVoteDetails = async () => {
           console.log('Converting server replyMessage to replyToMessage:', responseData.replyMessage);
           responseData.replyToMessage = {
             ...responseData.replyMessage,
-            // Ensure sender data is mapped correctly
             sender: responseData.replyMessage.user || { 
               _id: responseData.replyMessage.userId,
               name: 'Người dùng',
             }
           };
         }
-        // Preserve the replyToMessage data if this was a reply
         else if (tempMessage.replyToMessage && 
                 tempMessage.replyToMessage._id && 
                 typeof tempMessage.replyToMessage._id === 'string') {
           responseData.replyToMessage = tempMessage.replyToMessage;
         }
         
-        // Cập nhật tin nhắn trong state
         setMessages((prevMessages) => 
           prevMessages.map((msg) => 
             msg._id === tempId ? responseData : msg
@@ -1114,29 +965,23 @@ const loadVoteDetails = async () => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      // Keep the message in the UI but mark it as failed
       setMessages((prevMessages) => 
         prevMessages.map((msg) => 
           msg._id === tempId ? { ...msg, status: 'failed' } : msg
         )
       );
       
-      // Add retry functionality
       const retryHandler = () => {
-        // Update UI to show retrying
         setMessages((prevMessages) => 
           prevMessages.map((msg) => 
             msg._id === tempId ? { ...msg, status: 'retrying' } : msg
           )
         );
         
-        // Re-attempt to send
         conversationService.sendTextMessage(messageData)
           .then(response => {
             if (response && response.data) {
               const responseData = response.data;
-              
-              // Preserve our user display name again on retry
               if (responseData.sender) {
                 responseData.sender = {
                   ...responseData.sender,
@@ -1179,20 +1024,16 @@ const loadVoteDetails = async () => {
     }
   };
 
-  // Sửa lại hàm handleSendFileMessage
 const handleSendFileMessage = async (file) => {
   if (!file) return;
   
-  // Tạo ID tạm thởi cho tin nhắn file
   const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${user?._id?.substring(0, 8) || ''}`;
   
   try {
-    // Start tracking upload progress
     setIsUploading(true);
     setUploadProgress(0);
     setCurrentUploadingFile(file);
     
-    // Xác định loại file
     let fileType = 'FILE';
     if (file.isImage || (file.type && file.type.includes('image'))) {
       fileType = 'IMAGE';
@@ -1222,7 +1063,7 @@ const handleSendFileMessage = async (file) => {
       type: fileType,
       fileName: file.name,
       fileSize: file.size,
-      fileUrl: file.uri, // URI tạm thởi cho preview
+      fileUrl: file.uri,
       isTemp: true,
       status: 'uploading',
       uploadProgress: 0,
@@ -1230,10 +1071,8 @@ const handleSendFileMessage = async (file) => {
       forceMyMessage: true,
     };
     
-    // Thêm tin nhắn tạm thởi
     setMessages(prevMessages => [...prevMessages, tempMessage]);
     
-    // Progress tracking
     const updateProgress = (progress) => {
       setUploadProgress(progress);
       setMessages(prev => 
@@ -1245,13 +1084,11 @@ const handleSendFileMessage = async (file) => {
       );
     };
     
-    // Import và sử dụng messageApi
     const messageApiModule = await import('../api/messageApi');
     const { messageApi } = messageApiModule;
     
     console.log('Sending file with conversation ID:', conversationId);
     
-    // Gọi API sendFileMessage
     const response = await messageApi.sendFileMessage({
       file,
       conversationId,
@@ -1261,32 +1098,24 @@ const handleSendFileMessage = async (file) => {
     console.log('Response received:', response);
     
     if (response && response.data) {
-      // Đánh dấu ID này là đã xử lý để tránh socket thêm lại
       processedMessageIds.add(response.data._id);
       
-      // Đánh dấu cả fileUrl để tránh trùng lặp
       const fileUrl = response.data.fileUrl || response.data.url || response.data.mediaUrl;
       if (fileUrl) {
-        processedMessageIds.add(fileUrl); // Đánh dấu cả URL
+        processedMessageIds.add(fileUrl);
       }
       
-      // Giải phóng ID này sau 30 giây
       setTimeout(() => {
         processedMessageIds.delete(response.data._id);
         if (fileUrl) processedMessageIds.delete(fileUrl);
       }, 30000);
       
-      // Log để debug
       console.log('File response from server:', response.data);
       
-      // Tạo object với đầy đủ thông tin cần thiết
       const updatedMessage = {
         ...response.data,
-        // Đảm bảo type là IMAGE cho hình ảnh
         type: fileType || 'IMAGE',
-        // Đảm bảo có fileUrl cho hiển thị
         fileUrl: response.data.fileUrl || response.data.url || response.data.mediaUrl || file.uri,
-        // Thông tin khác
         isMyMessage: true,
         forceMyMessage: true,
         status: 'sent'
@@ -1327,23 +1156,18 @@ const handleSendFileMessage = async (file) => {
   }
 };
 
-  // Xóa tin nhắn (chỉ xóa ở phiên bản của mình)
   const handleDeleteMessage = async (messageId) => {
     try {
       console.log('Deleting message client side:', messageId);
       
-      // Gọi API trước
       await messageApi.deleteMessage(messageId);
       
-      // Sau khi API thành công, cập nhật UI
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== messageId)
       );
       
-      // Đóng modal
       setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
       
-      // Hiển thị thông báo thành công
       Alert.alert('Thành công', 'Tin nhắn đã được xóa');
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -1351,7 +1175,6 @@ const handleSendFileMessage = async (file) => {
     }
   };
   
-  // Thu hồi tin nhắn cho tất cả người dùng (tương đương với redoMessage)
   const handleRecallMessage = async (messageId) => {
     try {
       const messageToRecall = messages.find(msg => msg._id === messageId);
@@ -1360,7 +1183,6 @@ const handleSendFileMessage = async (file) => {
         return;
       }
       
-      // Cập nhật giao diện ngay lập tức để hiển thị "Tin nhắn đã được thu hồi"
       const updatedMessages = messages.map(msg => {
         if (msg._id === messageId) {
           return {
@@ -1368,7 +1190,7 @@ const handleSendFileMessage = async (file) => {
             content: MESSAGE_RECALL_TEXT,
             status: 'recalled',
             isRecalled: true,
-            isDeleted: false // Ensure message is not deleted
+            isDeleted: false
           };
         }
         return msg;
@@ -1376,11 +1198,9 @@ const handleSendFileMessage = async (file) => {
       
       setMessages(updatedMessages);
       
-      // Gọi API để thu hồi tin nhắn cho tất cả người dùng
       await messageApi.recallMessage(messageId);
       console.log('Message recalled successfully:', messageId);
       
-      // Đóng modal nếu đang mở
       setModalVisible(DEFAULT_MESSAGE_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error recalling message:', error);
@@ -1388,17 +1208,14 @@ const handleSendFileMessage = async (file) => {
     }
   };
 
-  // Handle add reaction
   const handleAddReaction = async (messageId, type) => {
     try {
-      // Chuyển đổi emoji sang số nếu cần
       let reactionNumber;
       if (typeof type === 'string') {
         const index = REACTIONS.findIndex(emoji => emoji === type);
         reactionNumber = index !== -1 ? index + 1 : 1;
         console.log(`Converting emoji ${type} to reaction number ${reactionNumber}`);
       } else {
-        // Nếu đã là số thì giữ nguyên
         reactionNumber = type;
       }
       
@@ -1412,23 +1229,19 @@ const handleSendFileMessage = async (file) => {
         createdAt: new Date().toISOString()
       };
       
-      // Cập nhật UI ngay lập tức
       setMessages(prevMessages => 
         prevMessages.map(msg => {
           if (msg._id === messageId) {
             const reactions = msg.reactions || [];
-            // Tìm kiếm reaction có cùng userId và type
             const existingIndex = reactions.findIndex(
               r => r.userId === user._id && r.type === type
             );
             
             let updatedReactions;
             if (existingIndex >= 0) {
-              // Xóa reaction nếu đã có
               updatedReactions = [...reactions];
               updatedReactions.splice(existingIndex, 1);
             } else {
-              // Thêm reaction mới
               updatedReactions = [...reactions, optimisticReaction];
             }
             
@@ -1438,10 +1251,8 @@ const handleSendFileMessage = async (file) => {
         })
       );
       
-      // Gọi API với reactionNumber thay vì emoji
       await messageApi.addReaction(messageId, reactionNumber);
       
-      // Đóng modal reaction nếu đang mở
       setReactProps(DEFAULT_REACTION_MODAL_VISIBLE);
     } catch (error) {
       console.error('Error adding reaction:', error);
@@ -1449,18 +1260,12 @@ const handleSendFileMessage = async (file) => {
     }
   };
 
-  // Thêm hàm handlePreviewImage vào MessageScreen component
-  // Thêm vào cùng khu vực với các hàm xử lý khác
-
-  // Hàm xử lý xem trước hình ảnh khi click vào tin nhắn dạng ảnh
   const handlePreviewImage = (imageUrl, allUrls = []) => {
-    // Đảm bảo imageUrl không bị null hoặc undefined
     if (!imageUrl) {
       console.warn('Attempted to preview image with empty URL');
       return;
     }
     
-    // Hiển thị modal xem hình ảnh
     setImageProps({
       isVisible: true,
       imageUrl: imageUrl,
@@ -1470,9 +1275,7 @@ const handleSendFileMessage = async (file) => {
     console.log('Previewing image:', imageUrl);
   };
 
-  // Function to scroll to a specific message by ID
   const scrollToMessage = (messageId) => {
-    // Find the message in the list
     const messageIndex = messages.findIndex(msg => msg._id === messageId);
     
     if (messageIndex !== -1) {
@@ -1494,18 +1297,14 @@ const handleSendFileMessage = async (file) => {
     }
   };
 
-// Xử lý khi người dùng chọn một option trong vote
 const handleVoteOption = async (voteId, optionName, isChecked) => {
   try {
     if (isChecked) {
-      // Người dùng chọn option
       await voteApi.selectOption(voteId, { options: [optionName] });
     } else {
-      // Người dùng bỏ chọn option
       await voteApi.deleteSelectOption(voteId, { options: [optionName] });
     }
     
-    // Cập nhật lại danh sách tin nhắn sau khi vote
     loadMessages(true);
   } catch (error) {
     console.error('Error voting:', error);
@@ -1513,16 +1312,11 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
   }
 };
 
-  // Cập nhật hàm renderMessage để xử lý tin nhắn hệ thống
   const renderMessage = (message, index) => {
-    // Đảm bảo tin nhắn hợp lệ
     if (!message) return null;
-    // Bổ sung thông tin người gửi nếu thiếu
     if (message.sender && !message.sender.name) {
-      // Tìm thông tin người gửi từ danh sách participants
       const sender = participants?.find(p => p._id === message.sender._id);
       if (sender) {
-        // Cập nhật thông tin người gửi
         message = {
           ...message,
           sender: {
@@ -1533,7 +1327,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
           }
         };
       } else if (message.sender._id) {
-        // Nếu không tìm thấy trong participants, sử dụng ID làm tên
         message = {
           ...message,
           sender: {
@@ -1544,21 +1337,16 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
       }
     }
     
-    // Lấy ID của người dùng hiện tại
     const currentUser = user || {};
     
-    // Kiểm tra xem ID người dùng là ObjectID hay email
     const isCurrentUserIdEmail = currentUser._id && 
         (currentUser._id.includes('@') || currentUser._id.length > 30);
     
-    // Kiểm tra xem message.sender._id có phải là ObjectID không
     const isSenderIdObjectId = message.sender && message.sender._id && 
         !message.sender._id.includes('@') && message.sender._id.length < 30;
     
-    // Xác định isMyMessage dựa trên ID hoặc email
     const currentUserId = realUserId || user?._id;
     
-    // Xác định isMyMessage như trước đó
     const isMyMessage = (
       message.isMyMessage === true || 
       message.forceMyMessage === true || 
@@ -1570,7 +1358,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
         message.sender.email === currentUser._id))
     );
 
-    // Log thêm thông tin để debug
     console.log(`Message ${message._id?.substring(0, 8)} ownership check:`, {
       isMyMessage,
       senderId: message.sender?._id,
@@ -1579,7 +1366,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
     });
 
   
-    // Xử lý các tin nhắn hệ thống
     if (message.type === 'NOTIFICATION' || 
         message.isNotification === true || 
         message.isSystemMessage === true) {
@@ -1591,9 +1377,7 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
       );
     }
     
-    // Kiểm tra nếu là tin nhắn vote
     if (message.type === 'VOTE') {
-      // Đảm bảo message có cấu trúc hợp lệ trước khi render
       const enhancedMessage = {
         ...message,
         options: Array.isArray(message.options) ? message.options : []
@@ -1602,10 +1386,9 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
       return (
         <VoteMessage
           key={message._id || index}
-          message={enhancedMessage} // Sử dụng tin nhắn đã được kiểm tra
+          message={enhancedMessage}
           navigation={navigation}
           onViewVoteDetailModal={(options) => {
-            // Xử lý hiển thị chi tiết bình chọn
             setMessageDetailProps({
               isVisible: true,
               message: message
@@ -1624,7 +1407,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
       );
     }
     
-    // Các loại tin nhắn khác sử dụng ChatMessage
     return (
       <ChatMessage
         key={message._id || index}
@@ -1644,7 +1426,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
     );
   };
 
-  // Fetch pinned messages for this conversation
   const fetchPinnedMessages = async () => {
     try {
       if (!actualIsGroupChat) {
@@ -1660,14 +1441,12 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
         const fetchedPinnedMessages = response.data;
         console.log('Pinned messages fetched:', fetchedPinnedMessages.length);
 
-        // Tìm tin nhắn thông báo ghim cho mỗi tin nhắn được ghim
         const pinnedMessagesWithPinner = await Promise.all(fetchedPinnedMessages.map(async pinnedMsg => {
           try {
-            // Lấy tất cả tin nhắn của cuộc trò chuyện để tìm tin nhắn thông báo
             const notificationsResponse = await conversationService.getMessages(
               conversationId,
               0,
-              100,  // Lấy 100 tin nhắn gần nhất
+              100,
               user?._id
             );
 
@@ -1697,7 +1476,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
               } : 'No notification found'
             );
 
-            // Nếu không tìm thấy tin nhắn thông báo, sử dụng thông tin từ tin nhắn được ghim
             const pinner = latestPinNotification?.sender || pinnedMsg.pinnedBy || {
               _id: pinnedMsg.userId || 'unknown',
               name: 'Người dùng'
@@ -1720,7 +1498,6 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
         
         setPinnedMessages(pinnedMessagesWithPinner);
         
-        // Cập nhật danh sách tin nhắn chính
         if (pinnedMessagesWithPinner.length > 0) {
           setMessages(prevMessages => {
             return prevMessages.map(msg => {
@@ -1750,16 +1527,14 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
     React.useCallback(() => {
       if (conversationId && messages.length > 0) {
         console.log('Screen focused, refreshing vote data');
-        loadVoteDetails(); // Tải lại thông tin vote khi quay lại màn hình
+        loadVoteDetails();
       }
       return () => {};
     }, [conversationId, messages.length])
   );
 
-  // Add effect to update header when conversationName changes
   useEffect(() => {
     if (conversationId && conversationName) {
-      // Cập nhật lại header với tên mới
       const actualName = conversationName || 'Cuộc trò chuyện';
       const actualAvatar = typeof avatar === 'string' ? avatar : (Array.isArray(avatar) ? '' : avatar || '');
       const actualAvatarColor = avatarColor || colors.primary;
@@ -1784,22 +1559,10 @@ const handleVoteOption = async (voteId, optionName, isChecked) => {
       });
     }
   }, [conversationName, conversationId]);
-  // Trong useEffect, khi nhận thông tin participants
-// useEffect(() => {
-//   if (participants && participants.length > 0) {
-//     // Cache thông tin người dùng từ participants vào Redux
-//     dispatch(bulkCacheNotificationUsers({ users: participants }));
-//     console.log(`Cached ${participants.length} users for notifications to Redux`);
-//   }
-// }, [participants]);
 
-  // Thêm hàm xử lý chấp nhận cuộc gọi
-// Thêm hàm xử lý chấp nhận cuộc gọi
 const handleAcceptCall = () => {
-  // Đóng modal
   setIncomingCall(prev => ({ ...prev, visible: false }));
   
-  // Điều hướng đến VideoCallScreen với tham số cho Agora
   navigation.navigate('VideoCallScreen', {
     conversationId,
     conversationName,
@@ -1810,14 +1573,12 @@ const handleAcceptCall = () => {
     effectiveUserId: realUserId || user?._id,
   });
   
-  // Thông báo đã trả lời cuộc gọi
   socketService.notifyCallAnswered(
     conversationId, 
     realUserId || user?._id, 
     actualIsGroupChat
   );
   
-  // Thêm thông báo trả lời cuộc gọi video
   socketService.notifyVideoCallAnswered(
     conversationId, 
     realUserId || user?._id, 
@@ -1826,16 +1587,11 @@ const handleAcceptCall = () => {
   );
 };
 
-// Thêm hàm xử lý từ chối cuộc gọi
 const handleRejectCall = () => {
-  // Đóng modal
   setIncomingCall(prev => ({ ...prev, visible: false }));
 };
 
-// Thêm hàm khởi tạo cuộc gọi video
-// Cập nhật hàm khởi tạo cuộc gọi video
 const handleStartVideoCall = () => {
-  // Đăng ký cuộc gọi video
   subscribeCallVideo(
     conversationId,
     currentUserId,
@@ -1844,7 +1600,6 @@ const handleStartVideoCall = () => {
     actualIsGroupChat
   );
   
-  // Navigation vào màn hình video call
   navigation.navigate('VideoCallScreen', {
     conversationId,
     conversationName,
@@ -1855,9 +1610,7 @@ const handleStartVideoCall = () => {
   });
 };
 
-// Thêm hàm khởi tạo cuộc gọi thoại
 const handleStartVoiceCall = () => {
-  // Đăng ký cuộc gọi thoại
   subscribeCallAudio(
     conversationId,
     currentUserId,
@@ -1865,7 +1618,6 @@ const handleStartVoiceCall = () => {
     user?.avatar || ''
   );
   
-  // Navigation vào màn hình voice call
   navigation.navigate('VoiceCallScreen', {
     conversationId,
     conversationName,
@@ -1876,13 +1628,10 @@ const handleStartVoiceCall = () => {
   });
 };
 
-  // Trong useEffect của MessageScreen, sau khi đã load tin nhắn
 useEffect(() => {
   if (conversationId) {
-    // Đánh dấu cuộc trò chuyện là đã đọc khi mở màn hình
     markConversationAsViewed(conversationId);
     
-    // Gửi trạng thái đã đọc lên server
     const socket = getSocket();
     if (socket) {
       socket.emit('conversation-last-view', conversationId);
@@ -1942,7 +1691,6 @@ useEffect(() => {
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
             }
             extraData={messages.length}
-            // Sửa keyExtractor để đảm bảo tính duy nhất
             keyExtractor={(item, index) => `${item._id}-${index}`}
             renderItem={({item, index}) => renderMessage(item, index)}
             initialNumToRender={20}
@@ -1952,28 +1700,22 @@ useEffect(() => {
             ListHeaderComponent={() =>
               loading ? <MessageDivider isLoading={true} /> : null
             }
-            inverted={false} // Không đảo ngược danh sách
+            inverted={false}
             contentContainerStyle={{paddingBottom: 15}}
-            // Thêm xử lý sự kiện scroll để sửa lỗi tin nhắn tự nhảy lên
             onScroll={handleScroll}
-            scrollEventThrottle={16} // Hạn chế số lần gọi handleScroll để tăng hiệu suất
-            // Cuộn xuống khi có thay đổi nội dung chỉ khi ở dưới cùng
+            scrollEventThrottle={16}
             onContentSizeChange={(width, height) => {
-              // Chỉ cuộn khi đang ở dưới cùng hoặc mới load tin nhắn
               if (isAtBottom || (!userScrolled && messages.length > 0)) {
                 scrollToBottom(true);
               }
             }}
             onLayout={() => {
-              // Khi lần đầu render hoàn tất
               if (!userScrolled && messages.length > 0) {
-                // Use requestAnimationFrame to ensure we scroll after render is complete
                 requestAnimationFrame(() => {
                   scrollToBottom(true, true);
                 });
               }
             }}
-            // Fix for the error with maintainVisibleContentPosition
             maintainVisibleContentPosition={{
               minIndexForVisible: 0
             }}
@@ -1990,7 +1732,6 @@ useEffect(() => {
             </View>
           )}
           
-          {/* Add back the MessageInput component */}
           <MessageInput 
             conversationId={conversationId}
             onSendMessage={handleSendMessage}
@@ -2001,7 +1742,6 @@ useEffect(() => {
             uploadProgress={uploadProgress}
           />
 
-          {/* StickyBoard component */}
           {stickyBoardVisible && (
             <StickyBoard
               height={keyboardHeight || 250}

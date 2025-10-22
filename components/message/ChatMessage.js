@@ -35,25 +35,19 @@ const ChatMessage = ({
   conversationId,
   scrollToMessage = null,
 }) => {
-  // Thêm state để hiển thị nút reaction nhanh
   const [showQuickReactions, setShowQuickReactions] = useState(false);
   
-  // Thêm state và logic cho modal thả reaction
   const [reactionModalVisible, setReactionModalVisible] = useState(false);
   const [touchPosition, setTouchPosition] = useState(null);
 
-  // Hàm xử lý nhấn vào tin nhắn
   const handleMessagePress = () => {
     setShowQuickReactions(!showQuickReactions);
-    // Tự động ẩn sau 3 giây nếu không có tương tác
     if (!showQuickReactions) {
       setTimeout(() => setShowQuickReactions(false), 3000);
     }
   };
   
-  // Hàm xử lý nhấn giữ tin nhắn để hiển thị modal reaction
   const handleLongPress = (event) => {
-    // Lấy tọa độ nhấn giữ để định vị modal
     setTouchPosition({
       x: event.nativeEvent.pageX,
       y: event.nativeEvent.pageY
@@ -61,12 +55,10 @@ const ChatMessage = ({
     setReactionModalVisible(true);
   };
 
-  // Skip rendering completely if the message is deleted (but NOT if it's recalled)
   if (message?.isDeleted && !message?.isRecalled) {
     return null;
   }
 
-  // Nếu là tin nhắn thông báo từ hệ thống, sử dụng SystemNotificationMessage
   if (message.type === 'NOTIFY') {
     return (
       <SystemNotificationMessage
@@ -75,9 +67,7 @@ const ChatMessage = ({
     );
   }
 
-  // Sửa hàm isSender để debug rõ ràng hơn
   const isSender = () => {
-    // Thêm log chi tiết hơn về ID để so sánh
     console.log(
       "DETAILED MESSAGE CHECK for " + message?._id + ":", {
         currentUserId: userId || 'undefined',
@@ -118,10 +108,8 @@ const ChatMessage = ({
   // Check if message has been recalled
   const isMessageRecalled = message?.isRecalled || message?.status === MESSAGE_STATUS.recalled;
 
-  // Xác định trước khi render để log
   const messageIsSender = isSender();
 
-  // Log kết quả cuối cùng
   console.log(`Message ${message?._id?.substr(0, 8)} is ${messageIsSender ? 'SENDER' : 'RECEIVER'}`);
 
   // Determine if the message is from the current user

@@ -44,13 +44,11 @@ const RegisterScreen = ({ navigation }) => {
       return false;
     }
 
-    // Kiểm tra email
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Email không hợp lệ');
       return false;
     }
 
-    // Kiểm tra số điện thoại
     if (!/^[0-9]{9,11}$/.test(phone)) {
       setError('Số điện thoại không hợp lệ');
       return false;
@@ -65,26 +63,22 @@ const RegisterScreen = ({ navigation }) => {
     
     setIsLoading(true);
     try {
-      // Tạo đối tượng userData theo yêu cầu backend
       const userData = {
         name: name,
-        username: email, // Backend yêu cầu username phải là email hoặc số điện thoại hợp lệ
+        username: email,
         password: password,
         phone: phone
       };
       
       console.log('Dữ liệu đăng ký:', { ...userData, password: '***' });
       
-      // Sử dụng authService.register để đăng ký
       const response = await authService.register(userData);
       
       setIsLoading(false);
       
-      // Kiểm tra phản hồi từ API
       if (response) {
         console.log('Đăng ký thành công:', response);
         
-        // Chuyển sang màn hình OTP để xác thực
         Alert.alert(
           'Đăng ký thành công',
           'Vui lòng xác nhận tài khoản bằng mã OTP đã được gửi đến email của bạn.',

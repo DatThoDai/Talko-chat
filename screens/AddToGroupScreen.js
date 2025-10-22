@@ -55,7 +55,6 @@ const AddToGroupScreen = ({ navigation, route }) => {
   const [selectedFriends, setSelectedFriends] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Lấy danh sách bạn bè và thành viên nhóm
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -96,7 +95,6 @@ const AddToGroupScreen = ({ navigation, route }) => {
     }
   }, [conversationId]);
   
-  // Lọc danh sách bạn bè theo từ khóa tìm kiếm
   useEffect(() => {
     if (searchText.trim() === '') {
       setFilteredFriends(friends);

@@ -1,9 +1,7 @@
 import api from './axios';
 import { REACT_APP_API_URL } from '../constants';
 
-// Auth services
 export const authService = {
-  // Đăng nhập
   login: async (email, password) => {
     try {
       console.log('Attempting login with:', { email, password: '****' });
@@ -69,7 +67,6 @@ export const authService = {
     }
   },
 
-  // Đăng ký
   register: async (userData) => {
     try {
       // Tạo username từ email nếu chưa có
@@ -83,7 +80,6 @@ export const authService = {
     }
   },
   
-  // Xác nhận tài khoản (OTP)
   confirmAccount: async (username, otp) => {
     try {
       const response = await api.post('/auth/confirm-account', { username, otp });
@@ -93,7 +89,6 @@ export const authService = {
     }
   },
 
-  // Quên mật khẩu - Gửi yêu cầu
   forgotPassword: async (email) => {
     try {
       // Su1eed du1ee5ng email tru1ef1c tiu1ebfp lu00e0m username
@@ -108,7 +103,6 @@ export const authService = {
     }
   },
 
-  // Xác thực mã OTP khi quên mật khẩu
   verifyOtp: async (email, otp) => {
     try {
       // Backend mới không cần bước xác thực OTP
@@ -119,7 +113,6 @@ export const authService = {
     }
   },
 
-  // Đặt lại mật khẩu sau khi quên
   resetPassword: async (email, otp, newPassword) => {
     try {      
       // Su1eed du1ee5ng email tru1ef1c tiu1ebfp lu00e0m username
@@ -139,7 +132,6 @@ export const authService = {
     }
   },
 
-  // Đổi mật khẩu (khi đã đăng nhập)
   changePassword: async (currentPassword, newPassword) => {
     try {
       const response = await api.post('/me/change-password', {
@@ -152,7 +144,6 @@ export const authService = {
     }
   },
 
-  // Đăng xuất
   logout: async () => {
     try {
       // Không gọi API /auth/logout nữa vì backend không có endpoint này
@@ -164,7 +155,6 @@ export const authService = {
     }
   },
 
-  // Lấy thông tin người dùng
   getUserProfile: async () => {
     try {
       const response = await api.get('/me');

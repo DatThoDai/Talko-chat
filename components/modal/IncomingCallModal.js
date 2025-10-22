@@ -19,17 +19,13 @@ const IncomingCallModal = ({
   onAccept, 
   onReject 
 }) => {
-  // Tạo hiệu ứng rung khi có cuộc gọi đến
   useEffect(() => {
     let intervalId;
     
     if (visible) {
-      // Rung liên tục
       if (Platform.OS === 'android') {
-        // Rung theo mẫu cuộc gọi trên Android
         Vibration.vibrate([500, 1000, 500, 1000], true);
       } else {
-        // iOS sử dụng cách tiếp cận khác
         intervalId = setInterval(() => {
           Vibration.vibrate();
         }, 1500);
@@ -37,13 +33,11 @@ const IncomingCallModal = ({
     }
     
     return () => {
-      // Dừng rung khi đóng modal
       Vibration.cancel();
       if (intervalId) clearInterval(intervalId);
     };
   }, [visible]);
   
-  // Kiểm tra dữ liệu người gọi
   const callerName = caller?.name || 'Người dùng';
   const callerAvatar = caller?.avatar || '';
   const callerAvatarColor = caller?.avatarColor || colors.primary;

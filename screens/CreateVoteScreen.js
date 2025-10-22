@@ -24,9 +24,8 @@ const CreateVoteScreen = ({ route, navigation }) => {
   const [options, setOptions] = useState(['', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dispatch = useDispatch(); // Thêm dòng này
-  const { user } = useSelector(state => state.auth); // Lấy thông tin user
+  const { user } = useSelector(state => state.auth);
 
-  // Thêm tùy chọn bình chọn mới
   const addOption = () => {
     if (options.length < 10) {
       setOptions([...options, '']);
@@ -35,7 +34,6 @@ const CreateVoteScreen = ({ route, navigation }) => {
     }
   };
 
-  // Xóa tùy chọn bình chọn
   const removeOption = (index) => {
     if (options.length > 2) {
       const newOptions = [...options];
@@ -46,29 +44,23 @@ const CreateVoteScreen = ({ route, navigation }) => {
     }
   };
 
-  // Cập nhật giá trị của tùy chọn bình chọn
   const updateOption = (text, index) => {
     const newOptions = [...options];
     newOptions[index] = text;
     setOptions(newOptions);
   };
 
-  // Kiểm tra form có hợp lệ không
   const isFormValid = () => {
     if (!title.trim()) return false;
     
-    // Kiểm tra có ít nhất 2 tùy chọn không rỗng
     const validOptions = options.filter(option => option.trim() !== '');
     if (validOptions.length < 2) return false;
     
-    // Kiểm tra có tùy chọn trùng nhau không
     const uniqueOptions = new Set(options.map(opt => opt.trim()).filter(opt => opt !== ''));
     if (uniqueOptions.size < validOptions.length) return false;
     
     return true;
   };
-
-  // Cập nhật phần xử lý tạo vote
 
 const handleSubmit = async () => {
   if (!isFormValid()) {

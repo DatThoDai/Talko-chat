@@ -233,7 +233,6 @@ const initialState = {
   hasMoreMessages: true,
   error: null,
   previousScreen: null,
-  // Thêm các state mới cho channel
   channels: [],
   currentChannelId: '',
   channelMessages: [],
@@ -243,10 +242,8 @@ const initialState = {
     totalPages: 0,
     totalItems: 0,
   },
-  files: [], // Thay đổi {} thành []
+  files: [],
 };
-
-// Thêm các async thunk cho channel
 export const fetchChannels = createAsyncThunk(
   'chat/fetchChannels',
   async ({ conversationId }, { rejectWithValue }) => {
@@ -420,30 +417,25 @@ const chatSlice = createSlice({
         };
       }
     },
-    // Thêm action setCurrentVote để lưu trữ thông tin vote hiện tại
+    
     setCurrentVote: (state, action) => {
       state.currentVote = action.payload;
     },
     
-    // Cập nhật vote khi người dùng bình chọn
     updateVoteInfo: (state, action) => {
       const { messageId, optionName, userId, isAdd } = action.payload;
       
-      // Cập nhật trong danh sách tin nhắn
       state.messages = state.messages.map(message => {
         if (message._id === messageId) {
-          // Tìm và cập nhật option được chọn
           const updatedOptions = message.options.map(option => {
             if (option.name === optionName) {
               let userIds = [...(option.userIds || [])];
               
               if (isAdd) {
-                // Thêm userId nếu chưa có
                 if (!userIds.includes(userId)) {
                   userIds.push(userId);
                 }
               } else {
-                // Xóa userId
                 userIds = userIds.filter(id => id !== userId);
               }
               
@@ -463,7 +455,6 @@ const chatSlice = createSlice({
         return message;
       });
       
-      // Cập nhật currentVote nếu đang hiển thị chi tiết vote này
       if (state.currentVote && state.currentVote._id === messageId) {
         state.currentVote = {
           ...state.currentVote,
@@ -471,7 +462,7 @@ const chatSlice = createSlice({
         };
       }
     },
-    // Thêm các reducers mới
+    
     setCurrentChannel: (state, action) => {
       const { currentChannelId, currentChannelName } = action.payload;
       state.currentChannelId = currentChannelId;

@@ -26,7 +26,6 @@ const VoteProgress = ({
   const auth = useSelector(state => state.auth);
   const user = auth?.user;
 
-  // Tính toán phần trăm
   let percent = 0;
   if (voteUtils && totalOfVotes >= 0 && option && option.userIds) {
     const count = Array.isArray(option.userIds) ? option.userIds.length : 0;
@@ -34,34 +33,26 @@ const VoteProgress = ({
   }
   percent = isNaN(percent) ? 0 : percent;
   
-  // Lấy số lượng người bình chọn
   const voteCount = option?.userIds?.length || 0;
   
-  // Cập nhật phần xác định trạng thái checked
   const isChecked = typeof externalChecked !== 'undefined' 
     ? externalChecked 
-    : false; // Chỉ dùng giá trị từ prop, không tự xác định
+    : false;
     
-  // State nội bộ theo dõi trạng thái UI
   const [checked, setChecked] = useState(isChecked);
 
-  // Luôn cập nhật khi prop thay đổi
   useEffect(() => {
     console.log(`Setting checked state for ${option?.name}:`, isChecked);
     setChecked(isChecked);
   }, [isChecked, option?.name]);
 
-  // Cải thiện cách xác định checked status
   useEffect(() => {
-    // Luôn ưu tiên giá trị từ props
     if (typeof externalChecked !== 'undefined') {
       console.log(`Setting checked for ${option?.name} from props: ${externalChecked}`);
       setChecked(externalChecked);
     } 
-    // Không tự xác định checked nếu đã có prop
   }, [externalChecked]);
 
-  // Chỉ phản hồi sự kiện onClick, không tự thay đổi state
   const handleOnPress = () => {
     if (!user) return;
     
@@ -69,7 +60,6 @@ const VoteProgress = ({
       console.log(`Toggling option ${option.name} from`, checked);
       onChange(!checked, option.name);
     }
-    // KHÔNG gọi setChecked ở đây, để parent component kiểm soát state
   };
 
   // Component checkbox

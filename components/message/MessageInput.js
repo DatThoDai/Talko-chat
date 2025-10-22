@@ -157,7 +157,6 @@ const MessageInput = ({
     inputRef.current?.focus();
   };
 
-  // Tính toán chiều cao của reply container
   const replyContainerHeight = replyAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 50], // Từ 0 đến 50 px

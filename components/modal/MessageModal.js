@@ -152,7 +152,6 @@ const MessageModal = ({
     );
   };
   
-  // Thu hồi tin nhắn (recall - not delete) - shows "Tin nhắn đã được thu hồi"
   const handleRecallMessage = async () => {
     if (!messageId || !isMyMessage) return;
     

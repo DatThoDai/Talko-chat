@@ -87,5 +87,4 @@ export const meApi = {
   },
 };
 
-// Export mặc định để duy trì khả năng tương thích với code hiện tại
 export default meApi;

@@ -170,8 +170,6 @@ const setupSocketEventHandlers = () => {
     return;
   }
 
-  // Socket connection events - connect is handled separately in initiateSocket
-
   socket.on('disconnect', (reason) => {
     console.log(`Socket disconnected: ${reason}`);
     
@@ -186,14 +184,11 @@ const setupSocketEventHandlers = () => {
     tryReconnect();
   });
 
-  // Handle message events
   socket.on('new-message', (conversationId, message) => {
     console.log('new-message received');
     if (storeInstance) {
-      // Thêm vào store Redux
       storeInstance.dispatch(addNewMessage({conversationId, message}));
       
-      // Lấy thông tin user và conversation
       const state = storeInstance.getState();
       const currentUserId = state.auth?.user?._id;
       const conversation = state.chat.conversations.find(c => c._id === conversationId);
@@ -224,13 +219,11 @@ const setupSocketEventHandlers = () => {
     dispatch(updateVoteMessage({conversationId, message}));
   });
 
-  // Handle message recall events
   socket.on('message-recalled', (data) => {
     console.log('Message recalled event received:', data);
     if (storeInstance) {
       const messageId = data.messageId || data._id || data.id;
       if (messageId) {
-        // Update the message to show as recalled
         storeInstance.dispatch(updateMessage({
           _id: messageId,
           content: 'Tin nhắn đã được thu hồi',
@@ -241,34 +234,26 @@ const setupSocketEventHandlers = () => {
     }
   });
 
-  // Handle rename conversation event
   socket.on('rename-conversation', (conversationId, newName, message) => {
     console.log('Rename conversation event received:', { conversationId, newName });
     
-    // If we have a store instance, we can update redux state
     if (storeInstance) {
-      // Dispatch an action to update the conversation name in the store if you have one
       // Right now we're handling this in the MessageScreen component
     }
     
     // The message processing will be handled in MessageScreen.js
   });
 
-  // Handle both possible message deletion event formats from server
   socket.on('delete-message', (data) => {
     console.log('Delete message event received:', data);
     if (storeInstance) {
-      // Handle different data formats: either {id}, {messageId}, or {conversationId, id/messageId}
       const messageId = data.messageId || data.id;
       if (messageId) {
         console.log('Removing message:', messageId);
-        // Force immediate UI update
         storeInstance.dispatch(removeMessage(messageId));
         
-        // If we're in the conversation where the message was deleted, force a re-render
         const currentState = storeInstance.getState();
         if (currentState.chat.currentConversation === data.conversationId) {
-          // Trigger a re-render by updating the messages array
           const updatedMessages = currentState.chat.messages.filter(msg => msg._id !== messageId);
           storeInstance.dispatch(updateMessages(updatedMessages));
         }
@@ -276,31 +261,25 @@ const setupSocketEventHandlers = () => {
     }
   });
   
-  // Also handle legacy message-deleted event for backward compatibility
   socket.on('message-deleted', (data) => {
     console.log('Legacy message-deleted event received:', data);
     if (storeInstance && data && data.messageId) {
       console.log('Removing message from legacy event:', data.messageId);
-      // Force immediate UI update
       storeInstance.dispatch(removeMessage(data.messageId));
       
-      // If we're in the conversation where the message was deleted, force a re-render
       const currentState = storeInstance.getState();
       if (currentState.chat.currentConversation === data.conversationId) {
-        // Trigger a re-render by updating the messages array
         const updatedMessages = currentState.chat.messages.filter(msg => msg._id !== data.messageId);
         storeInstance.dispatch(updateMessages(updatedMessages));
       }
     }
   });
 
-  // Handle typing events
   socket.on('typing', (data) => {
     console.log('Typing event:', data);
     handleTypingEvent(data.conversationId, data.user, data.isTyping);
   });
   
-  // Handle user online status
   socket.on('user-status-changed', (data) => {
     console.log('User status changed:', data);
     if (storeInstance) {
@@ -311,45 +290,30 @@ const setupSocketEventHandlers = () => {
     }
   });
 
-  // THÊM XỬ LÝ AGORA VIDEO CALL
-  
-  // Xử lý khi có người tham gia kênh Agora
   socket.on('group-call-participants-updated', (data) => {
     console.log('👥 GROUP CALL PARTICIPANTS UPDATED:', data);
-    // Thông báo cập nhật danh sách người tham gia cuộc gọi nhóm
   });
 
-  // Xử lý khi cuộc gọi được trả lời
   socket.on('call-answered-notification', (data) => {
     console.log('📞 CALL ANSWERED NOTIFICATION:', data);
-    // Xử lý khi cuộc gọi được trả lời
   });
   
-  // Xử lý khi cuộc gọi thoại bị từ chối
   socket.on('voice-call-rejected', (data) => {
     console.log('❌ VOICE CALL REJECTED:', data);
-    // Xử lý khi cuộc gọi thoại bị từ chối
   });
   
-  // Xử lý khi cuộc gọi video bị từ chối
   socket.on('video-call-rejected', (data) => {
     console.log('❌ VIDEO CALL REJECTED:', data);
-    // Xử lý khi cuộc gọi video bị từ chối
   });
   
-  // Xử lý khi cuộc gọi thoại bị hủy
   socket.on('voice-call-cancelled', (data) => {
     console.log('🚫 VOICE CALL CANCELLED:', data);
-    // Xử lý khi cuộc gọi thoại bị hủy
   });
   
-  // Xử lý khi cuộc gọi video bị hủy
   socket.on('video-call-cancelled', (data) => {
     console.log('🚫 VIDEO CALL CANCELLED:', data);
-    // Xử lý khi cuộc gọi video bị hủy
   });
   
-  // Handle error events
   socket.on('error', (error) => {
     // Chỉ log lỗi một lần, tránh spam console
     console.log('Socket error occurred - disabling reconnections to avoid spamming logs');
@@ -359,7 +323,6 @@ const setupSocketEventHandlers = () => {
     }
   });
   
-  // Handle reconnection events
   socket.io.on('reconnect', (attempt) => {
     console.log(`Socket reconnected after ${attempt} attempts`);
   });
@@ -376,7 +339,6 @@ const setupSocketEventHandlers = () => {
     console.log('user-last-view event received:', data);
     
     if (storeInstance) {
-      // Đảm bảo userId nhận được khác với userId hiện tại
       const currentState = storeInstance.getState();
       const currentUserId = currentState.auth?.user?._id;
       
@@ -391,10 +353,8 @@ const setupSocketEventHandlers = () => {
     }
   });
   
-  // Xử lý khi có cuộc gọi thoại đến
   socket.on('incoming-voice-call', (data) => {
     console.log('📞 INCOMING VOICE CALL:', data);
-    // Thông báo cuộc gọi đến - bạn có thể gửi thông báo đến Redux store hoặc sử dụng callback
     if (storeInstance) {
       storeInstance.dispatch({
         type: 'INCOMING_VOICE_CALL',
@@ -406,10 +366,8 @@ const setupSocketEventHandlers = () => {
     }
   });
 
-  // Xử lý khi có cuộc gọi video đến
   socket.on('incoming-video-call', (data) => {
     console.log('📹 INCOMING VIDEO CALL:', data);
-    // Thông báo cuộc gọi đến - bạn có thể gửi thông báo đến Redux store hoặc sử dụng callback
     if (storeInstance) {
       storeInstance.dispatch({
         type: 'INCOMING_VIDEO_CALL',
@@ -422,37 +380,27 @@ const setupSocketEventHandlers = () => {
     }
   });
 
-  // Xử lý khi người dùng tham gia cuộc gọi
   socket.on('user-joined-call', (data) => {
     console.log('👤 USER JOINED CALL:', data);
-    // Thông báo có người tham gia cuộc gọi
   });
 
-  // Xử lý khi người dùng kết thúc cuộc gọi
   socket.on('user-ended-call', (data) => {
     console.log('👋 USER ENDED CALL:', data);
-    // Thông báo có người kết thúc cuộc gọi
   });
 
-  // Xử lý thông báo trả lời cuộc gọi video
   socket.on('video-call-answered-notification', (data) => {
     console.log('📹 VIDEO CALL ANSWERED NOTIFICATION:', data);
-    // Xử lý khi cuộc gọi video được trả lời
   });
 
-  // Xử lý cập nhật danh sách người tham gia cuộc gọi video
   socket.on('video-call-participants-updated', (data) => {
     console.log('👥 VIDEO CALL PARTICIPANTS UPDATED:', data);
-    // Thông báo cập nhật danh sách người tham gia cuộc gọi video
   });
   
-  // Trong phần setupSocketEventHandlers, thêm listener cho add-reaction
   socket.on('add-reaction', (data) => {
     console.log('📢 SOCKET: Reaction event received:', data);
     if (storeInstance) {
       const { messageId, user, type, conversationId } = data;
       
-      // Tạo đối tượng reaction đầy đủ để cập nhật UI
       const reaction = {
         userId: user._id,
         userName: user.name || user.username || 'Người dùng',
@@ -462,7 +410,6 @@ const setupSocketEventHandlers = () => {
         createdAt: new Date().toISOString()
       };
       
-      // Gửi action để cập nhật Redux store
       storeInstance.dispatch({
         type: 'chat/updateMessageReaction',
         payload: { messageId, reaction }
@@ -480,7 +427,6 @@ const tryReconnect = () => {
 
   reconnectAttempts++;
   
-  // Calculate exponential backoff delay with jitter
   const delay = Math.min(
     RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1) + Math.random() * 1000,
     MAX_RECONNECT_DELAY
@@ -497,7 +443,6 @@ const tryReconnect = () => {
   }, delay);
 };
 
-// Join a conversation room
 export const joinConversation = (conversationId) => {
   if (!socket) {
     console.log('Cannot join conversation: socket is null');
@@ -592,7 +537,6 @@ const handleTypingEvent = (conversationId, user, isTyping) => {
     return;
   }
   
-  // Update typing users in state
   store.dispatch(setTypingUsers({
     conversationId,
     typingUsers: conversationTypingUsers,
@@ -952,7 +896,6 @@ export default {
   off,
   emitNotTyping,
   markConversationAsViewed,
-  // Các hàm video call hiện tại
   notifyUserJoinedAgoraChannel,
   notifyUserLeftAgoraChannel,
   notifyCallAnswered,
@@ -964,7 +907,6 @@ export default {
   cancelVoiceCall,
   cancelVideoCall,
   
-  // Thêm các hàm mới
   subscribeCallAudio,
   subscribeCallVideo,
   notifyVideoCallAnswered,

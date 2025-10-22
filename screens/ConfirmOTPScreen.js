@@ -43,7 +43,6 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     setValue,
   });
   
-  // Đếm ngược thời gian gửi lại OTP
   useEffect(() => {
     let timer;
     if (timeLeft > 0 && !canResend) {
@@ -58,12 +57,10 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     };
   }, [timeLeft, canResend]);
   
-  // Xác thực OTP
   const handleVerify = async () => {
     setError('');
     setCodeError('');
     
-    // Xác thực đầu vào
     if (value.length !== CELL_COUNT) {
       setCodeError('Vui lòng nhập đủ mã xác nhận');
       return;
@@ -93,16 +90,11 @@ const ConfirmOTPScreen = ({ route, navigation }) => {
     }
   };
   
-  // Gửi lại mã OTP
   const handleResendCode = async () => {
     if (!canResend) return;
     
     setIsLoading(true);
     try {
-      // TODO: Implement resend OTP API call when available
-      // await authService.resendOTP(username);
-      
-      // Tạm thời dùng mock call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       setTimeLeft(RESEND_TIMEOUT);

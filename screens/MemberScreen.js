@@ -22,13 +22,10 @@ import userService from '../api/userService';
 
 // Mock group members data for demonstration
 
-// Thay đổi định nghĩa MemberItem
 const MemberItem = ({ member, onRemove, onToggleManager, isCurrentUserAdmin, isCurrentUserManager, index, totalItems, openMenuId, setOpenMenuId }) => {
-  // Tính toán xem menu có đang hiển thị không
   const isMenuVisible = openMenuId === member._id;
   
-  // Tính toán vị trí menu dựa vào vị trí của item
-  const isNearBottom = index > totalItems - 3; // 3 item cuối cùng
+  const isNearBottom = index > totalItems - 3;
   
   const menuStyle = isNearBottom ? 
     { ...styles.menuPopup, bottom: 40, top: 'auto' } : 
@@ -42,10 +39,8 @@ const MemberItem = ({ member, onRemove, onToggleManager, isCurrentUserAdmin, isC
     }
   };
 
-  // Xác định xem người dùng hiện tại có quyền quản lý không (admin hoặc manager)
   const hasManagementRights = isCurrentUserAdmin || isCurrentUserManager;
   
-  // Xác định xem nút menu có nên hiển thị không
   const shouldShowMenuButton = (isCurrentUserAdmin || isCurrentUserManager) && 
                               !member.isLeader && 
                               !(isCurrentUserManager && member.isManager);
@@ -142,27 +137,21 @@ const MemberItem = ({ member, onRemove, onToggleManager, isCurrentUserAdmin, isC
 const MemberScreen = ({ route, navigation }) => {
   const { conversationId, name } = route.params || {};
   
-  // Thêm dòng này để lấy user từ Redux store
   const { user } = useSelector(state => state.auth);
   
   const [members, setMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false); 
-  const [managers, setManagers] = useState([]); // Thêm state cho danh sách phó nhóm
-  const [realUserId, setRealUserId] = useState(null); // Thêm state để lưu ID thực
-  // Thêm state này trong MemberScreen
+  const [managers, setManagers] = useState([]);
+  const [realUserId, setRealUserId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
-  // Trong component MemberScreen, thêm state sau
   const [isCurrentUserManager, setIsCurrentUserManager] = useState(false);
 
-  // Thêm useEffect để fetch ID thực từ email
   useEffect(() => {
     const fetchRealUserId = async () => {
-      // Kiểm tra xem user._id có phải là email không
       if (user && user._id && user._id.includes('@')) {
         try {
-          // Gọi API để lấy userId thực từ email
           const response = await userService.searchByUsername(user._id);
           if (response && response.data && response.data._id) {
             setRealUserId(response.data._id);
@@ -300,10 +289,7 @@ const MemberScreen = ({ route, navigation }) => {
     navigation.navigate('AddToGroupScreen', { conversationId });
   };
 
-  // Cập nhật hàm handleRemoveMember để tránh phó nhóm xóa trưởng nhóm hoặc phó nhóm khác
-
 const handleRemoveMember = (member) => {
-  // Ngăn không cho phó nhóm xóa trưởng nhóm hoặc phó nhóm khác
   if (!isCurrentUserAdmin && (member.isLeader || member.isManager)) {
     Alert.alert(
       'Không được phép',

@@ -31,7 +31,6 @@ function ReceiverMessage({
   onPressRecall = () => {},
   scrollToMessage = null,
 }) {
-  // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const content = message?.content || '';
   const time = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
   const reactLength = message?.reactions?.length || 0;
@@ -43,26 +42,22 @@ function ReceiverMessage({
   const handleViewImage = previewImage || (() => {});
   const navigation = {};
   
-  // Make sure we have message
   if (!message) {
     console.warn('ReceiverMessage received null message');
     return null;
   }
   
-  // State for message actions modal and position
   const [showActions, setShowActions] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
 
   const { type, fileUrl, _id, sender = {} } = message;
   
-  // Ensure we display a valid sender name
   const senderName = sender?.name || 
                      sender?.username ||
                      (sender?.email && sender.email.includes('@') 
                       ? sender.email.split('@')[0] 
-                      : sender?._id || 'Người dùng'); // Sử dụng ID nếu không có tên hoặc email
+                      : sender?._id || 'Người dùng');
 
-  // Thêm hàm formatFileSize
   const formatFileSize = (bytes) => {
     if (!bytes) return '';
     
@@ -72,9 +67,7 @@ function ReceiverMessage({
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  // Thêm hàm này vào sau dòng 'const senderName = ...'
   const getFileIcon = (message) => {
-    // Xác định icon dựa trên loại file và phần mở rộng
     const fileName = message.fileName || '';
     const fileType = message.fileType || '';
     const extension = fileName.split('.').pop().toLowerCase();
@@ -98,16 +91,13 @@ function ReceiverMessage({
     return "document-outline";
   };
 
-  // Cập nhật renderFile method trong ReceiverMessage.js
   const renderFile = () => {
-    // Thêm console log để debug
     console.log('Rendering file with data:', {
       fileUrl: message.fileUrl || 'missing',
       fileName: message.fileName || 'unnamed',
       fileSize: message.fileSize
     });
     
-    // Lấy fileUrl từ các thuộc tính có thể có
     const actualFileUrl = message.fileUrl || message.url || message.content;
     
     return (
@@ -203,9 +193,7 @@ function ReceiverMessage({
     );
   };
 
-  // Hiển thị tin nhắn hình ảnh
   const renderImage = () => {
-    // Lấy URL hình ảnh từ message
     const imageUrl = message.fileUrl || message.content;
     
     if (!imageUrl) {
@@ -226,7 +214,6 @@ function ReceiverMessage({
     );
   };
 
-  // Hiển thị tin nhắn video
   const renderVideo = () => {
     const videoUrl = message.fileUrl || message.content;
     const thumbnailUrl = message.thumbnail || null;
@@ -290,7 +277,6 @@ function ReceiverMessage({
     );
   };
 
-  // Render appropriate message content based on type
   const renderContent = () => {
     switch (type) {
       case messageType.IMAGE:
@@ -307,7 +293,6 @@ function ReceiverMessage({
     }
   };
 
-  // Handle long press to open message actions
   const handleLongPress = (event) => {
     // Trích xuất tọa độ từ sự kiện press
     const { pageX, pageY } = event.nativeEvent;
@@ -328,13 +313,11 @@ function ReceiverMessage({
     setShowActions(true);
   };
 
-  // Close the message actions
   const handleCloseActions = () => {
     setShowActions(false);
     setMenuPosition(null);
   };
 
-  // Handle text selection for copy
   const handleCopyText = (text) => {
     // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
     let textToCopy = text || '';
@@ -368,19 +351,15 @@ function ReceiverMessage({
     }
   };
 
-  // Check if message is recalled or deleted
   const isRecalled = message.manipulatedUserIds?.includes(message.userId);
   const isDeleted = message.isDeleted;
   
-  // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
-  // Sử dụng nhiều cách khác nhau để xác định tin nhắn chuyển tiếp
   const isForwarded = 
     message.metadata?.isForwarded === true || 
     message.forwardedMessage === true ||
     message.content?.startsWith('📤 Tin nhắn được chuyển tiếp:') ||
     (typeof message.forwardedMessage === 'string' && message.forwardedMessage === 'true');
   
-  // Log thông tin để debug
   console.log('[ReceiverMessage] Trạng thái chuyển tiếp:', {
     messageId: message._id,
     metadata_isForwarded: message.metadata?.isForwarded,
@@ -389,12 +368,10 @@ function ReceiverMessage({
     final_isForwarded: isForwarded
   });
   
-  // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
     ? {...styles.messageContent, backgroundColor: '#a0a0a0'} 
     : styles.messageContent;
 
-  // Add new function to render reply preview
   const renderReplyPreview = () => {
     // Kiểm tra chặt chẽ hơn về dữ liệu tin nhắn trả lời
     // - replyToMessage phải tồn tại và có _id

@@ -27,18 +27,12 @@ const VoteDetailScreen = ({ navigation, route }) => {
   const currentVote = chatState?.currentVote || route.params?.voteData;
   const { user } = useSelector(state => state.auth);
   
-  // Thêm state để quản lý loading
   const [loading, setLoading] = useState(false);
-  // Mapping người dùng với ID
   const [userMapping, setUserMapping] = useState({});
-  // Thay đổi state để lưu nhiều lựa chọn
   const [selectedOptions, setSelectedOptions] = useState([]);
-  // Lưu trạng thái ban đầu (mảng các phương án)
   const [initialVoteState, setInitialVoteState] = useState([]);
-  // Kiểm tra nếu đã thay đổi lựa chọn
   const [hasChanged, setHasChanged] = useState(false);
 
-  // Sửa phần useEffect fetch dữ liệu ban đầu
   useEffect(() => {
     if (!currentVote && route.params?.conversationId) {
       const fetchVoteDetails = async () => {
@@ -137,17 +131,14 @@ const VoteDetailScreen = ({ navigation, route }) => {
     }
   }, [route.params?.conversationId, currentVote?.userOptions]);
 
-  // Sửa phần xác định các lựa chọn của người dùng
   useEffect(() => {
     if (currentVote && currentVote.options && user) {
       console.log('Current user:', user);
       const fetchCorrectUserId = async () => {
         try {
-          // Sử dụng email của người dùng để tìm MongoDB ID
           const userEmail = user.email || user._id;
           console.log('Searching for userId with email:', userEmail);
 
-          // Gọi API để lấy thông tin user từ email
           const response = await userService.searchByUsername(userEmail);
           
           if (response && response.data) {
@@ -182,19 +173,15 @@ const VoteDetailScreen = ({ navigation, route }) => {
     }
   }, [currentVote, user]);
 
-  // Thêm useEffect để lắng nghe socket events
   useEffect(() => {
-    // Đăng ký event listener khi component mount
     if (currentVote && currentVote._id) {
       const handleVoteUpdated = (updatedMessage) => {
         console.log('Received socket vote-updated event');
         
-        // Chỉ xử lý nếu là vote hiện tại
         if (updatedMessage._id === currentVote._id && updatedMessage.type === 'VOTE') {
           console.log('Updating current vote from socket event');
           dispatch(setCurrentVote(updatedMessage));
           
-          // Cập nhật mapping
           if (updatedMessage.userOptions && Array.isArray(updatedMessage.userOptions)) {
             const mapping = {};
             updatedMessage.userOptions.forEach(user => {
@@ -203,7 +190,6 @@ const VoteDetailScreen = ({ navigation, route }) => {
             setUserMapping(mapping);
           }
           
-          // Fetch lại các lựa chọn của người dùng hiện tại
           if (user && updatedMessage.options) {
             const userEmail = user.email || user._id;
             userService.searchByUsername(userEmail)
@@ -308,7 +294,6 @@ const VoteDetailScreen = ({ navigation, route }) => {
 
   const { content, options = [] } = currentVote;
   
-  // Sắp xếp options theo số người bình chọn (giảm dần)
   const sortedOptions = [...options].sort((a, b) => 
     (b.userIds?.length || 0) - (a.userIds?.length || 0)
   );
@@ -316,7 +301,6 @@ const VoteDetailScreen = ({ navigation, route }) => {
   const totalVotes = voteUtils.getTotalOfVotes(options);
   const totalVoters = voteUtils.getNumOfPeopleVoted(options);
 
-  // Tạo thời gian hiển thị
   const createdDate = new Date(currentVote.createdAt);
   const formattedDate = createdDate.toLocaleDateString('vi-VN', {
     year: 'numeric',
@@ -326,7 +310,6 @@ const VoteDetailScreen = ({ navigation, route }) => {
     minute: '2-digit'
   });
 
-  // Kiểm tra xem hai mảng có các phần tử khác nhau không
   const areArraysDifferent = (arr1, arr2) => {
     if (arr1.length !== arr2.length) return true;
     
@@ -340,19 +323,16 @@ const VoteDetailScreen = ({ navigation, route }) => {
     return false;
   };
 
-  // Xử lý khi người dùng chọn một phương án
   const handleVoteChange = (isChecked, optionName) => {
     console.log(`Option ${optionName} changed to ${isChecked ? 'checked' : 'unchecked'}`);
     
     let updatedOptions = [...selectedOptions];
     
     if (isChecked) {
-      // Thêm phương án vào danh sách đã chọn nếu chưa có
       if (!updatedOptions.includes(optionName)) {
         updatedOptions.push(optionName);
       }
     } else {
-      // Xóa phương án khỏi danh sách đã chọn nếu có
       updatedOptions = updatedOptions.filter(option => option !== optionName);
     }
     
@@ -361,8 +341,7 @@ const VoteDetailScreen = ({ navigation, route }) => {
     setHasChanged(areArraysDifferent(updatedOptions, initialVoteState));
   };
 
-  // Cập nhật hàm handleConfirm
-const handleConfirm = async () => {
+  const handleConfirm = async () => {
   try {
     if (!user) {
       Alert.alert('Lỗi', 'Bạn cần đăng nhập để bình chọn');
@@ -493,14 +472,11 @@ const handleConfirm = async () => {
   }
 };
 
-  // Xử lý khi nhấn nút hủy
   const handleCancel = () => {
-    // Khôi phục lại trạng thái ban đầu
     setSelectedOptions([...initialVoteState]);
     setHasChanged(false);
   };
 
-  // Lấy thông tin người tạo bình chọn
   const creatorName = currentVote.user?.name || 'Người dùng';
   const creatorAvatar = currentVote.user?.avatar || '';
   const creatorAvatarColor = currentVote.user?.avatarColor || '#1194ff';

@@ -66,7 +66,6 @@ const MessageActions = ({
     }
   }, [visible, scaleAnim, opacityAnim]);
   
-  // Cải thiện logic xác định tin nhắn của mình
   const isMyMessage = message?.userId === currentUserId || 
                      message?.sender?._id === currentUserId || 
                      message?.senderId === currentUserId ||

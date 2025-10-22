@@ -2,7 +2,6 @@ import api from './axios';
 
 // User profile services
 export const userService = {
-  // Lấy thông tin người dùng theo ID
   fetchUser: async (userId) => {
     try {
       const response = await api.get(`/users/${userId}`);
@@ -12,7 +11,6 @@ export const userService = {
     }
   },
 
-  // Cập nhật thông tin profile
   updateProfile: async (userData) => {
     try {
       const response = await api.put('/me/update', userData);
@@ -23,7 +21,6 @@ export const userService = {
     }
   },
 
-  // Upload avatar
   uploadAvatar: async (formData) => {
     try {
       const response = await api.put('/me/avatar', {
@@ -118,7 +115,6 @@ export const userService = {
     }
   },
 
-  // Lấy thông tin chi tiết của một người dùng
   getUserById: async (userId) => {
     try {
       // Sử dụng endpoint có sẵn từ backend
@@ -129,12 +125,11 @@ export const userService = {
       throw error.response || { message: 'Lỗi kết nối đến server' };
     }
   },
-  //Lấy avatar từ userName
+  
   getAvatarByEmail: async (email) => {
     try {
       if (!email) return null;
       
-      // Gọi API để lấy thông tin user từ email
       const response = await api.get(`/users/search/username/${encodeURIComponent(email)}`);
       
       if (response && response.data) {
@@ -148,7 +143,6 @@ export const userService = {
     }
   },
   
-  // Lấy thông tin profile của người dùng hiện tại
   getUserProfile: async (username) => {
     try {
       console.log('Calling API with username:', username);
@@ -173,12 +167,10 @@ export const userService = {
     }
   },
   
-  // Thay đổi mật khẩu người dùng
   changePassword: async (oldPassword, newPassword, username) => {
     try {
       console.log('Changing password for user:', username);
       
-      // Sử dụng đúng endpoint và phương thức HTTP
       const response = await api.patch('/me/password', { 
         oldPassword: oldPassword,     // Dùng đúng tên trường theo backend
         newPassword: newPassword 
@@ -190,10 +182,8 @@ export const userService = {
     }
   },
   
-  // Lấy gợi ý kết bạn
   getSuggestedUsers: async () => {
     try {
-      // Kiểm tra xem backend có sẵn API này không, nếu không thì cần cập nhật
       const response = await api.get('/users/suggestions');
       return response;
     } catch (error) {
@@ -202,7 +192,6 @@ export const userService = {
     }
   },
 
-  // Thêm hàm mới để lấy userId từ email
   getUserIdByEmail: async (email) => {
     try {
       if (!email) return null;

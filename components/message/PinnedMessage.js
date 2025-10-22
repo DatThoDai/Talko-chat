@@ -17,14 +17,11 @@ import commonFuc from '../../utils/commonFuc';
 import { pinMessagesApi } from '../../api/pinMessagesApi';
 
 const PinnedMessage = ({ pinnedMessages, onViewDetail, onViewImage, onUnpin }) => {
-  // Hàm xử lý bỏ ghim tin nhắn
   const handleUnpin = async (messageId) => {
     try {
-      // Gọi API để bỏ ghim tin nhắn
       const response = await pinMessagesApi.unpinMessage(messageId);
       
-      // Gọi callback nếu được truyền vào
-      if (typeof onUnpin === 'function') {
+      if (onUnpin) {
         onUnpin(messageId);
       }
       

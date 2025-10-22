@@ -61,7 +61,6 @@ const formatLastMessage = (message) => {
 };
 
 const ConversationItem = ({ item, onPress, currentUserId }) => {
-  // Thêm log
   React.useEffect(() => {
     if (item.lastMessage) {
       console.log(`🔄 HOME: Rendering conversation item ${item.name || 'Unknown'}:`, {
@@ -73,21 +72,16 @@ const ConversationItem = ({ item, onPress, currentUserId }) => {
     }
   }, [item.lastMessage]);
   
-  // Calculate unread count
   const unreadCount = item.unreadMessages?.length || 0;
   
-  // Get last message timestamp
   const lastMessageTime = item.lastMessage?.createdAt 
     ? formatTime(item.lastMessage.createdAt)
     : '';
   
-  // Get last message content
   const lastMessageContent = formatLastMessage(item.lastMessage);
   
-  // Check if this is a group conversation
   const isGroup = item.isGroup || item.participants?.length > 2;
   
-  // Get sender name if this is a group conversation
   const senderPrefix = isGroup && item.lastMessage && item.lastMessage.sender?._id !== currentUserId
     ? `${item.lastMessage.sender?.name || 'Ai đó'}: `
     : '';
@@ -166,9 +160,8 @@ const HomeScreen = ({ navigation }) => {
     return () => {
       notificationService.unloadSound();
     };
-  }, [user?._id]); // Thêm user?._id vào dependencies
+  }, [user?._id]);
   
-  // Thêm useEffect để join vào các conversation mỗi khi conversations thay đổi
   useEffect(() => {
     const socket = getSocket();
     if (socket && socket.connected && conversations?.length > 0) {
@@ -183,7 +176,6 @@ const HomeScreen = ({ navigation }) => {
     dispatch(fetchConversations());
   }, [dispatch]);
   
-  // Setup socket listeners for new messages
   useEffect(() => {
     const socket = getSocket();
     
@@ -239,7 +231,6 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [dispatch, user]);
   
-  // Thêm useEffect để quan sát thay đổi của conversations
   useEffect(() => {
     console.log(`🗂️ HOME: Conversations updated: ${conversations?.length || 0} conversations`);
     if (conversations?.length > 0) {

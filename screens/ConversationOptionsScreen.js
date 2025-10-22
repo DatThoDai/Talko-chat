@@ -43,14 +43,11 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [changeAvatarModalVisible, setChangeAvatarModalVisible] = useState(false);
   
-  // Thêm dòng này để khởi tạo dispatch
   const dispatch = useDispatch();
   
   useEffect(() => {
-    // Giả định trạng thái mặc định là "đã bật thông báo"
     setNotificationEnabled(true);
     
-    // Debug thông tin để xác nhận params
     console.log('ConversationOptions loaded with params:', {
       conversationId,
       name,
@@ -58,14 +55,12 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
       isGroupParam: route.params?.isGroupChat
     });
     
-    // Thêm kiểm tra vai trò nếu là nhóm
     if (type === 'group' || route.params?.isGroupChat) {
       checkUserRole();
     }
     
   }, [conversationId]);
 
-  // Thêm hàm mới để kiểm tra vai trò
   const checkUserRole = async () => {
     try {
       const response = await conversationApi.fetchConversation(conversationId);
@@ -128,21 +123,17 @@ const ConversationOptionsScreen = ({ route, navigation }) => {
       name,
       isGroup: type === 'group' || Boolean(route.params?.isGroupChat)
     });
-    // Xóa dòng navigation.goBack() ở đây vì nó sẽ làm người dùng quay lại trước khi thấy màn hình Member
   };
 
-  // Sửa hàm handleViewMedia
 const handleViewMedia = async () => {
   try {
     console.log('handleViewMedia called with conversationId:', conversationId);
     console.log('Route params:', route.params);
-    // Hiển thị loading nếu cần
     setIsLoading(prev => ({ ...prev, media: true }));
     
-    // Sử dụng conversationId từ route.params thay vì currentConversationId
     await dispatch(
       fetchFiles({
-        conversationId: conversationId, // Sửa ở đây
+        conversationId: conversationId,
         type: messageType.ALL,
       })
     );

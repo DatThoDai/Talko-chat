@@ -43,18 +43,15 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     scrollToMessage = null
   } = rest;
   
-  // Trích xuất trường dữ liệu từ message để tương thích với code cũ
   const messageContent = message?.content || content;
   const messageTime = message?.createdAt ? new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : time;
   const messageReactLength = message?.reactions?.length || reactLength;
   const messageReactVisibleInfo = messageReactLength > 0 ? `${messageReactLength}` : reactVisibleInfo;
-  // Ưe tiên sử dụng conversationId từ props, nếu không có thì lấy từ message
   const msgConversationId = conversationId || message?.conversationId;
   const userCurrentId = currentUserId || message?.sender?._id;
   const messageStatus = message?.status || 'sent';
   console.log('[SenderMessage] messageTime:', messageTime, 'from createdAt:', message.createdAt);
 
-  // Make sure we have message and sender
   if (!message) {
     console.warn('SenderMessage received null or undefined message');
     return null;
@@ -62,19 +59,15 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
 
   const { type, sender = {}, fileUrl, fileName, fileSize } = message;
   
-  // Ensure sender name is correct for this user
   const senderName = sender?.name === 'truong chi bao' ? 
     'truong chi bao' : // Keep this exact name
     sender?.name || 'You';
 
-  // Force message to be recognized as from current user
   const isMyMessage = true;
   
-  // State for message actions modal and position
   const [showActions, setShowActions] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   
-  // Chuyển đổi dung lượng file sang định dạng readable
   const formatFileSize = (bytes) => {
     if (!bytes) return '';
     
@@ -83,8 +76,6 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
-
-  // Thêm function này vào khu vực các phương thức xử lý sự kiện
 
   const handleViewImageLocal = (url, senderName) => {
     if (previewImage && typeof previewImage === 'function') {
@@ -132,7 +123,6 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     return validUrl;
   };
 
-  // Render appropriate message content based on type
   const renderContent = () => {
     switch (type) {
       case messageType.FILE:
@@ -282,7 +272,6 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     );
   };
 
-  // Handle long press to open message actions
   const handleLongPress = (event) => {
     // Trích xuất tọa độ từ sự kiện press
     const { pageX, pageY } = event.nativeEvent;
@@ -303,13 +292,11 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     setShowActions(true);
   };
 
-  // Close the message actions
   const handleCloseActions = () => {
     setShowActions(false);
     setMenuPosition(null);
   };
 
-  // Handle text selection for copy
   const handleCopyText = (text) => {
     // Đảm bảo sao chép được nội dung tin nhắn dù nó ở đâu
     let textToCopy = text || '';
@@ -345,19 +332,15 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     }
   };
 
-  // Check if message is recalled or deleted
   const isRecalled = message.manipulatedUserIds?.includes(message.userId);
   const isDeleted = message.isDeleted;
   
-  // Kiểm tra xem tin nhắn có phải là tin nhắn được chuyển tiếp hay không
-  // Sử dụng nhiều cách khác nhau để xác định tin nhắn chuyển tiếp
   const isForwarded = 
     message.metadata?.isForwarded === true || 
     message.forwardedMessage === true ||
     message.content?.startsWith('📤 Tin nhắn được chuyển tiếp:') ||
     (typeof message.forwardedMessage === 'string' && message.forwardedMessage === 'true');
   
-  // Log thông tin để debug
   console.log('[SenderMessage] Trạng thái chuyển tiếp:', {
     metadata_isForwarded: message.metadata?.isForwarded,
     forwardedMessage: message.forwardedMessage,
@@ -365,12 +348,10 @@ function SenderMessage({ someProp = 'defaultValue', ...rest }) {
     final_isForwarded: isForwarded
   });
   
-  // Modified message style if recalled or deleted
   const messageStyle = isRecalled || isDeleted 
     ? {...styles.messageContent, backgroundColor: '#f0f0f0'} 
     : styles.messageContent;
   
-  // Hiển thị chỉ báo trạng thái tin nhắn
   const renderMessageStatus = () => {
     if (!messageStatus) return null;
     
@@ -807,7 +788,6 @@ SenderMessage.propTypes = {
   loading: PropTypes.bool,
   previewImage: PropTypes.func,
   navigation: PropTypes.object,
-  // Giữ lại các propTypes cũ để tương thích
   content: PropTypes.string,
   time: PropTypes.string,
   reactVisibleInfo: PropTypes.string,

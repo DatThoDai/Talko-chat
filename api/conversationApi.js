@@ -3,42 +3,35 @@ import { API_ENDPOINTS , REACT_APP_API_URL } from '../constants';
 
 
 const BASE_URL = REACT_APP_API_URL + API_ENDPOINTS.CONVERSATIONS;
-// const BASE_URL = REACT_APP_API_URL;
 
-// Log để debug endpoint
 console.log('Using conversation endpoint:', BASE_URL);
 
 const conversationApi = {
-  // Phương thức upload file với tiến trình
   uploadFile: async (formData, onProgress) => {
     console.log('Uploading file...', formData);
 
     try {
-      // Tạo hàm callback progress để cập nhật tiến trình
       const progressCallback = (progressEvent) => {
         if (progressEvent.lengthComputable) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           console.log(`Upload progress: ${percentCompleted}%`);
           
-          // Gọi callback nếu có
           if (typeof onProgress === 'function') {
             onProgress(percentCompleted);
           }
         }
       };
       
-      // Gọi API upload đúng endpoint theo backend CNM_Chat
       const response = await axiosClient.post(`/messages/files`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         onUploadProgress: progressCallback,
-        timeout: 60000, // Tăng timeout lên 60 giây cho upload file
+        timeout: 60000,
       });
       
       console.log('File uploaded successfully:', response);
       
-      // Trả về dữ liệu theo cấu trúc đã thống nhất
       return {
         success: true,
         message: 'File uploaded successfully',
@@ -47,15 +40,12 @@ const conversationApi = {
     } catch (error) {
       console.error('Error uploading file:', error);
       
-      // Thử lại với mock data nếu backend chưa hoàn thiện
       console.warn('Using mock data for file upload response...');
       
-      // Gọi onProgress 100% để hoàn tất tiến trình bất kể thế nào
       if (typeof onProgress === 'function') {
         onProgress(100);
       }
       
-      // Trả về dữ liệu mẫu để không làm đứt quá trình 
       return {
         success: true,
         message: 'Mock file upload response',
@@ -63,7 +53,7 @@ const conversationApi = {
           _id: `file-${Date.now()}`,
           fileUrl: formData.get('file')?.uri || 'https://example.com/file.jpg',
           fileName: formData.get('file')?.name || 'file.jpg',
-          fileSize: 1024 * 1024, // 1MB
+          fileSize: 1024 * 1024,
           conversationId: formData.get('conversationId') || '',
           createdAt: new Date().toISOString(),
           sender: {
@@ -75,40 +65,32 @@ const conversationApi = {
     }
   },
 
-  // Phương thức gửi tin nhắn văn bản
   sendTextMessage: async (messageData) => {
     console.log('Sending text message:', messageData);
 
     try {
-      // Gọi API đúng endpoint theo backend CNM_Chat: /messages/text
-      // Đảm bảo request body đúng định dạng
       const requestBody = {
         conversationId: messageData.conversationId,
         content: messageData.content,
-        type: "TEXT", // Đảm bảo type là TEXT viết hoa
-        tempId: messageData.tempId || `temp-${Date.now()}` // Thêm tempId để tracking
+        type: "TEXT",
+        tempId: messageData.tempId || `temp-${Date.now()}`
       };
       
-      // Xử lý trường hợp tin nhắn trả lời
-      // Ưu tiên replyMessageId nếu có
       if (messageData.replyMessageId) {
         requestBody.replyMessageId = messageData.replyMessageId;
         console.log('Using existing replyMessageId:', requestBody.replyMessageId);
       } 
-      // Sử dụng replyToId nếu không có replyMessageId
       else if (messageData.replyToId) {
         requestBody.replyMessageId = messageData.replyToId;
         console.log('Using replyToId as replyMessageId:', requestBody.replyMessageId);
       }
-      // Sử dụng replyToMessage._id nếu có replyToMessage object
       else if (messageData.replyToMessage && messageData.replyToMessage._id) {
         requestBody.replyMessageId = messageData.replyToMessage._id;
         console.log('Using replyToMessage._id as replyMessageId:', requestBody.replyMessageId);
       }
 
-      // Sử dụng endpoint đúng từ backend CNM_Chat
       const response = await axiosClient.post(`${BASE_URL.replace('/conversations', '')}/messages/text`, requestBody, {
-        timeout: 10000, // 10 giây timeout
+        timeout: 10000,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -125,13 +107,10 @@ const conversationApi = {
       console.error('Error sending message:', error);
       console.warn('Detailed error:', JSON.stringify(error.response || error, null, 2));
       
-      // Lấy tempId từ request để đảm bảo tin nhắn tạm thời có thể được cập nhật
       const tempId = messageData.tempId || `msg-${Date.now()}`;
       
-      // Tạo dữ liệu mẫu tương tự với cấu trúc dữ liệu từ backend
       console.warn('Using mock data for message response...');
       
-      // Đảm bảo tin nhắn có thuộc tính isMyMessage=true
       return {
         success: true, 
         message: 'Mock message sent',
@@ -146,14 +125,13 @@ const conversationApi = {
             name: 'Current User',
           },
           type: 'TEXT',
-          isMyMessage: true, // Thêm trường này để đảm bảo tin nhắn được hiển thị đúng
-          isTemp: true // Đánh dấu là tin nhắn tạm thời
+          isMyMessage: true,
+          isTemp: true
         }
       };
     }
   },
   
-  // Lấy danh sách cuộc trò chuyện - endpoint giống với Talko-chat-web/apis/conversationApi.js
   fetchConversations: params => {
     return axiosClient.get(BASE_URL, {params});
   },
@@ -169,7 +147,6 @@ const conversationApi = {
   },
 
   addConversation: userId => {
-    // Tương ứng với method createConversationIndividual trong Talko-chat-web
     const url = `${BASE_URL}/individuals/${userId}`;
     return axiosClient.post(url);
   },
@@ -272,39 +249,28 @@ const conversationApi = {
       data: {managerIds},
     });
   },
-  // Thêm phương thức getPinnedMessages để khắc phục lỗi trong MessageScreen
+  
   getPinnedMessages: (conversationId) => {
-    // Cố gắng lấy tin nhắn được ghim từ server nếu có
     try {
-      // Trả về mảng rỗng làm fallback khi chức năng này chưa được triển khai hoàn chỉnh
       console.log(`Getting pinned messages for conversation ${conversationId} (fallback method)`);
       return [];
-      
-      // TODO: Triển khai sau khi backend hỗ trợ endpoints cho tin nhắn ghim
-      // Tham khảo: return axiosClient.get(`${BASE_URL}/${conversationId}/pinned-messages`);
     } catch (error) {
       console.error('Error fetching pinned messages:', error);
-      return []; // Trả về mảng rỗng để không gây crash
+      return [];
     }
   },
   
-  // Thêm phương thức getMessages để lấy tin nhắn từ một cuộc trò chuyện
-  // Đây là phương thức đang được gọi từ MessageScreen.js
   getMessages: async (conversationId, page = 0, pageSize = 30, currentUserId = null) => {
     try {
       console.log(`Fetching messages for conversation ${conversationId}, page ${page}`);
       
-      // Sử dụng endpoint trong messageApi.js
       const url = `${API_ENDPOINTS.MESSAGES}/${conversationId}`;
       
-      // Mock data tạm thời cho tin nhắn khi backend chưa hoàn thiện
-      // Lưu ý: Chỉ sử dụng khi backend không trả về dữ liệu đủ
-      const useMockData = false; // Đã tắt mock data để sử dụng dữ liệu thực từ MongoDB
+      const useMockData = false;
       
       if (useMockData) {
         console.log('Using mock data for messages');
         
-        // Tạo một số tin nhắn mẫu
         const mockData = [
           {
             _id: `mock-${Date.now()}-1`,
@@ -349,7 +315,8 @@ const conversationApi = {
               avatarColor: '#673ab7'
             },
             isDeleted: false,
-            reactions: []
+            reactions: [],
+            isMyMessage: true,
           },
           {
             _id: `mock-${Date.now()}-4`,
@@ -398,7 +365,6 @@ const conversationApi = {
         }
       });
       
-      // Kiểm tra cấu trúc dữ liệu trả về chi tiết để debug
       console.log('API response structure:', {
         status: response.status,
         hasData: !!response.data,
@@ -408,31 +374,24 @@ const conversationApi = {
         hasDataProperty: response.data && response.data.data !== undefined,
       });
       
-      // Xử lý trường hợp cấu trúc API response là { data: [...messages] }
       let messagesData = [];
       
       if (response.data) {
         if (Array.isArray(response.data)) {
-          // Nếu response.data là một mảng
           messagesData = response.data;
         } else if (response.data.data && Array.isArray(response.data.data)) {
-          // Nếu response.data.data là một mảng (cấu trúc chuẩn API)
           messagesData = response.data.data;
         } else if (typeof response.data === 'object') {
-          // Nếu response.data là một object, trả về mảng rỗng để tránh crash
           console.warn('Unexpected API response format, trying to continue');
           messagesData = [];
         }
       }
       
-      // Chuẩn hóa tin nhắn và chuyển đổi thông tin người gửi
       messagesData = messagesData.map(message => {
-        // Kiểm tra tin nhắn có hợp lệ không
         if (!message || typeof message !== 'object') {
-          return null; // Bỏ qua tin nhắn không hợp lệ
+          return null;
         }
         
-        // Log toàn bộ tin nhắn để kiểm tra cấu trúc dữ liệu
         try {
           const messageShort = JSON.stringify(message).substring(0, 1000);
           console.log(`Message ${message._id || 'unknown'} structure:`, messageShort);
@@ -449,12 +408,9 @@ const conversationApi = {
           console.error('Error logging message:', e.message);
         }
         
-        // Xử lý thông tin người gửi
         let sender = message.sender;
         let userId = null;
         let userName = null;
-        
-        // Kiểm tra các trường phổ biến có thể chứa ID người dùng
         if (message.sender) userId = message.sender;
         else if (message.userId) userId = message.userId;
         else if (message.user) userId = message.user;
@@ -478,12 +434,9 @@ const conversationApi = {
             avatarColor: message.user.avatarColor || message.user.color || ''
           };
         }
-        // Nếu sender là chuỗi ID hoặc username
         else if (typeof message.sender === 'string' || userId) {
-          // Có thể backend chỉ gửi userId hoặc username
           console.log(`Converting sender string to object: ${message.sender || userId}`);
           
-          // Tạo sender object với dữ liệu có sẵn hoặc lấy từ userId/userName
           const avatarName = userName || userId || 'User';
           sender = {
             _id: message.sender || userId || 'unknown',
@@ -492,7 +445,6 @@ const conversationApi = {
             avatarColor: message.senderAvatarColor || message.userAvatarColor || '#' + Math.floor(Math.random()*16777215).toString(16)
           };
         } 
-        // Nếu sender là object nhưng cấu trúc không khớp với mobile app
         else if (message.sender && typeof message.sender === 'object') {
           console.log(`Normalizing sender object with keys: ${Object.keys(message.sender).join(', ')}`);
           sender = {
@@ -540,14 +492,11 @@ const conversationApi = {
           isMyMessage: isMyMessage,
         };
         
-        // Chỉ thêm các trường liên quan đến file nếu có
         if (message.fileUrl) normalizedMessage.fileUrl = message.fileUrl;
         if (message.fileName) normalizedMessage.fileName = message.fileName;
         if (message.fileType) normalizedMessage.fileType = message.fileType;
         if (message.fileSize) normalizedMessage.fileSize = message.fileSize;
         
-        // Chỉ thêm trường replyMessage, replyTo, hoặc replyToMessage nếu có trong dữ liệu gốc
-        // và có _id hợp lệ
         if (message.replyMessage && message.replyMessage._id) {
           normalizedMessage.replyMessage = message.replyMessage;
         }

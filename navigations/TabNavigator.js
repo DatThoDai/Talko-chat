@@ -9,17 +9,14 @@ import { useSelector } from 'react-redux';
 import { createSelector } from '@reduxjs/toolkit';
 import FriendsScreen from '../screens/FriendsScreen';
 
-// Tiếp tục sử dụng Material Top Tabs nhưng sửa lại cách triển khai
 const Tab = createMaterialTopTabNavigator();
 
-// Sử dụng createSelector đúng cách để tránh re-render không cần thiết
 const selectChat = state => state.chat;
 const selectChatConversations = createSelector(
   [selectChat],
   (chat) => (chat && chat.conversations) || []
 );
 
-// Tạo component riêng cho từng tab để tránh lỗi key prop
 function TabIcon({ iconName, focused, unreadCount }) {
   return (
     <View style={styles.iconContainer}>

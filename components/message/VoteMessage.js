@@ -17,10 +17,8 @@ const VoteMessage = ({
   const auth = useSelector(state => state.auth);
   const user = auth?.user;
 
-  // Thêm kiểm tra để đảm bảo message.options tồn tại
   const messageOptions = message?.options || [];
   
-  // Sửa dòng gây lỗi, đảm bảo options là mảng hợp lệ
   const options = Array.isArray(messageOptions) 
     ? [...messageOptions].sort((option1, option2) =>
         (option1.userIds?.length || 0) > (option2.userIds?.length || 0) ? -1 : 1

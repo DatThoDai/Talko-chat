@@ -35,7 +35,6 @@ const ChangePasswordScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Lấy thông tin user từ Redux store thay vì AuthContext
   const { user: authUser } = useSelector((state) => state.auth);
   
   const handleSubmit = async (values, { resetForm }) => {

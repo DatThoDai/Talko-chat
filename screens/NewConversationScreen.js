@@ -28,7 +28,6 @@ const NewConversationScreen = ({ navigation }) => {
   
   const { user: currentUser } = useSelector(state => state.auth);
   
-  // Load danh sách bạn bè khi màn hình được khởi tạo
   useEffect(() => {
     const fetchFriends = async () => {
       setIsLoading(true);
@@ -37,7 +36,7 @@ const NewConversationScreen = ({ navigation }) => {
         if (response && response.data) {
           console.log('Loaded friends:', response.data.length);
           setAllFriends(response.data);
-          setUsers(response.data); // Hiển thị tất cả bạn bè ban đầu
+          setUsers(response.data);
         } else {
           console.log('No friends data received');
           setAllFriends([]);
@@ -54,11 +53,8 @@ const NewConversationScreen = ({ navigation }) => {
     fetchFriends();
   }, []);
   
-  // Tìm kiếm bạn bè từ danh sách local
   useEffect(() => {
-    // Lọc danh sách bạn bè theo từ khóa tìm kiếm
     if (searchText.trim() === '') {
-      // Hiển thị tất cả bạn bè trừ những người đã được chọn
       const unselectedFriends = allFriends.filter(friend => 
         !selectedUsers.some(selected => selected._id === friend._id)
       );
@@ -68,7 +64,6 @@ const NewConversationScreen = ({ navigation }) => {
     
     const lowerCaseSearch = searchText.toLowerCase();
     const filteredUsers = allFriends.filter(friend => 
-      // Chỉ hiển thị bạn bè chưa được chọn và tên/username khớp với từ khóa
       !selectedUsers.some(selected => selected._id === friend._id) &&
       ((friend.name && friend.name.toLowerCase().includes(lowerCaseSearch)) || 
       (friend.username && friend.username.toLowerCase().includes(lowerCaseSearch)) ||
@@ -78,38 +73,26 @@ const NewConversationScreen = ({ navigation }) => {
     setUsers(filteredUsers);
   }, [searchText, allFriends, selectedUsers]);
   
-  // Cập nhật useEffect để tự động bật/tắt chế độ nhóm
   useEffect(() => {
-    // Nếu người dùng chọn từ 2 người trở lên, tự động bật chế độ nhóm
     if (selectedUsers.length >= 2 && !isGroup) {
       setIsGroup(true);
       
-      // Đặt tên nhóm mặc định nếu chưa có
       if (!groupName.trim()) {
         const nameList = selectedUsers.map(user => user.name || user.username || 'User').slice(0, 3);
         setGroupName(nameList.join(', ') + (selectedUsers.length > 3 ? '...' : ''));
       }
     }
-    
-    // Tùy chọn: Tự động tắt chế độ nhóm khi chỉ còn 1 người
-    // Bỏ comment dòng dưới nếu muốn tắt tự động
-    // if (selectedUsers.length === 1 && isGroup) {
-    //   setIsGroup(false);
-    // }
   }, [selectedUsers]);
 
-  // Handle user selection
   const handleSelectUser = (user) => {
     setSelectedUsers([...selectedUsers, user]);
-    setSearchText(''); // Xóa ô tìm kiếm sau khi chọn
+    setSearchText('');
   };
   
-  // Handle removing a selected user
   const handleRemoveUser = (user) => {
     setSelectedUsers(selectedUsers.filter(u => u._id !== user._id));
   };
   
-  // Xử lý tạo cuộc trò chuyện mới
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) {
       Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một người dùng.');
@@ -187,7 +170,6 @@ const NewConversationScreen = ({ navigation }) => {
     }
   };
   
-  // Render người dùng đã được chọn
   const renderSelectedUserChip = ({ item }) => (
     <View style={styles.selectedUserChip}>
       <CustomAvatar 
@@ -209,7 +191,6 @@ const NewConversationScreen = ({ navigation }) => {
     </View>
   );
   
-  // Render người dùng trong danh sách
   const renderUserItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.userItem} 

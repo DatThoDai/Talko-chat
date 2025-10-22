@@ -56,16 +56,14 @@ const FriendsScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
-  // Thêm refs để theo dõi trạng thái nhưng không gây render
   const hasLoadedRef = useRef(false);
   const isMountedRef = useRef(true);
   const loadingRef = useRef(false);
   
   const { user } = useSelector((state) => state.auth);
   
-  // Hàm loadFriends mới, kiểm tra trạng thái loading
   const loadFriends = useCallback(async () => {
-    if (loadingRef.current) return; // Ngăn gọi API khi đang loading
+    if (loadingRef.current) return;
     
     loadingRef.current = true;
     try {
@@ -91,7 +89,6 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, []);
   
-  // Hàm refresh
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadFriends();
@@ -100,10 +97,6 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, [loadFriends]);
   
-  // Không cần hàm này nữa, gộp với useFocusEffect
-  // const handleInitialLoad = useCallback...
-  
-  // Search filter không thay đổi
   useEffect(() => {
     if (searchText.trim() === '') {
       setFilteredFriends(friends);
@@ -117,17 +110,14 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, [searchText, friends]);
   
-  // Thiết lập cleanup khi component unmount 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
   }, []);
   
-  // Sửa useFocusEffect để tránh vòng lặp vô hạn
   useFocusEffect(
     useCallback(() => {
-      // Chỉ load khi chưa từng load hoặc khi refresh thủ công
       if (!hasLoadedRef.current && !loadingRef.current) {
         setIsLoading(true);
         loadFriends().finally(() => {
@@ -140,10 +130,9 @@ const FriendsScreen = ({ navigation }) => {
       return () => {
         // Cleanup nếu cần
       };
-    }, [loadFriends]) // Giảm dependencies
+    }, [loadFriends])
   );
   
-  // Sửa hàm handleUnfriend để đảm bảo không gọi lại screen
   const handleUnfriend = useCallback((friend) => {
     Alert.alert(
       'Xóa bạn',
@@ -157,7 +146,6 @@ const FriendsScreen = ({ navigation }) => {
             try {
               await friendApi.deleteFriend(friend._id);
               
-              // Cập nhật state local thay vì gọi API lại
               if (isMountedRef.current) {
                 const newFriends = friends.filter(f => f._id !== friend._id);
                 setFriends(newFriends);
@@ -182,21 +170,17 @@ const FriendsScreen = ({ navigation }) => {
         },
       ]
     );
-  }, [friends, searchText]); // Phụ thuộc vào friends và searchText
+  }, [friends, searchText]);
   
   const handleFriendPress = useCallback(async (friend) => {
     try {
-      // Hiển thị loading nếu cần
       setIsLoading(true);
       
-      // Gọi API để tạo hoặc lấy conversationId với người bạn này
       const response = await conversationApi.addConversation(friend._id);
       
-      // Kiểm tra dữ liệu trả về
       if (response && response.data && response.data._id) {
-        // Chuyển hướng với conversationId đúng
         navigation.navigate('MessageScreen', {
-          conversationId: response.data._id, // Quan trọng: Sử dụng ID cuộc trò chuyện
+          conversationId: response.data._id,
           conversationName: friend.name,
           name: friend.name,
           avatar: friend.avatar,
@@ -277,7 +261,7 @@ const FriendsScreen = ({ navigation }) => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={handleRefresh} // Sử dụng handleRefresh thay vì loadFriends trực tiếp
+              onRefresh={handleRefresh}
               colors={[colors.primary]}
             />
           }

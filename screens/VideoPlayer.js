@@ -24,20 +24,16 @@ const VideoPlayer = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Xử lý tải xuống video
   const handleDownload = async () => {
     try {
-      // Kiểm tra quyền truy cập media library
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Quyền truy cập', 'Cần quyền truy cập để lưu video');
         return;
       }
 
-      // Hiển thị thông báo đang tải xuống
       Alert.alert('Đang tải xuống', 'Vui lòng đợi trong giây lát...');
 
-      // Tạo tên file random
       const fileName = `talko_video_${Date.now()}.mp4`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
@@ -57,14 +53,11 @@ const VideoPlayer = ({ route, navigation }) => {
     }
   };
 
-  // Xử lý chia sẻ video
   const handleShare = async () => {
     try {
-      // Tạo tên file random
       const fileName = `talko_video_${Date.now()}.mp4`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
-      // Tải file về thiết bị trước khi chia sẻ
       const downloadResult = await FileSystem.downloadAsync(uri, fileUri);
 
       if (downloadResult.status === 200) {

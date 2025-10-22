@@ -43,7 +43,6 @@ const VideoCallScreen = ({ navigation, route }) => {
   const { conversationId, participants, conversationName, isGroup } = route.params || {};
   const { user } = useSelector(state => state.auth);
 
-  // State để quản lý cuộc gọi
   const [engine, setEngine] = useState(null);
   const [localUid, setLocalUid] = useState(null);
   const [remoteUsers, setRemoteUsers] = useState({});
@@ -56,7 +55,6 @@ const VideoCallScreen = ({ navigation, route }) => {
   const [hasRemoteParticipants, setHasRemoteParticipants] = useState(false);
   const [joinSucceed, setJoinSucceed] = useState(false);
 
-  // Thêm tham số mới từ route.params
   const {
     isInitiator = false,
     isIncoming = false,
@@ -65,13 +63,10 @@ const VideoCallScreen = ({ navigation, route }) => {
     effectiveUserId
   } = route.params || {};
 
-  // Sử dụng userIdForCall khi gọi các hàm liên quan đến socket
   const userIdForCall = effectiveUserId || user._id;
 
-  // Refs để lưu trữ thông tin
   const channelRef = useRef(conversationId);
 
-  // Khởi tạo khi component được mount
   useEffect(() => {
     console.log('📞 VIDEO CALL: VideoCallScreen mounted');
     
@@ -117,7 +112,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // Kiểm tra kết nối socket
   useEffect(() => {
     const socket = getSocket();
     if (socket) {
@@ -130,7 +124,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     } else {
       console.error('📞 SOCKET ERROR: Socket does not exist in VideoCallScreen');
 
-      // Thử kết nối socket nếu chưa có
       console.log('📞 SOCKET: Attempting to initialize socket');
       initiateSocket(user?._id, conversationId)
         .then(() => {
@@ -142,7 +135,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   }, []);
 
-  // Xin quyền truy cập camera và microphone
   const requestCameraAndAudioPermission = async () => {
     if (Platform.OS === 'android') {
       try {
@@ -172,7 +164,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Khởi tạo Agora Engine - PHƯƠNG THỨC CẬP NHẬT CHO PHIÊN BẢN 4.5.3
   const initializeAgoraEngine = async () => {
     try {
       // Xin quyền trước tiên
@@ -226,22 +217,18 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Thêm state để theo dõi trạng thái camera local
   const [localCameraReady, setLocalCameraReady] = useState(false);
 
-  // Thiết lập callbacks cho Agora Engine
   const setupAgoraCallbacks = (rtcEngine) => {
     if (!rtcEngine) return;
     
     rtcEngine.registerEventHandler({
-      // Khi tham gia kênh thành công
       onJoinChannelSuccess: (connection, uid) => {
         console.log('📞 VIDEO CALL: Joined channel successfully:', connection.channelId, uid);
         setJoinSucceed(true);
         setCallStatus('connected');
         setIsCallActive(true);
         
-        // Nếu là người nhận cuộc gọi, thông báo đã trả lời
         if (isIncoming) {
           // Sử dụng hàm thông báo phù hợp với loại cuộc gọi
           notifyCallAnswered(
@@ -381,7 +368,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     });
   };
 
-  // Tham gia kênh Agora
   const joinChannel = async (rtcEngine, uid) => {
     if (!rtcEngine) return;
     
@@ -410,7 +396,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Bật/tắt âm thanh
   const toggleMute = async () => {
     if (!engine) return;
     
@@ -426,7 +411,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Bật/tắt camera
   const toggleCamera = async () => {
     if (!engine) return;
     
@@ -442,7 +426,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Chuyển đổi camera (trước/sau)
   const switchCamera = async () => {
     if (!engine) return;
     
@@ -453,7 +436,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Kết thúc cuộc gọi và dọn dẹp
   const endCall = async () => {
     console.log('📞 VIDEO CALL: Ending call, cleaning up resources');
     
@@ -491,14 +473,12 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Xử lý kết thúc cuộc gọi và di chuyển
   const handleEndCall = () => {
     endCall();
     navigation.goBack();
     return true;
   };
 
-  // Hiển thị remote streams - cập nhật cho phiên bản 4.x
   const renderRemoteStreams = () => {
     const remoteUserIds = Object.keys(remoteUsers);
     
@@ -557,7 +537,6 @@ const VideoCallScreen = ({ navigation, route }) => {
     );
   };
 
-  // Thêm hàm để đảm bảo camera local hoạt động
   const ensureLocalVideoWorks = async () => {
     if (!engine) return;
     
@@ -569,7 +548,6 @@ const VideoCallScreen = ({ navigation, route }) => {
       
       console.log('📞 VIDEO CALL: Restarting local video');
       
-      // Kiểm tra sau 1 giây nếu camera vẫn không hoạt động
       setTimeout(() => {
         if (!localCameraReady) {
           console.log('📞 VIDEO CALL WARNING: Local camera still not working');
@@ -585,10 +563,8 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   };
 
-  // Cập nhật useEffect để thử lại nếu camera không hoạt động
   useEffect(() => {
     if (joinSucceed && !localCameraReady && !isCameraOff) {
-      // Thử lại khi camera không hoạt động trong 3 giây sau khi join
       const timer = setTimeout(() => {
         ensureLocalVideoWorks();
       }, 3000);
@@ -597,16 +573,13 @@ const VideoCallScreen = ({ navigation, route }) => {
     }
   }, [joinSucceed, localCameraReady, isCameraOff]);
 
-  // Cập nhật phương thức renderLocalVideo hoàn toàn
   const renderLocalVideo = () => {
-    // Thêm log để debug
     console.log('Rendering local video, camera state:', {
       joinSucceed: joinSucceed,
       localCameraReady: localCameraReady,
       isCameraOff: isCameraOff
     });
     
-    // Nếu camera tắt, hiển thị icon
     if (isCameraOff) {
       return (
         <View style={styles.localStreamContainer}>
@@ -646,22 +619,18 @@ const VideoCallScreen = ({ navigation, route }) => {
     );
   };
 
-  // Kiểm tra kết nối định kỳ
   useEffect(() => {
     if (!isCallActive) return;
     
-    // Kiểm tra trạng thái kết nối của tất cả người dùng
     const checkConnectionsInterval = setInterval(() => {
       console.log('📞 VIDEO CALL: Checking connections');
       
-      // Kiểm tra số lượng người dùng
       const userCount = Object.keys(remoteUsers).length;
       console.log('📞 VIDEO CALL: Remote users count:', userCount);
       
-      // Cập nhật trạng thái có người tham gia hay không
       setHasRemoteParticipants(userCount > 0);
       
-    }, 5000); // Kiểm tra mỗi 5 giây
+    }, 5000);
     
     return () => clearInterval(checkConnectionsInterval);
   }, [isCallActive, remoteUsers]);

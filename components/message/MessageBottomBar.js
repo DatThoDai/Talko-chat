@@ -33,20 +33,16 @@ function MessageBottomBar({
   const typingTimeoutRef = useRef(null);
   const dispatch = useDispatch();
 
-  // Reset typing state when component unmounts
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      // Stop typing indicator
       if (isTyping) {
         emitTyping(false, conversationId);
       }
     };
   }, [isTyping, conversationId]);
-
-  // Handle text input changes
   const handleTextChange = (value) => {
     setText(value);
     

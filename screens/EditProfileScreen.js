@@ -57,26 +57,21 @@ const parseDate = (dateString) => {
     return dateString;
   }
   
-  // Handle object format from backend {day, month, year}
   if (typeof dateString === 'object' && dateString.day && dateString.month && dateString.year) {
     return new Date(dateString.year, dateString.month - 1, dateString.day);
   }
   
-  // Handle DD/MM/YYYY format
   if (typeof dateString === 'string' && dateString.includes('/')) {
     const [day, month, year] = dateString.split('/');
     return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
   }
   
-  // Handle YYYY-MM-DD format
   if (typeof dateString === 'string' && dateString.includes('-')) {
     const [year, month, day] = dateString.split('-');
-    // If day contains time info (like "01T00:00:00")
     const cleanDay = day.split('T')[0];
     return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(cleanDay, 10));
   }
   
-  // Handle ISO string or other formats
   try {
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
@@ -102,7 +97,6 @@ const EditProfileScreen = ({ navigation, route }) => {
   // Use a ref to make sure we update the date only once initially
   const initialDateSet = React.useRef(false);
   
-  // Initialize with a safe default date
   const [selectedDate, setSelectedDate] = useState(new Date(2000, 0, 1));
   
   // Use userData for gender if available, otherwise fall back to authUser
@@ -130,7 +124,6 @@ const EditProfileScreen = ({ navigation, route }) => {
     };
   }, [userData, authUser]);
   
-  // Set initial date when user data is available
   useEffect(() => {
     // First try the userData from route params
     const dateSource = userData?.dateOfBirth || user?.dateOfBirth;
@@ -164,7 +157,6 @@ const EditProfileScreen = ({ navigation, route }) => {
     }
   }, [userData, user]);
   
-  // Xóa lỗi khi vào màn hình và xử lý khi thoát
   useEffect(() => {
     dispatch(clearError());
     return () => {
@@ -173,7 +165,6 @@ const EditProfileScreen = ({ navigation, route }) => {
     };
   }, [dispatch]);
   
-  // Xử lý khi cập nhật hồ sơ thành công
   useEffect(() => {
     if (profileUpdateSuccess) {
       console.log('Profile update successful!');
@@ -228,7 +219,6 @@ const EditProfileScreen = ({ navigation, route }) => {
     });
   }, [user, userData, authUser]);
 
-  // Create form initial values - make sure we always have valid values
   const getInitialFormValues = () => {
     // Prefer userData from route params if available
     if (userData) {

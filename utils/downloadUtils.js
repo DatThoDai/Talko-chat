@@ -106,20 +106,17 @@ export const downloadFile = async (fileUrl, fileName, fileType) => {
   }
 };
 
-// Hàm phụ trợ để xác định phần mở rộng file từ fileType hoặc URL
 function getExtensionFromTypeOrUrl(fileUrl, fileType) {
-  // Thử lấy phần mở rộng từ URL trước
   if (fileUrl && typeof fileUrl === 'string') {
     const urlParts = fileUrl.split('?')[0].split('.');
     if (urlParts.length > 1) {
       const ext = urlParts.pop().toLowerCase();
-      if (ext && ext.length >= 2 && ext.length <= 5) { // Chỉ lấy phần mở rộng hợp lệ
+      if (ext && ext.length >= 2 && ext.length <= 5) {
         return ext;
       }
     }
   }
   
-  // Xác định phần mở rộng dựa vào fileType
   const typeMap = {
     'PDF': 'pdf',
     'DOC': 'doc',
@@ -133,7 +130,6 @@ function getExtensionFromTypeOrUrl(fileUrl, fileType) {
   return typeMap[fileType] || 'bin';
 }
 
-// Kiểm tra xem file có phải là media file không
 function isMediaFile(fileName) {
   const mediaExtensions = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'mp3', 'wav'];
   const extension = fileName.split('.').pop().toLowerCase();

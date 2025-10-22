@@ -20,9 +20,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  // Cấu hình cho CORS và timeout
-  timeout: 30000, // Tăng timeout lên 30 giây cho mạng chậm
-  withCredentials: true, // Cho phép gửi cookie qua CORS
+  timeout: 30000,
+  withCredentials: true,
 });
 
 // Interceptor để thêm token vào headers
@@ -177,10 +176,8 @@ api.interceptors.response.use(
       // Không hiển thị thông báo lỗi mạng cho người dùng
       // Ứng dụng sẽ tự động retry và xử lý nội bộ
     } else if (error.code === 'ECONNABORTED') {
-      // Xử lý timeout, chỉ log không hiển thị
       console.error('Request timeout (hidden from UI):', error.config?.url);
       
-      // Thêm trả về fallback data cho các API chính để ứng dụng không crash
       const url = error.config?.url || '';
       if (url.includes('/messages')) {
         console.log('Returning empty messages array to avoid app crash');
@@ -188,22 +185,18 @@ api.interceptors.response.use(
       }
     }
     
-    // Xử lý các API quan trọng với dữ liệu fallback để tránh crash app
     const url = error.config?.url || '';
     
-    // API conversations - trả về mảng rỗng 
     if (url.includes('/conversations')) {
       console.log('Returning empty conversations array to avoid app crash');
       return { data: [] };
     }
     
-    // API tin nhắn - trả về mảng rỗng
     if (url.includes('/messages')) {
       console.log('Returning empty messages array to avoid app crash');
       return { data: [] };
     }
     
-    // API người dùng - trả về dữ liệu mặc định 
     if (url.includes('/users') || url.includes('/me/profile')) {
       console.log('Returning default user data to avoid app crash');
       return { 

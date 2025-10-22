@@ -27,11 +27,9 @@ const ResetPasswordScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Xác thực đầu vào
   const validateInputs = () => {
     let isValid = true;
     
-    // Xác thực mật khẩu
     if (!password) {
       setPasswordError('Mật khẩu là bắt buộc');
       isValid = false;
@@ -56,9 +54,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
     return isValid;
   };
 
-  // Xử lý đặt lại mật khẩu
   const handleResetPassword = async () => {
-    // Xác thực đầu vào
     if (!validateInputs()) return;
     
     setIsLoading(true);

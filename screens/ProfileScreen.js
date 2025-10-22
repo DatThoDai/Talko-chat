@@ -111,7 +111,6 @@ const ProfileScreen = ({ navigation }) => {
     return unsubscribe;
   }, [navigation]);
 
-  // Log trực tiếp URL hình nền nếu có
   React.useEffect(() => {
     if (user && (user.coverImage || user.backgroundImage)) {
       console.log('User has cover image:', user.coverImage || user.backgroundImage);
@@ -119,7 +118,6 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [user]);
 
-  // Lấy thông tin người dùng từ API
   const fetchUserProfile = async () => {
     if (!authUser) return;
 
@@ -256,11 +254,9 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  // Yêu cầu quyền truy cập thư viện ảnh
   const requestMediaLibraryPermissions = async () => {
     if (Platform.OS !== 'web') {
       try {
-        // Yêu cầu quyền truy cập vào thư viện ảnh
         const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         
         if (mediaLibraryStatus !== 'granted') {
@@ -294,7 +290,6 @@ const ProfileScreen = ({ navigation }) => {
     return true;
   };
 
-  // Xử lý thay đổi ảnh đại diện
   const handleChangeProfileImage = async () => {
     const hasPermission = await requestMediaLibraryPermissions();
 
@@ -452,7 +447,6 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  // Xử lý thay đổi ảnh bìa cá nhân
   const handleChangeCoverImage = async () => {
     const hasPermission = await requestMediaLibraryPermissions();
 
@@ -574,22 +568,16 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  // Xử lý cập nhật thông tin cá nhân
   const handleEditProfile = () => {
-    // Log the user data being passed to the edit screen
     console.log('Passing user data to EditProfile:', user);
     
-    // Ensure we pass the complete user object to the edit screen
     navigation.navigate('EditProfile', { userData: user });
   };
 
-  // Xử lý thay đổi mật khẩu
   const handleChangePassword = () => {
-    // Chuyển đến màn hình thay đổi mật khẩu
     navigation.navigate('ChangePassword');
   };
 
-  // Tạo chữ cái đầu từ tên người dùng cho ảnh đại diện mặc định
   const getInitials = () => {
     if (user && user.name) {
       return user.name.charAt(0).toUpperCase();
@@ -601,7 +589,6 @@ const ProfileScreen = ({ navigation }) => {
     return 'U';
   };
 
-  // Xử lý đăng xuất
   const handleLogout = () => {
     Alert.alert(
       'Đăng xuất',
@@ -632,7 +619,6 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  // Nếu đang tải dữ liệu
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
